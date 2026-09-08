@@ -13,8 +13,7 @@ out/
 .kotlin
 *.iws
 *.ipr
-.idea/workspace.xml
-.idea/shelf/
+.idea/
 
 ### Eclipse ###
 .apt_generated
