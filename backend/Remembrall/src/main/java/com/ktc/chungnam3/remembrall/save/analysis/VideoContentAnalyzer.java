@@ -22,6 +22,7 @@ import org.springframework.util.MimeType;
 import java.net.URI;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -44,21 +45,28 @@ public class VideoContentAnalyzer {
     private static final GoogleGenAiChatModel.ChatModel MODEL = GoogleGenAiChatModel.ChatModel.GEMINI_3_6_FLASH;
 
     private static final String ANALYSIS_VERSION = "v1";
-    private static final String PROMPT_VERSION = "v1";
+    private static final String PROMPT_VERSION = "v2";
 
-    private static final String PROMPT = """
+    private static final String PROMPT_TEMPLATE = """
             너는 여행·맛집 유튜브 영상에서 정보를 추출하는 분석가다.
             반드시 아래 규칙을 지켜서 정해진 JSON 형식으로만 응답해라.
+
+            영상 게시일: %s
 
             - summary는 영상의 핵심 주제, 소개 대상, 주요 특징과 영상에서 명시된 추천 상황·제약을 간결하게 적어라.
               장소가 없어도 요약은 남겨라.
             - 장소 정보가 없으면 placeCandidates를 빈 배열로 두고 절대 추측하지 마라.
+            - 장소 이름은 상호명(name)·지점명(branchName)·지역 단서(regionHint)로 나눠 적어라.
+              예: "대전 성심당 본점"이면 name="성심당", branchName="본점", regionHint="대전".
+              지점이나 지역이 확인되지 않으면 해당 필드는 빈 문자열로 둬라.
             - regionHint가 불확실하면 상위 단위로만 적어라 (구를 모르면 "대전"까지만 적어라).
             - 좌표는 추출하지 않는다 (이 단계의 책임이 아니다).
             - 여러 장소가 있으면 각각 분리해서 반환해라.
             - evidence의 detail에는 근거 위치나 내용을 간단히 적어라 (예: "화면 자막 0:12", "설명란 첫 줄").
             - relatedPlaceNames에는 이 기간과 연결되는 placeCandidates의 name을 그대로 적어라. 관계가 없으면 빈 배열로 둬라.
-            - startDate/endDate/startTime/endTime을 확인할 수 없으면 빈 문자열로 둬라. 절대 추정하지 마라.
+            - startDate/endDate에 연도가 없는 날짜가 나오면(예: "10월 3일까지") 위 영상 게시일과 같은 연도로 채우고,
+              uncertainties에 "연도 추정"이라고 적어라. 월·일 자체를 확인할 수 없으면 빈 문자열로 두고 절대 추정하지 마라.
+            - startTime/endTime을 확인할 수 없으면 빈 문자열로 둬라. 절대 추정하지 마라.
             - suggestedOrder는 영상에서 방문 순서가 명시된 경우에만 1부터 채우고, 없으면 0으로 둬라.
             - 확실하게 판단하지 못한 내용은 각 항목의 uncertainties에 짧게 적어라.
             """;
@@ -157,9 +165,9 @@ public class VideoContentAnalyzer {
         this.chatModel = chatModel;
     }
 
-    public YouTubeContentExtractionResultDto analyze(String youtubeUrl) {
+    public YouTubeContentExtractionResultDto analyze(String youtubeUrl, LocalDate publishedAt) {
         UserMessage userMessage = UserMessage.builder()
-                .text(PROMPT)
+                .text(PROMPT_TEMPLATE.formatted(publishedAt))
                 .media(Media.builder()
                         .mimeType(MimeType.valueOf("video/mp4"))
                         .data(URI.create(youtubeUrl))
@@ -214,20 +222,23 @@ public class VideoContentAnalyzer {
         }
 
         List<TemporalInfoDto> temporalInfos = result.temporalInfos().stream()
-                .map(t -> new TemporalInfoDto(
-                        t.subject(),
-                        t.originalText(),
-                        t.relatedPlaceNames().stream()
-                                .map(nameToCandidateId::get)
-                                .filter(java.util.Objects::nonNull)
-                                .toList(),
-                        blankToNull(t.startDate()) == null ? null : LocalDate.parse(t.startDate()),
-                        blankToNull(t.endDate()) == null ? null : LocalDate.parse(t.endDate()),
-                        blankToNull(t.startTime()) == null ? null : LocalTime.parse(t.startTime()),
-                        blankToNull(t.endTime()) == null ? null : LocalTime.parse(t.endTime()),
-                        toEvidenceDtos(t.evidence()),
-                        t.uncertainties()
-                ))
+                .map(t -> {
+                    List<String> uncertainties = new ArrayList<>(t.uncertainties());
+                    return new TemporalInfoDto(
+                            t.subject(),
+                            t.originalText(),
+                            t.relatedPlaceNames().stream()
+                                    .map(nameToCandidateId::get)
+                                    .filter(java.util.Objects::nonNull)
+                                    .toList(),
+                            parseDateOrNull(t.startDate(), uncertainties),
+                            parseDateOrNull(t.endDate(), uncertainties),
+                            parseTimeOrNull(t.startTime(), uncertainties),
+                            parseTimeOrNull(t.endTime(), uncertainties),
+                            toEvidenceDtos(t.evidence()),
+                            uncertainties
+                    );
+                })
                 .toList();
 
         return new YouTubeContentExtractionResultDto(
@@ -249,5 +260,29 @@ public class VideoContentAnalyzer {
 
     private String blankToNull(String value) {
         return (value == null || value.isBlank()) ? null : value;
+    }
+
+    private LocalDate parseDateOrNull(String value, List<String> uncertainties) {
+        if (blankToNull(value) == null) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(value);
+        } catch (DateTimeParseException e) {
+            uncertainties.add("날짜 형식 확인 필요: " + value);
+            return null;
+        }
+    }
+
+    private LocalTime parseTimeOrNull(String value, List<String> uncertainties) {
+        if (blankToNull(value) == null) {
+            return null;
+        }
+        try {
+            return LocalTime.parse(value);
+        } catch (DateTimeParseException e) {
+            uncertainties.add("시간 형식 확인 필요: " + value);
+            return null;
+        }
     }
 }
