@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: Remembrall
+  ai:
+    google:
+      genai:
+        # AI Studio(API 키) 모드가 기본. Vertex AI로 전환하려면 secrets.properties에
+        # gemini.vertex-ai.enabled=true 와 project-id/location을 채우면 된다.
+        api-key: ${gemini.api.key:}
+        vertex-ai: ${gemini.vertex-ai.enabled:false}
+        project-id: ${gemini.vertex-ai.project-id:}
+        location: ${gemini.vertex-ai.location:us-central1}
+  config:
+    import: optional:file:./secrets.properties
+
+# TODO: 협의 필요 - 실제 운영에서는 환경변수/시크릿 매니저로 관리할 것. 지금은 로컬 테스트용.
+# 실제 키 값은 secrets.properties(git-ignored)에 적는다. 이 파일에는 절대 실제 키를 적지 말 것.
+youtube:
+  api:
+    key: ${youtube.api.key:}
