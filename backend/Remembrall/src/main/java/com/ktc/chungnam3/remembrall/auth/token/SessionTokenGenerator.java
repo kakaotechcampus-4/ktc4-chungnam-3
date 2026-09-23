@@ -6,7 +6,7 @@ import java.security.SecureRandom;
 import java.util.Base64;
 
 @Component
-public class RefreshTokenGenerator {
+public class SessionTokenGenerator {
 
     private static final int TOKEN_BYTE_LENGTH = 32;
 

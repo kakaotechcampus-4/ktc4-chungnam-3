@@ -18,7 +18,7 @@ import java.util.UUID;
         name = "device",
         uniqueConstraints = {
                 @UniqueConstraint(name = "uk_device_member", columnNames = "member_id"),
-                @UniqueConstraint(name = "uk_device_refresh_token_hash", columnNames = "refresh_token_hash")
+                @UniqueConstraint(name = "uk_device_session_token_hash", columnNames = "session_token_hash")
         }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -30,11 +30,11 @@ public class Device {
     @Column(name = "member_id", nullable = false)
     private UUID memberId;
 
-    @Column(name = "refresh_token_hash", nullable = false, length = 64)
-    private String refreshTokenHash;
+    @Column(name = "session_token_hash", length = 64)
+    private String sessionTokenHash;
 
-    @Column(name = "refresh_token_expires_at", nullable = false)
-    private Instant refreshTokenExpiresAt;
+    @Column(name = "session_expires_at")
+    private Instant sessionExpiresAt;
 
     @Column(name = "fcm_token", length = 512)
     private String fcmToken;
@@ -48,36 +48,37 @@ public class Device {
     private Device(
             UUID id,
             UUID memberId,
-            String refreshTokenHash,
-            Instant refreshTokenExpiresAt,
+            String sessionTokenHash,
+            Instant sessionExpiresAt,
             Instant createdAt
     ) {
         this.id = id;
         this.memberId = memberId;
-        this.refreshTokenHash = refreshTokenHash;
-        this.refreshTokenExpiresAt = refreshTokenExpiresAt;
+        this.sessionTokenHash = sessionTokenHash;
+        this.sessionExpiresAt = sessionExpiresAt;
         this.createdAt = createdAt;
         this.updatedAt = createdAt;
     }
 
     public static Device create(
             UUID memberId,
-            String refreshTokenHash,
-            Instant refreshTokenExpiresAt,
+            String sessionTokenHash,
+            Instant sessionExpiresAt,
             Instant createdAt
     ) {
         return new Device(
                 UUID.randomUUID(),
                 memberId,
-                refreshTokenHash,
-                refreshTokenExpiresAt,
+                sessionTokenHash,
+                sessionExpiresAt,
                 createdAt
         );
     }
 
-    public void rotateRefreshToken(String refreshTokenHash, Instant refreshTokenExpiresAt, Instant updatedAt) {
-        this.refreshTokenHash = refreshTokenHash;
-        this.refreshTokenExpiresAt = refreshTokenExpiresAt;
+    public void replaceSession(String sessionTokenHash, Instant sessionExpiresAt, Instant updatedAt) {
+        this.sessionTokenHash = sessionTokenHash;
+        this.sessionExpiresAt = sessionExpiresAt;
+        this.fcmToken = null;
         this.updatedAt = updatedAt;
     }
 
