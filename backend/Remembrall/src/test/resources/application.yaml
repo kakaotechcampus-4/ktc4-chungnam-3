@@ -1,0 +1,9 @@
+kakao:
+  app-id: 1
+
+auth:
+  jwt:
+    issuer: remembrall-test
+    secret: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+    access-token-ttl: 30m
+    refresh-token-ttl: 30d
