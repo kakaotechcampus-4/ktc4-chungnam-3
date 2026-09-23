@@ -6,6 +6,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -30,7 +32,7 @@ public class YoutubeMetadataClient {
     }
 
     public record VideoInfo(String videoId, String title, String description,
-                             List<String> tags, String channelId, int durationSec) {
+                             List<String> tags, String channelId, int durationSec, LocalDate publishedAt) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -42,7 +44,7 @@ public class YoutubeMetadataClient {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record Snippet(String title, String description, List<String> tags, String channelId) {
+    private record Snippet(String title, String description, List<String> tags, String channelId, String publishedAt) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -96,7 +98,8 @@ public class YoutubeMetadataClient {
                 snippet.description(),
                 snippet.tags() != null ? snippet.tags() : List.of(),
                 snippet.channelId(),
-                parseDurationSeconds(item.contentDetails().duration())
+                parseDurationSeconds(item.contentDetails().duration()),
+                OffsetDateTime.parse(snippet.publishedAt()).toLocalDate()
         );
     }
 
@@ -126,8 +129,12 @@ public class YoutubeMetadataClient {
                     .map(CommentSnippet::textDisplay)
                     .toList();
         } catch (HttpClientErrorException e) {
-            // 댓글 사용 중지 등으로 403/404가 날 수 있음 - 정상적인 케이스로 취급
-            return List.of();
+            // 댓글 기능이 꺼진 영상은 commentsDisabled로 403이 남 - 정상적인 케이스로 취급.
+            // quotaExceeded, keyInvalid 등 그 외 4xx는 실제 장애이므로 그대로 다시 던진다.
+            if (e.getResponseBodyAsString().contains("commentsDisabled")) {
+                return List.of();
+            }
+            throw e;
         }
     }
 

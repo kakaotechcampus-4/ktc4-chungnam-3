@@ -28,3 +28,6 @@ auth:
     secret: ${jwt.secret:}
     access-token-ttl: ${jwt.access-token-ttl:30m}
     refresh-token-ttl: ${jwt.refresh-token-ttl:30d}
+locationiq:
+  api:
+    key: ${locationiq.api.key:}
