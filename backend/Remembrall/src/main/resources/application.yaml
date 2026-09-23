@@ -18,3 +18,7 @@ spring:
 youtube:
   api:
     key: ${youtube.api.key:}
+
+locationiq:
+  api:
+    key: ${locationiq.api.key:}
