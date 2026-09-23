@@ -8,9 +8,14 @@
     "scheme": "frontend",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.remembrall.frontend",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "현재 위치의 위도와 경도를 확인하기 위해 위치 권한이 필요합니다."
+      }
     },
     "android": {
+      "package": "com.remembrall.frontend",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -31,7 +36,14 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
-      ]
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "현재 위치의 위도와 경도를 확인하기 위해 위치 권한이 필요합니다."
+        }
+      ],
+      "expo-share-intent"
     ],
     "experiments": {
       "reactCompiler": true
