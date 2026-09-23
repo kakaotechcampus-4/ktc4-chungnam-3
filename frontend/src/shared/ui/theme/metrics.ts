@@ -65,4 +65,21 @@ export const metrics = {
       { dx: 2.4, top: 40.9, rotate: '1deg' },
     ],
   },
+  // 07 전체 기억 셀 2061:911.
+  albumCell: {
+    labelGap: 6,
+    badgeInset: 6,
+  },
+  // 07b 전체 기억 빈 상태 2061:956. frames: 360 폭 절대좌표를 프레임 중심 기준으로 바꾼 값.
+  archiveEmpty: {
+    introPaddingTop: 40,
+    framesHeight: 300,
+    frameWidth: 84,
+    frameHeight: 150,
+    frames: [
+      { dx: -86, top: 70 },
+      { dx: 0, top: 50 },
+      { dx: 86, top: 70 },
+    ],
+  },
 } as const;
