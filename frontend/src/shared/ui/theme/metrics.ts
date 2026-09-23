@@ -24,4 +24,45 @@ export const metrics = {
   button: {
     paddingVertical: 14,
   },
+  // C/Chip 2054:139. 높이 34 → 상하 8 씩 50dp.
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    hitSlop: { top: 8, bottom: 8 },
+  },
+  // C/Card/Nearby 2054:120.
+  nearbyCard: {
+    thumbWidth: 112,
+    headGap: 2,
+    nowPaddingHorizontal: 10,
+    nowPaddingVertical: 3,
+    summaryMaxLines: 3,
+  },
+  // C/Card/Memory 2054:107.
+  memoryCard: {
+    thumbWidth: 72,
+    headGap: 2,
+    summaryMaxLines: 2,
+  },
+  // 01 근처 2061:760.
+  proposal: {
+    introPaddingTop: 24,
+    introGap: 6,
+    locationIconSize: 16,
+    listPaddingTop: 16,
+  },
+  // 06 근처 빈 상태 2061:881. 링크 높이 20 → 상하 14 씩 48dp.
+  // stack: Figma 360 폭 절대좌표를 썸네일 중심 기준으로 바꾼 값. dx 는 화면 가운데로부터의 거리.
+  nearbyEmpty: {
+    linkGap: 2,
+    linkIconSize: 16,
+    linkHitSlop: { top: 14, bottom: 14 },
+    stackHeight: 300,
+    stackThumbWidth: 104,
+    stack: [
+      { dx: -47.1, top: 63, rotate: '9deg' },
+      { dx: 50.9, top: 41, rotate: '-7deg' },
+      { dx: 2.4, top: 40.9, rotate: '1deg' },
+    ],
+  },
 } as const;

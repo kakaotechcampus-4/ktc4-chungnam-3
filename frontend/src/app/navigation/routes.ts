@@ -19,3 +19,10 @@ export type RootStackParamList = {
   [ROUTES.ContentDetail]: { placeId: string };
   [ROUTES.SaveResult]: { resultId: string };
 };
+
+// features 는 app 을 import 하지 않는다. useNavigation() 을 제네릭 없이 써도 라우트가 타입 검사되게 한다.
+declare global {
+  namespace ReactNavigation {
+    interface RootParamList extends RootStackParamList {}
+  }
+}
