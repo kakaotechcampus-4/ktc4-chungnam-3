@@ -6,6 +6,7 @@
         "@expo-google-fonts/gowun-dodum": "^0.4.1",
         "@expo-google-fonts/noto-sans-kr": "^0.4.3",
         "@expo/ui": "~57.0.18",
+        "@react-navigation/bottom-tabs": "^7.19.2",
         "@react-navigation/native": "^7.4.1",
         "@react-navigation/native-stack": "^7.19.2",
         "expo": "~57.0.23",

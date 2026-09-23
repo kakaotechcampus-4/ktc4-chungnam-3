@@ -6,3 +6,4 @@ export { stroke } from './stroke';
 export { fade } from './fade';
 export { fontFamily, typography } from './typography';
 export { effects } from './effects';
+export { metrics } from './metrics';
