@@ -5,44 +5,28 @@ import com.ktc.chungnam3.remembrall.save.dto.ResolvedPlaceDto;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
 import java.util.stream.IntStream;
 
 /**
- * LocationIQ 검색 결과 개수에 따라 장소를 확정할지, 사용자에게 되물을지, 확정할 수 없다고
- * 볼지 판단한다 (저장 파이프라인.md 3장 "판정" 기준 — 1건 확정, 2~3건 되묻기, 그 외 NO_PLACE).
+ * LocationIQ 검색 결과를 걸러서 장소를 확정할지, 사용자에게 되물을지, 확정할 수 없다고 볼지
+ * 판단한다 (저장 파이프라인.md 3장 "판정" 기준, 도구 검토 문서 2026-09-23 "개선 ①" 반영).
  * <p>
- * TODO: 후보가 1건일 때 이게 정말 신뢰할 만한 매치인지 추가로 검증하는 로직은 지역(시·도) 단위까지만
- * 있음 — "을지로 골뱅이 골목"이 "잠실"로 잘못 나온 사례처럼 같은 시·도 안에서 구·동 단위가 틀린
- * 경우는 이 필터로 못 잡는다 (LocationIQ 테스트 결과, CLAUDE.md 참고). 이건 카카오/네이버 하이브리드
- * 결정이 나야 근본적으로 해결됨.
+ * 판정 순서: ① 결과 이름에 찾던 이름이 없으면 버림 ② 도로·동네급 결과(class=highway/place)는 버림
+ * ③ 시·도가 명백히 다른 결과는 버림 ④ 남은 개수로 확정/되묻기/장소없음 판정, 이때 후보가 1건이어도
+ * 지점명이 다르면 확정하지 않고 되묻는다 (검색어 자체엔 지점명을 안 넣으므로 - PlaceSearchClient 참고 -
+ * 지점 특정은 여기서 한다).
+ * <p>
+ * TODO: 시·도 단위 지역 교차검증만 있어서, 같은 시·도 안에서 구·동 단위까지 틀린 동명이인(예: 송파의
+ * 「을지로 골뱅이」)은 여전히 못 잡는다. 공공 상가정보 연동(개선 ②, 별도 작업)이 나와야 근본 해결됨.
  */
 @Component
 public class PlaceResolver {
 
     private static final int MAX_CONFIRMATION_CANDIDATES = 3;
 
-    // LocationIQ(OSM/Nominatim)가 실제로 쓰는 로마자 표기 변형까지 포함 (예: 대전 -> Daejon/Daejeon).
-    // 시·도 단위까지만 다룬다 - 구·동 단위 표기는 변형이 너무 많아 이 표로 감당 못 함.
-    private static final Map<String, List<String>> REGION_ALIASES = Map.ofEntries(
-            Map.entry("서울", List.of("Seoul")),
-            Map.entry("부산", List.of("Busan")),
-            Map.entry("대구", List.of("Daegu")),
-            Map.entry("인천", List.of("Incheon")),
-            Map.entry("광주", List.of("Gwangju")),
-            Map.entry("대전", List.of("Daejon", "Daejeon")),
-            Map.entry("울산", List.of("Ulsan")),
-            Map.entry("세종", List.of("Sejong")),
-            Map.entry("경기", List.of("Gyeonggi", "Kyeonggi", "Kyeongki")),
-            Map.entry("강원", List.of("Gangwon")),
-            Map.entry("충북", List.of("Chungbuk", "Chungcheongbuk")),
-            Map.entry("충남", List.of("Chungnam", "Chungcheongnam")),
-            Map.entry("전북", List.of("Jeonbuk", "Jeollabuk")),
-            Map.entry("전남", List.of("Jeonnam", "Jeollanam")),
-            Map.entry("경북", List.of("Gyeongbuk", "Gyeongsangbuk")),
-            Map.entry("경남", List.of("Gyeongnam", "Gyeongsangnam")),
-            Map.entry("제주", List.of("Jeju"))
-    );
+    // 도로·동네·행정구역급 결과는 업체가 아니므로 확정 후보에서 제외한다.
+    private static final Set<String> REJECTED_CLASSES = Set.of("highway", "place");
 
     public enum Decision {
         RESOLVED,
@@ -55,7 +39,8 @@ public class PlaceResolver {
 
     public Result resolve(String candidateId, String name, String branchName, String regionHint,
                            List<PlaceSearchClient.PlaceSearchResult> searchResults) {
-        List<PlaceSearchClient.PlaceSearchResult> filtered = filterByRegion(regionHint, searchResults);
+        List<PlaceSearchClient.PlaceSearchResult> filtered =
+                filterByRegion(regionHint, filterByNameAndClass(name, searchResults));
 
         if (filtered.isEmpty() || filtered.size() > MAX_CONFIRMATION_CANDIDATES) {
             return new Result(Decision.NO_PLACE, null, null);
@@ -63,9 +48,21 @@ public class PlaceResolver {
 
         if (filtered.size() == 1) {
             PlaceSearchClient.PlaceSearchResult match = filtered.get(0);
-            ResolvedPlaceDto place = new ResolvedPlaceDto(
-                    candidateId, name, branchName, match.displayName(), match.lat(), match.lon());
-            return new Result(Decision.RESOLVED, place, null);
+
+            boolean branchMatchesOrUnspecified = branchName == null || branchName.isBlank()
+                    || containsIgnoreCase(match.displayName(), branchName);
+
+            if (branchMatchesOrUnspecified) {
+                ResolvedPlaceDto place = new ResolvedPlaceDto(
+                        candidateId, name, branchName, match.displayName(), match.lat(), match.lon());
+                return new Result(Decision.RESOLVED, place, null);
+            }
+
+            // 이름은 맞는데 찾던 지점인지 확신할 수 없으니 확정하지 않고 되묻는다.
+            ConfirmRequestDto confirm = new ConfirmRequestDto("어느 장소가 맞을까요?", List.of(
+                    new ResolvedPlaceDto(candidateId + "-1", name, branchName, match.displayName(), match.lat(), match.lon())
+            ));
+            return new Result(Decision.NEEDS_CONFIRMATION, null, confirm);
         }
 
         List<ResolvedPlaceDto> options = IntStream.range(0, filtered.size())
@@ -79,6 +76,15 @@ public class PlaceResolver {
         return new Result(Decision.NEEDS_CONFIRMATION, null, confirm);
     }
 
+    /** 결과 이름에 찾던 이름이 없으면, 그리고 도로·동네급 결과(class=highway/place)면 제외한다. */
+    private List<PlaceSearchClient.PlaceSearchResult> filterByNameAndClass(
+            String name, List<PlaceSearchClient.PlaceSearchResult> results) {
+        return results.stream()
+                .filter(r -> containsIgnoreCase(r.displayName(), name))
+                .filter(r -> r.osmClass() == null || !REJECTED_CLASSES.contains(r.osmClass().toLowerCase()))
+                .toList();
+    }
+
     /**
      * regionHint(시·도 단위)와 검색 결과 주소가 겹치는지 확인해 명백히 다른 시·도인 결과를 제외한다.
      * regionHint가 없거나 매핑표에 없는(구·동 단위 등) 지역명이면 교차검증을 건너뛰고 그대로 반환한다 -
@@ -90,7 +96,7 @@ public class PlaceResolver {
             return results;
         }
 
-        List<String> aliases = REGION_ALIASES.entrySet().stream()
+        List<String> aliases = KoreanProvinces.ROMANIZED_ALIASES.entrySet().stream()
                 .filter(entry -> regionHint.contains(entry.getKey()))
                 .flatMap(entry -> entry.getValue().stream())
                 .toList();

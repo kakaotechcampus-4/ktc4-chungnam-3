@@ -45,7 +45,7 @@ public class VideoContentAnalyzer {
     private static final GoogleGenAiChatModel.ChatModel MODEL = GoogleGenAiChatModel.ChatModel.GEMINI_3_6_FLASH;
 
     private static final String ANALYSIS_VERSION = "v1";
-    private static final String PROMPT_VERSION = "v2";
+    private static final String PROMPT_VERSION = "v3";
 
     private static final String PROMPT_TEMPLATE = """
             너는 여행·맛집 유튜브 영상에서 정보를 추출하는 분석가다.
@@ -59,7 +59,9 @@ public class VideoContentAnalyzer {
             - 장소 이름은 상호명(name)·지점명(branchName)·지역 단서(regionHint)로 나눠 적어라.
               예: "대전 성심당 본점"이면 name="성심당", branchName="본점", regionHint="대전".
               지점이나 지역이 확인되지 않으면 해당 필드는 빈 문자열로 둬라.
-            - regionHint가 불확실하면 상위 단위로만 적어라 (구를 모르면 "대전"까지만 적어라).
+            - regionHint에는 시·도(예: 서울특별시, 대전광역시)를 반드시 포함해라. 구·동까지 확인되면
+              "대전 중구"처럼 시·도 뒤에 이어서 적되, 시·도 자체를 빼지는 마라 - 장소 검색 단계가
+              시·도 단위로만 지역을 대조하기 때문이다. 구·동까지도 불확실하면 시·도까지만 적어라.
             - 좌표는 추출하지 않는다 (이 단계의 책임이 아니다).
             - 여러 장소가 있으면 각각 분리해서 반환해라.
             - evidence의 detail에는 근거 위치나 내용을 간단히 적어라 (예: "화면 자막 0:12", "설명란 첫 줄").

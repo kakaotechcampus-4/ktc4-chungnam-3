@@ -22,3 +22,8 @@ youtube:
 locationiq:
   api:
     key: ${locationiq.api.key:}
+
+# 소상공인시장진흥공단 상가(상권)정보 - 개선②(공공 상가정보 연동)용, 아직 코드에서 안 씀
+dataportal:
+  api:
+    key: ${dataportal.api.key:}
