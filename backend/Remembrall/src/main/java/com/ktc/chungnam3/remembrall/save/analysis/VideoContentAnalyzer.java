@@ -217,7 +217,6 @@ public class VideoContentAnalyzer {
                     blankToNull(p.branchName()),
                     blankToNull(p.regionHint()),
                     p.description(),
-                    (p.suggestedOrder() == null || p.suggestedOrder() == 0) ? null : p.suggestedOrder(),
                     toEvidenceDtos(p.evidence()),
                     p.uncertainties()
             ));
