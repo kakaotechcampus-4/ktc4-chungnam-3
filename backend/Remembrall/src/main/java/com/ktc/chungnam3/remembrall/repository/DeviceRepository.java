@@ -13,5 +13,7 @@ public interface DeviceRepository extends JpaRepository<Device, UUID> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Device> findByRefreshTokenHash(String refreshTokenHash);
 
+    Optional<Device> findByMemberId(UUID memberId);
+
     void deleteByMemberId(UUID memberId);
 }
