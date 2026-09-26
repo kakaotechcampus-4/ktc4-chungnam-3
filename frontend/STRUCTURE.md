@@ -30,6 +30,10 @@
 ```
 frontend/
 ├── index.js                  RN 엔트리. 앱 등록 + 백그라운드 태스크 등록만.
+├── assets/
+│   └── fonts/                Noto Sans KR 서브셋 ttf + OFL.txt
+├── scripts/
+│   └── subset-fonts.py       폰트 서브셋 생성 (원본 출처 · 범위 · 실행 방법은 파일 상단)
 ├── android/
 │   └── app/src/main/java/com/remembrall/share/
 │       └── ShareActivity.kt  투명 공유 수신 액티비티 (앱 UI 안 띄움)
@@ -81,7 +85,11 @@ frontend/
             └── theme/        Figma 토큰 + metrics
 ```
 
-폰트는 `@expo-google-fonts` 패키지로 받는다. `assets/fonts/` 는 두지 않는다.
+폰트:
+
+- Noto Sans KR(400 · 500)은 한자를 뺀 서브셋을 `assets/fonts/` 에 직접 번들한다.
+  한글 · 라틴 · 기호는 모두 남긴다. `scripts/subset-fonts.py` 로 다시 만든다.
+- Gowun Dodum 은 `@expo-google-fonts` 패키지를 쓴다. 화면 제목이 확정되면 제목 글자만 남기는 서브셋으로 바꾼다.
 
 ## 컴포넌트 위치
 
@@ -96,6 +104,8 @@ frontend/
   (`bg/screen` → `colors.bg.screen`, `brand/primary-pressed` → `colors.brand.primaryPressed`, `space/md` → `spacing.md`)
 - 스타일은 `C 바랜기억/` 접두어를 뗀 이름을 camelCase 로 쓴다. (`Heading/Screen` → `typography.headingScreen`)
 - `fade/*` 는 퍼센트다. 100 으로 나눠 opacity 로 쓴다.
+- headingScreen(Gowun Dodum)은 고정 문구와 숫자만 그린다. 장소명·영상 제목 같은 동적 텍스트에 쓰지 않는다.
+  서브셋 이후 빠진 글자가 기본 글꼴로 섞인다.
 - `metrics.ts` 는 **Figma 변수가 아니다.** 변수에 바인딩되지 않은 노드 실측값을 컴포넌트별 키로 둔다. hitSlop 도 여기 둔다.
 - `features/`, `shared/ui/`, `app/` 에는 색·간격·radius·타이포를 리터럴로 쓰지 않는다.
 
