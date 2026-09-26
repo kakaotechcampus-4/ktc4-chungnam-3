@@ -18,3 +18,16 @@ spring:
 youtube:
   api:
     key: ${youtube.api.key:}
+
+kakao:
+  app-id: ${kakao.app-id:}
+
+auth:
+  jwt:
+    issuer: remembrall
+    secret: ${jwt.secret:}
+    access-token-ttl: ${jwt.access-token-ttl:30m}
+    refresh-token-ttl: ${jwt.refresh-token-ttl:30d}
+locationiq:
+  api:
+    key: ${locationiq.api.key:}
