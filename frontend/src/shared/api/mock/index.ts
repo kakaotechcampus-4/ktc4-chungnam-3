@@ -6,3 +6,4 @@ export const MOCK_SCENARIO = {
 
 export { archiveMock } from './archive';
 export { nearbyEmptyMock, nearbyMock } from './nearby';
+export { saveResultsMock } from './saveResults';

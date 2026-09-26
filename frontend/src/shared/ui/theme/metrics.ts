@@ -82,4 +82,37 @@ export const metrics = {
       { dx: 86, top: 70 },
     ],
   },
+  // 02~05 저장 결과 2061:784. 닫기 아이콘 24 → 사방 12 씩 48dp.
+  saveResult: {
+    closeHitSlop: { top: 12, bottom: 12, left: 12, right: 12 },
+    sourceGap: 16,
+    thumbWidth: 96,
+    infoGap: 6,
+  },
+  // 02 장소 후보 2061:799 · 2061:804.
+  placeOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    textGap: 2,
+    checkSize: 20,
+  },
+  // 02 "여기 없어요, 직접 찾을게요" 2061:808. 높이 44 → 상하 2 씩 48dp.
+  directOption: {
+    paddingHorizontal: 16,
+    hitSlop: { top: 2, bottom: 2 },
+  },
+  // 03 분석 중 스켈레톤 2061:831.
+  skeleton: {
+    padding: 16,
+    cards: [
+      [
+        { width: 140, height: 14 },
+        { width: 90, height: 10 },
+      ],
+      [
+        { width: 110, height: 14 },
+        { width: 60, height: 10 },
+      ],
+    ],
+  },
 } as const;
