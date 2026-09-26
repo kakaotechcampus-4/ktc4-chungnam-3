@@ -24,7 +24,13 @@ export default function NearbyEmpty({ area, nearestDistance, nearestArea, stackT
         <Text style={styles.body}>
           가장 가까운 기억은 {nearestDistance} 떨어진 {nearestArea}에 있어요.
         </Text>
-        <Pressable accessibilityRole="link" hitSlop={metrics.nearbyEmpty.linkHitSlop} style={styles.link}>
+        {/* 동작이 연결되면 disabled 를 뺀다. */}
+        <Pressable
+          accessibilityRole="link"
+          accessibilityState={{ disabled: true }}
+          hitSlop={metrics.nearbyEmpty.linkHitSlop}
+          style={styles.link}
+        >
           <Text style={styles.linkLabel}>{nearestArea} 기억 보기</Text>
           <Icon name="chevronRight" size={metrics.nearbyEmpty.linkIconSize} />
         </Pressable>
