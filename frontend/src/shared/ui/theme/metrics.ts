@@ -101,6 +101,27 @@ export const metrics = {
     paddingHorizontal: 16,
     hitSlop: { top: 2, bottom: 2 },
   },
+  // 08 장소 상세 2061:971. 시트는 지도 위로 38 겹친다(top 292). 뒤로가기 38 → 사방 5 씩 48dp.
+  contentDetail: {
+    mapHeight: 330,
+    sheetOverlap: 38,
+    backLeft: 16,
+    backIconSize: 22,
+    backHitSlop: { top: 5, bottom: 5, left: 5, right: 5 },
+    sheetPaddingTop: 10,
+    sheetPaddingBottom: 24,
+    sheetGap: 16,
+    handleWidth: 36,
+    handleHeight: 4,
+    headGap: 16,
+    thumbWidth: 72,
+    infoGap: 2,
+    noteGap: 6,
+    tagGap: 6,
+    tagPaddingVertical: 2,
+    sourcePaddingLeft: 14,
+    sourceTextGap: 2,
+  },
   // 03 분석 중 스켈레톤 2061:831.
   skeleton: {
     padding: 16,
