@@ -1,4 +1,5 @@
 // 앨범 셀. 썸네일 + 상태 배지 + 한 줄 라벨. 폭은 부모가 정한다.
+// 라벨은 장소명·설명(label) 또는 영상 제목(videoTitle). 영상 제목이면 따옴표를 붙인다.
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import Badge, { type BadgeStatus } from '../../../shared/ui/Badge';
@@ -6,14 +7,15 @@ import Thumb, { type ThumbFade } from '../../../shared/ui/Thumb';
 import { colors, metrics, typography } from '../../../shared/ui/theme';
 
 export type AlbumCellProps = {
-  label: string;
+  label?: string;
+  videoTitle?: string;
   thumbUri?: string;
   fade: ThumbFade;
   status?: BadgeStatus;
   onPress?: () => void;
 };
 
-export default function AlbumCell({ label, thumbUri, fade, status, onPress }: AlbumCellProps) {
+export default function AlbumCell({ label, videoTitle, thumbUri, fade, status, onPress }: AlbumCellProps) {
   return (
     <Pressable
       accessibilityRole={onPress ? 'button' : undefined}
@@ -26,7 +28,7 @@ export default function AlbumCell({ label, thumbUri, fade, status, onPress }: Al
         {status && <Badge status={status} style={styles.badge} />}
       </View>
       <Text numberOfLines={1} style={styles.label}>
-        {label}
+        {videoTitle != null ? `“${videoTitle}”` : label}
       </Text>
     </Pressable>
   );

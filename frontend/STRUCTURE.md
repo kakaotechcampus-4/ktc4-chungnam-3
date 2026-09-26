@@ -29,7 +29,7 @@
 
 ```
 frontend/
-├── index.js                  RN 엔트리. 앱 등록 + 백그라운드 태스크 등록만.
+├── index.js                  RN 엔트리. 앱 등록 + (runtime 작업 때) 백그라운드 태스크 등록
 ├── assets/
 │   └── fonts/                Noto Sans KR 서브셋 ttf + OFL.txt
 ├── scripts/
@@ -142,6 +142,9 @@ shared/  ───┘
 - `features/` 끼리는 서로 import 하지 않는다. 공유가 필요하면 `domain/` 이나 `shared/` 로 올린다.
 - `domain/` 은 아무것도 import 하지 않는다. 순수 타입만 둔다.
 - `features/` 는 `domain/extraction/` 을 직접 import 하지 않는다. 항상 매핑을 거친다.
+- `features/` 는 `app/` 을 import 하지 않는다(`import type` 포함).
+  내비게이션 타입은 `routes.ts` 의 `ReactNavigation.RootParamList` 전역 선언으로 받고,
+  라우트 이름은 문자열 리터럴로 쓴다.
 
 ## 확정된 것 (백엔드 코드에 실재)
 

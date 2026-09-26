@@ -1,4 +1,5 @@
 // 전체 기억 탭 목 데이터. 화면 props 모양 그대로이며 서버 계약이 아니다. 문구는 Figma 07 그대로.
+// 영상 제목은 videoTitle 에 따옴표 없이 둔다. 따옴표는 컴포넌트가 붙인다.
 // 01 근처와 같은 장소는 같은 이미지를 쓴다.
 const img = (id: number) => `https://picsum.photos/id/${id}/360/640`;
 
@@ -10,7 +11,7 @@ export const archiveMock = {
       items: [
         {
           id: 'daejeon-bread',
-          label: '“대전 빵집 3곳”',
+          videoTitle: '대전 빵집 3곳',
           thumbUri: img(431),
           fade: 'recent',
           status: 'needsConfirmation',
