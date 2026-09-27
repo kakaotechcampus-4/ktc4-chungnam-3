@@ -38,7 +38,7 @@ public interface ContentRepository extends JpaRepository<Content, UUID> {
     @Query(value = """
             UPDATE content
                SET analysis_status = :status,
-                   source_status = :sourceStatus,
+                   source_status = COALESCE(:sourceStatus, source_status),
                    title = COALESCE(:title, title),
                    summary = COALESCE(:summary, summary),
                    category = COALESCE(:category, category),

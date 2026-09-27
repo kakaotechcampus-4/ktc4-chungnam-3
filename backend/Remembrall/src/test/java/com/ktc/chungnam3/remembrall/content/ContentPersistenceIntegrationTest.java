@@ -4,13 +4,16 @@ import com.ktc.chungnam3.remembrall.content.dto.AnalysisOutcome;
 import com.ktc.chungnam3.remembrall.content.dto.ContentSaveClaim;
 import com.ktc.chungnam3.remembrall.content.service.ContentPersistenceService;
 import com.ktc.chungnam3.remembrall.domain.content.Content;
+import com.ktc.chungnam3.remembrall.domain.content.ContentAnalysisFailureCode;
 import com.ktc.chungnam3.remembrall.domain.content.ContentAnalysisStatus;
 import com.ktc.chungnam3.remembrall.domain.content.ContentSourceStatus;
 import com.ktc.chungnam3.remembrall.domain.member.AuthProvider;
 import com.ktc.chungnam3.remembrall.domain.member.Member;
+import com.ktc.chungnam3.remembrall.repository.ContentPlaceRepository;
 import com.ktc.chungnam3.remembrall.repository.ContentRepository;
 import com.ktc.chungnam3.remembrall.repository.MemberRepository;
 import com.ktc.chungnam3.remembrall.repository.PersonalSaveRepository;
+import com.ktc.chungnam3.remembrall.repository.PlaceRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,6 +63,12 @@ class ContentPersistenceIntegrationTest {
     private PersonalSaveRepository personalSaveRepository;
 
     @Autowired
+    private PlaceRepository placeRepository;
+
+    @Autowired
+    private ContentPlaceRepository contentPlaceRepository;
+
+    @Autowired
     private PlatformTransactionManager transactionManager;
 
     private ContentPersistenceService service;
@@ -69,6 +78,8 @@ class ContentPersistenceIntegrationTest {
         service = new ContentPersistenceService(
                 contentRepository,
                 personalSaveRepository,
+                placeRepository,
+                contentPlaceRepository,
                 Clock.systemUTC(),
                 transactionManager
         );
@@ -114,36 +125,38 @@ class ContentPersistenceIntegrationTest {
     }
 
     @Test
-    void completedOutcomeStoresDesignedFieldsAndCannotBeAppliedTwice() {
+    void successfulOutcomeStoresDesignedFieldsAndCannotBeAppliedTwice() {
         UUID memberId = createMember();
         ContentSaveClaim claim = service.saveAndClaim(memberId, "completed-video");
         Instant fetchedAt = Instant.parse("2026-09-25T01:00:00Z");
         AnalysisOutcome outcome = new AnalysisOutcome(
-                ContentAnalysisStatus.COMPLETED,
+                ContentAnalysisStatus.SUCCESS,
+                null,
                 ContentSourceStatus.AVAILABLE,
                 "Video title",
                 "Video summary",
                 "TRAVEL",
                 "v1",
-                null,
-                fetchedAt
+                fetchedAt,
+                List.of()
         );
 
         assertThat(service.applyOutcome(claim.contentId(), outcome)).isTrue();
         Instant analyzedAt = contentRepository.findById(claim.contentId()).orElseThrow().getAnalyzedAt();
         assertThat(service.applyOutcome(claim.contentId(), new AnalysisOutcome(
                 ContentAnalysisStatus.FAILED,
-                ContentSourceStatus.UNAVAILABLE,
+                ContentAnalysisFailureCode.EXTRACTION_API_ERROR,
+                ContentSourceStatus.UNKNOWN,
                 null,
                 null,
                 null,
                 null,
-                "LATE_FAILURE",
-                null
+                null,
+                List.of()
         ))).isFalse();
 
         Content content = contentRepository.findById(claim.contentId()).orElseThrow();
-        assertThat(content.getAnalysisStatus()).isEqualTo(ContentAnalysisStatus.COMPLETED);
+        assertThat(content.getAnalysisStatus()).isEqualTo(ContentAnalysisStatus.SUCCESS);
         assertThat(content.getSourceStatus()).isEqualTo(ContentSourceStatus.AVAILABLE);
         assertThat(content.getTitle()).isEqualTo("Video title");
         assertThat(content.getSummary()).isEqualTo("Video summary");
@@ -165,24 +178,26 @@ class ContentPersistenceIntegrationTest {
         ContentSaveClaim failedClaim = service.saveAndClaim(memberId, "failed-video");
 
         assertThat(service.applyOutcome(partialClaim.contentId(), new AnalysisOutcome(
-                ContentAnalysisStatus.PARTIAL_SUCCESS,
+                ContentAnalysisStatus.PARTIAL,
+                ContentAnalysisFailureCode.PLACE_SEARCH_API_ERROR,
                 ContentSourceStatus.AVAILABLE,
                 "Partial title",
                 "Partial summary",
                 null,
                 "v1",
-                "PLACE_SEARCH_ERROR",
-                Instant.parse("2026-09-25T01:00:00Z")
+                Instant.parse("2026-09-25T01:00:00Z"),
+                List.of()
         ))).isTrue();
         assertThat(service.applyOutcome(failedClaim.contentId(), new AnalysisOutcome(
                 ContentAnalysisStatus.FAILED,
+                ContentAnalysisFailureCode.VIDEO_UNAVAILABLE,
                 ContentSourceStatus.UNAVAILABLE,
                 null,
                 null,
                 null,
                 null,
-                "METADATA_FETCH_ERROR",
-                null
+                null,
+                List.of()
         ))).isTrue();
 
         Instant partialAnalyzedAt = contentRepository.findById(partialClaim.contentId())
@@ -190,28 +205,29 @@ class ContentPersistenceIntegrationTest {
         Instant failedAnalyzedAt = contentRepository.findById(failedClaim.contentId())
                 .orElseThrow().getAnalyzedAt();
         AnalysisOutcome lateCompletion = new AnalysisOutcome(
-                ContentAnalysisStatus.COMPLETED,
+                ContentAnalysisStatus.SUCCESS,
+                null,
                 ContentSourceStatus.AVAILABLE,
                 "Late title",
                 "Late summary",
                 null,
                 "v2",
                 null,
-                null
+                List.of()
         );
         assertThat(service.applyOutcome(partialClaim.contentId(), lateCompletion)).isFalse();
         assertThat(service.applyOutcome(failedClaim.contentId(), lateCompletion)).isFalse();
 
         Content partial = contentRepository.findById(partialClaim.contentId()).orElseThrow();
         Content failed = contentRepository.findById(failedClaim.contentId()).orElseThrow();
-        assertThat(partial.getAnalysisStatus()).isEqualTo(ContentAnalysisStatus.PARTIAL_SUCCESS);
+        assertThat(partial.getAnalysisStatus()).isEqualTo(ContentAnalysisStatus.PARTIAL);
         assertThat(partial.getSummary()).isEqualTo("Partial summary");
         assertThat(partial.getCategory()).isNull();
-        assertThat(partial.getLastAnalysisErrorCode()).isEqualTo("PLACE_SEARCH_ERROR");
+        assertThat(partial.getLastAnalysisErrorCode()).isEqualTo("PLACE_SEARCH_API_ERROR");
         assertThat(partialAnalyzedAt).isNotNull();
         assertThat(partial.getAnalyzedAt()).isEqualTo(partialAnalyzedAt);
         assertThat(failed.getAnalysisStatus()).isEqualTo(ContentAnalysisStatus.FAILED);
-        assertThat(failed.getLastAnalysisErrorCode()).isEqualTo("METADATA_FETCH_ERROR");
+        assertThat(failed.getLastAnalysisErrorCode()).isEqualTo("VIDEO_UNAVAILABLE");
         assertThat(failedAnalyzedAt).isNotNull();
         assertThat(failed.getAnalyzedAt()).isEqualTo(failedAnalyzedAt);
         assertThat(personalSaveRepository.findById(partialClaim.personalSaveId())).isPresent();
