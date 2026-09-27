@@ -3,5 +3,5 @@
 export async function enqueue(item: unknown): Promise<void> {}
 
 export async function drain(): Promise<unknown[]> {
-  return [];
+    return [];
 }

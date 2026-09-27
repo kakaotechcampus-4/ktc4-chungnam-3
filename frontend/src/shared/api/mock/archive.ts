@@ -5,44 +5,80 @@ const img = (id: number) => `https://picsum.photos/id/${id}/360/640`;
 
 // 07 전체 기억 · 시간순 앨범 (2061:901)
 export const archiveMock = {
-  sections: [
-    {
-      title: '이번 주',
-      items: [
+    sections: [
         {
-          id: 'daejeon-bread',
-          videoTitle: '대전 빵집 3곳',
-          thumbUri: img(431),
-          fade: 'recent',
-          status: 'needsConfirmation',
-          resultId: 'needs-confirmation',
+            title: "이번 주",
+            items: [
+                {
+                    id: "daejeon-bread",
+                    videoTitle: "대전 빵집 3곳",
+                    thumbUri: img(431),
+                    fade: "recent",
+                    status: "needsConfirmation",
+                    resultId: "needs-confirmation",
+                },
+                {
+                    id: "just-saved",
+                    label: "방금 저장한 영상",
+                    thumbUri: img(225),
+                    fade: "recent",
+                    status: "analyzing",
+                    resultId: "analyzing",
+                },
+                {
+                    id: "sojedong",
+                    label: "소제동 카페거리",
+                    thumbUri: img(312),
+                    fade: "recent",
+                },
+            ],
         },
         {
-          id: 'just-saved',
-          label: '방금 저장한 영상',
-          thumbUri: img(225),
-          fade: 'recent',
-          status: 'analyzing',
-          resultId: 'analyzing',
+            title: "지난 몇 주",
+            items: [
+                {
+                    id: "sungsimdang",
+                    label: "성심당 본점",
+                    thumbUri: img(1080),
+                    fade: "weeks",
+                    detailId: "sungsimdang",
+                },
+                {
+                    id: "afternoon-four",
+                    label: "오후 네시",
+                    thumbUri: img(1060),
+                    fade: "weeks",
+                },
+                {
+                    id: "daeheung-cathedral",
+                    label: "대흥동 성당",
+                    thumbUri: img(488),
+                    fade: "weeks",
+                },
+            ],
         },
-        { id: 'sojedong', label: '소제동 카페거리', thumbUri: img(312), fade: 'recent' },
-      ],
-    },
-    {
-      title: '지난 몇 주',
-      items: [
-        { id: 'sungsimdang', label: '성심당 본점', thumbUri: img(1080), fade: 'weeks', detailId: 'sungsimdang' },
-        { id: 'afternoon-four', label: '오후 네시', thumbUri: img(1060), fade: 'weeks' },
-        { id: 'daeheung-cathedral', label: '대흥동 성당', thumbUri: img(488), fade: 'weeks' },
-      ],
-    },
-    {
-      title: '올해 봄',
-      items: [
-        { id: 'hanbat-kalguksu', label: '한밭 손칼국수', thumbUri: img(292), fade: 'months' },
-        { id: 'skyroad', label: '으능정이 스카이로드', thumbUri: img(674), fade: 'months' },
-        { id: 'gyejoksan', label: '계족산 황톳길', thumbUri: img(1015), fade: 'months' },
-      ],
-    },
-  ],
+        {
+            title: "올해 봄",
+            items: [
+                {
+                    id: "hanbat-kalguksu",
+                    label: "한밭 손칼국수",
+                    thumbUri: img(292),
+                    fade: "months",
+                },
+                {
+                    id: "skyroad",
+                    label: "으능정이 스카이로드",
+                    thumbUri: img(674),
+                    fade: "months",
+                },
+                {
+                    id: "gyejoksan",
+                    label: "계족산 황톳길",
+                    thumbUri: img(1015),
+                    fade: "months",
+                },
+            ],
+        },
+    ],
 } as const;

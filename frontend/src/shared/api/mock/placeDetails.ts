@@ -3,15 +3,15 @@
 const img = (id: number) => `https://picsum.photos/id/${id}/360/640`;
 
 export const placeDetailsMock = {
-  // 08 장소 상세 · 지도 (2061:971)
-  sungsimdang: {
-    time: '3주 전',
-    place: '성심당 본점',
-    meta: '대전 중구 은행동 · 도보 4분',
-    thumbUri: img(1080),
-    fade: 'recent',
-    note: '튀김소보로는 오전에 가면 줄이 짧다. 부추빵도 같이 사라고 함.',
-    tags: ['줄서는', '오전', '빵집'],
-    sourceMeta: '@daejeon.bread · YouTube Shorts',
-  },
+    // 08 장소 상세 · 지도 (2061:971)
+    sungsimdang: {
+        time: "3주 전",
+        place: "성심당 본점",
+        meta: "대전 중구 은행동 · 도보 4분",
+        thumbUri: img(1080),
+        fade: "recent",
+        note: "튀김소보로는 오전에 가면 줄이 짧다. 부추빵도 같이 사라고 함.",
+        tags: ["줄서는", "오전", "빵집"],
+        sourceMeta: "@daejeon.bread · YouTube Shorts",
+    },
 } as const;
