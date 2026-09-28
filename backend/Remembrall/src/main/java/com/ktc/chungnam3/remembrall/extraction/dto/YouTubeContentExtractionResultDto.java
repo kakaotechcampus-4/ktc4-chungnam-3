@@ -6,18 +6,11 @@ import java.util.List;
 
 public record YouTubeContentExtractionResultDto(
         ExtractionStatus status,
-
         AnalysisMetadataDto analysisMetadata,
-
         String summary,
-
         List<String> summaryUncertainties,
-
         List<PlaceCandidateDto> placeCandidates,
-
         List<TemporalInfoDto> temporalInfos,
-
         FailureInfoDto failure
-
 ) {
 }

@@ -1,56 +1,36 @@
-# Welcome to your Expo app 👋
+# REMEMBRALL 프론트엔드
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+저장만 해두고 잊어버린 콘텐츠를, 에이전트가 꺼내주는 앱
 
-## Get started
+저장해둔 장소 영상을 근처에 갔을 때 다시 꺼내주는 앱의 React Native(Expo) 클라이언트다.
+지금은 UI 단계라 화면이 목 데이터로 렌더된다.
 
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## 실행
 
 ```bash
-npm run reset-project
+npm install
+npx expo start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+터미널에 뜬 QR 코드를 폰의 Expo Go 로 스캔한다. 에뮬레이터가 있으면 `a` 를 누른다.
 
-### Other setup steps
+## 딥링크로 화면 열기
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+저장 결과 모달(02~05)처럼 앱 안에서 바로 갈 수 없는 화면은 딥링크로 연다.
 
-## Learn more
+1. Expo Go 홈 → Enter URL manually → `exp://<Metro 주소>/--/save-result/failed`
+   (`<Metro 주소>` 는 `npx expo start` 가 보여주는 `192.168.x.x:8081` 같은 값)
+2. adb 가 있으면:
+    ```bash
+    adb shell am start -W -a android.intent.action.VIEW -d "exp://<Metro 주소>/--/save-result/failed" host.exp.exponent
+    ```
 
-To learn more about developing your project with Expo, look at the following resources:
+경로는 `save-result/needs-confirmation`, `save-result/analyzing`, `save-result/no-place`, `save-result/failed`,
+`detail/sungsimdang`, `nearby`, `archive` 가 있다.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+빈 상태(06 · 07b)는 `src/shared/api/mock/index.ts` 의 `MOCK_SCENARIO` 플래그를 `true` 로 바꾸고 reload 해서 본다.
 
-## Join the community
+## 문서
 
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- [STRUCTURE.md](STRUCTURE.md): 디렉토리 구조, 의존 방향, 테마 토큰 규칙, 확정·미확정 항목
+- [CLAUDE.md](CLAUDE.md): 작업 범위, git, 코드 규칙

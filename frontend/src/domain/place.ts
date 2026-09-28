@@ -6,9 +6,9 @@ export type PlaceId = string;
 export type PlaceResolution = string;
 
 export interface Place {
-  id: PlaceId;
-  name: string;
-  resolution: PlaceResolution;
-  latitude: number | null;
-  longitude: number | null;
+    id: PlaceId;
+    name: string;
+    resolution: PlaceResolution;
+    latitude: number | null;
+    longitude: number | null;
 }

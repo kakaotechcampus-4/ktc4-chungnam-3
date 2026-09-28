@@ -6,24 +6,14 @@ import java.util.List;
 
 
 public record TemporalInfoDto(
-
         String subject,
-
         String originalText,
-
         List<String> relatedPlaceCandidateIds,
-
         LocalDate startDate,
-
         LocalDate endDate,
-
         LocalTime startTime,
-
         LocalTime endTime,
-
         List<EvidenceDto> evidence,
-
         List<String> uncertainties
-
 ) {
 }
