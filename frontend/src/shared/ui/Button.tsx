@@ -7,7 +7,7 @@ import {
     type ViewStyle,
 } from "react-native";
 
-import { colors, metrics, radius, spacing, stroke, typography } from "./theme";
+import { colors, radius, size, spacing, stroke, typography } from "./theme";
 
 export type ButtonKind = "primary" | "secondary" | "text";
 
@@ -41,8 +41,8 @@ const styles = StyleSheet.create({
     base: {
         alignItems: "center",
         justifyContent: "center",
+        height: size.button,
         paddingHorizontal: spacing.lg,
-        paddingVertical: metrics.button.paddingVertical,
         borderRadius: radius.md,
     },
     primaryPressed: {
