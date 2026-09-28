@@ -20,20 +20,15 @@ export const metrics = {
     badge: {
         paddingVertical: 3,
     },
-    // C/Button 2054:157. 14 + 글자 20 + 14 = 높이 48.
-    button: {
-        paddingVertical: 14,
-    },
-    // C/Chip 2054:139. 높이 34 → 상하 8 씩 50dp.
+    // C/Chip 2054:139. 높이 size.chip 32 → 상하 8 씩 48dp.
+    // Figma 는 테두리를 크기에 넣지 않는다. RN 은 테두리가 안쪽에 들어가므로 좌우 padding 에서 테두리만큼 뺀다.
     chip: {
         paddingHorizontal: 14,
-        paddingVertical: 6,
         hitSlop: { top: 8, bottom: 8 },
     },
     // C/Card/Nearby 2054:120.
     nearbyCard: {
         thumbWidth: 112,
-        headGap: 2,
         nowPaddingHorizontal: 10,
         nowPaddingVertical: 3,
         summaryMaxLines: 3,
@@ -41,7 +36,6 @@ export const metrics = {
     // C/Card/Memory 2054:107.
     memoryCard: {
         thumbWidth: 72,
-        headGap: 2,
         summaryMaxLines: 2,
     },
     // 01 근처 2061:760.
@@ -54,7 +48,6 @@ export const metrics = {
     // 06 근처 빈 상태 2061:881. 링크 높이 20 → 상하 14 씩 48dp.
     // stack: Figma 360 폭 절대좌표를 썸네일 중심 기준으로 바꾼 값. dx 는 화면 가운데로부터의 거리.
     nearbyEmpty: {
-        linkGap: 2,
         linkIconSize: 16,
         linkHitSlop: { top: 14, bottom: 14 },
         stackHeight: 300,
@@ -93,7 +86,6 @@ export const metrics = {
     placeOption: {
         paddingHorizontal: 16,
         paddingVertical: 14,
-        textGap: 2,
         checkSize: 20,
     },
     // 02 "여기 없어요, 직접 찾을게요" 2061:808. 높이 44 → 상하 2 씩 48dp.
@@ -115,12 +107,10 @@ export const metrics = {
         handleHeight: 4,
         headGap: 16,
         thumbWidth: 72,
-        infoGap: 2,
         noteGap: 6,
         tagGap: 6,
         tagPaddingVertical: 2,
         sourcePaddingLeft: 14,
-        sourceTextGap: 2,
     },
     // 03 분석 중 스켈레톤 2061:831.
     skeleton: {

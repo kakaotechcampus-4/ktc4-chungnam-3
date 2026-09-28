@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
     },
     text: {
         flex: 1,
-        gap: metrics.placeOption.textGap,
+        gap: spacing.xs,
     },
     name: {
         ...typography.titleCard,

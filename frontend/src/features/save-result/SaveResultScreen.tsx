@@ -50,12 +50,20 @@ const BADGE: Record<SaveResultState, BadgeStatus | undefined> = {
     failed: "failed",
 };
 
-const COUNT_WORDS = ["한", "두", "세", "네", "다섯"];
-
-// 1~5 는 "두 곳", 그 이상은 "6곳".
-function placeCount(n: number): string {
-    const word = COUNT_WORDS[n - 1];
-    return word ? `${word} 곳` : `${n}곳`;
+// 02 확인 필요 문구는 후보 수로 가른다. 1곳이면 02b (Figma 2094:303).
+function confirmCopy(count: number) {
+    if (count === 1) {
+        return {
+            heading: "이 영상, 여기가 맞나요?",
+            body: "영상에서 1곳을 찾았어요. 여기가 맞는지 확인해주세요.",
+            later: "나중에 확인할게요",
+        };
+    }
+    return {
+        heading: "이 영상, 어디였을까요?",
+        body: `영상에서 ${count}곳을 찾았어요. 맞는 곳을 골라주세요.`,
+        later: "나중에 고를게요",
+    };
 }
 
 // 받침이 있으면 "으로", 없거나 ㄹ 받침이면 "로". 마지막 글자가 한글이 아니면 "(으)로".
@@ -89,6 +97,7 @@ export default function SaveResultScreen() {
     const selected = candidates.find(
         (candidate) => candidate.id === selectedId,
     );
+    const copy = confirmCopy(candidates.length);
 
     return (
         <ScrollView
@@ -115,10 +124,7 @@ export default function SaveResultScreen() {
 
             {result.state === "needsConfirmation" && (
                 <>
-                    <Message
-                        heading="이 영상, 어디였을까요?"
-                        body={`영상에서 ${placeCount(candidates.length)}을 찾았어요. 맞는 곳을 골라주세요.`}
-                    />
+                    <Message heading={copy.heading} body={copy.body} />
                     <View style={styles.options} accessibilityRole="radiogroup">
                         {candidates.map((candidate) => (
                             <PlaceOption
@@ -180,7 +186,7 @@ export default function SaveResultScreen() {
                         )}
                         <Button
                             kind="text"
-                            label="나중에 고를게요"
+                            label={copy.later}
                             onPress={close}
                         />
                     </>

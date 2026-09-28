@@ -37,10 +37,8 @@ export default function ProposalScreen() {
         );
     }
 
-    const { area, nearby, memoryGroups } = nearbyMock;
-    const count =
-        nearby.length +
-        memoryGroups.reduce((sum, group) => sum + group.length, 0);
+    // 제목 숫자는 카드 수가 아니라 근처 전체 수(total)다. 필터 칩과 무관하다.
+    const { area, total, nearby, memoryGroups } = nearbyMock;
 
     return (
         <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom }}>
@@ -50,7 +48,7 @@ export default function ProposalScreen() {
                     <Text style={styles.caption}>지금 {area}</Text>
                 </View>
                 <Text style={styles.heading}>
-                    잊고 있던 곳 {count}개를 찾았어요
+                    잊고 있던 곳 {total}개를 찾았어요
                 </Text>
                 <Text style={styles.caption}>
                     가까이 갈수록 사진에 색이 돌아와요

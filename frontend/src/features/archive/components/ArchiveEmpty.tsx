@@ -41,7 +41,7 @@ export default function ArchiveEmpty() {
                             <Icon
                                 name="pin"
                                 size={size.iconMd}
-                                color={colors.text.secondary}
+                                color={colors.icon.secondary}
                             />
                         )}
                     </View>

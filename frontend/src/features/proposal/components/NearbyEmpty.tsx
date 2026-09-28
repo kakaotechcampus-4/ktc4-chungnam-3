@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         alignSelf: "flex-start",
-        gap: metrics.nearbyEmpty.linkGap,
+        gap: spacing.xs,
         paddingTop: spacing.sm,
     },
     linkLabel: {
