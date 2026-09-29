@@ -8,7 +8,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class PlaceResolverTest {
 
-    private final PlaceResolver resolver = new PlaceResolver();
+    // 기본값: 반경 내 상가업소 데이터가 전혀 없는 경우(교통시설·공공기관 등)를 흉내낸다 -
+    // hasNearbyStoreMismatch가 false를 반환해야 하는 케이스.
+    private final PlaceResolver resolver = new PlaceResolver((lon, lat, radiusMeters) -> List.of());
+
+    private static PlaceResolver resolverWithNearbyStores(
+            List<DataportalStoreClient.StoreResult> nearbyStores) {
+        return new PlaceResolver((lon, lat, radiusMeters) -> nearbyStores);
+    }
+
+    private static DataportalStoreClient.StoreResult store(String bizesNm) {
+        return new DataportalStoreClient.StoreResult(bizesNm, "", "음식", "어딘가", 0, 0);
+    }
 
     private static PlaceSearchClient.PlaceSearchResult result(String displayName, double lat, double lon) {
         return new PlaceSearchClient.PlaceSearchResult(displayName, lat, lon, null, null);
@@ -132,6 +143,32 @@ class PlaceResolverTest {
         PlaceResolver.Result resolved = resolver.resolve("p1", "을지로 골뱅이", null, "을지로", matches);
 
         assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.NEEDS_CONFIRMATION);
+    }
+
+    @Test
+    void 반경내_상가업소_이름이_하나도_안맞으면_확정하지_않고_되묻는다() {
+        // 「을지로 골뱅이 골목」이 시·도 단위 교차검증을 통과한 채 실제로는 잠실 좌표로 잘못
+        // 확정되는 사례(CLAUDE.md 참고)를 흉내낸다 - 결과는 1건, 지역/이름 필터는 통과하지만
+        // 반경 내 실제 상가업소 중엔 일치하는 이름이 없는 상황.
+        var wrongCoordinate = result("을지로 골뱅이 골목", 37.508, 127.106);
+        var resolver = resolverWithNearbyStores(List.of(store("편의점"), store("치킨집")));
+
+        PlaceResolver.Result resolved = resolver.resolve(
+                "p1", "을지로 골뱅이 골목", null, null, List.of(wrongCoordinate));
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.NEEDS_CONFIRMATION);
+        assertThat(resolved.resolvedPlace()).isNull();
+    }
+
+    @Test
+    void 반경내_상가업소_이름이_일치하면_RESOLVED_유지() {
+        var correctCoordinate = result("을지로 골뱅이 골목", 37.566, 126.991);
+        var resolver = resolverWithNearbyStores(List.of(store("을지로 골뱅이 골목"), store("편의점")));
+
+        PlaceResolver.Result resolved = resolver.resolve(
+                "p1", "을지로 골뱅이 골목", null, null, List.of(correctCoordinate));
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
     }
 
     @Test

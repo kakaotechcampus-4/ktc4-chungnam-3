@@ -53,6 +53,14 @@ public class PlaceSearchClient {
      * 매칭에 실패하면 city 값 자체("서울", "대전" 같은 지명)를 엉뚱하게 반환해버리는 문제가 있었고,
      * regionHint가 없으면 400 Bad Request까지 났다 (실측 확인함). 그래서 자유문장 방식을 유지하되
      * countrycodes만 추가 - 이건 q와 같이 써도 되는 파라미터다.
+     * <p>
+     * {@code accept-language=ko}도 추가한다 (2026-09-29 실측) - 이게 없으면 Nominatim이 장소의
+     * 여러 다국어 이름 태그 중 기본값(유명 장소는 보통 영문 {@code name})을 돌려줘서, 한글 검색어와
+     * displayName이 아예 안 겹쳐 {@link PlaceResolver}의 이름 필터에서 통째로 걸러지는 문제가 있었다
+     * (예: "경복궁" 검색 → {@code Gyeongbokgung Palace}만 돌아옴). {@code ko}를 지정하면 {@code name:ko}
+     * 태그가 있는 장소는 한글로 옴 - 단, 일부는 여전히 정식 명칭이라 구어체 검색어와 다를 수 있음
+     * (예: "명동성당" 검색해도 {@code name:ko}가 "명동대성당"이라 부분일치 안 될 수 있음, 별도 이슈).
+     * <p>
      * 일치하는 장소가 없으면 빈 리스트를 반환한다 (정상 케이스, 예외 아님).
      */
     public List<PlaceSearchResult> search(String name, String branchName, String regionHint) {
@@ -64,6 +72,7 @@ public class PlaceSearchClient {
                             .queryParam("key", apiKey)
                             .queryParam("q", query)
                             .queryParam("countrycodes", "kr")
+                            .queryParam("accept-language", "ko")
                             .queryParam("format", "json")
                             .queryParam("limit", 5)
                             .build())
