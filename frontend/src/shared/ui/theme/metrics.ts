@@ -132,6 +132,11 @@ export const metrics = {
         knobInset: 3,
         durationMs: 150,
     },
+    // 12 저장물 없음 2105:682. 빈 썸네일 자리 96 × 9:16, 닫기 · 뒤로 아이콘 24 → 사방 12 씩 48dp.
+    notFound: {
+        thumbWidth: 96,
+        closeHitSlop: { top: 12, bottom: 12, left: 12, right: 12 },
+    },
     // 03 분석 중 스켈레톤 2061:831.
     skeleton: {
         padding: 16,

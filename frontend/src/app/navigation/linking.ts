@@ -9,6 +9,8 @@ export function buildLinkingConfig(): LinkingOptions<RootStackParamList> {
     return {
         prefixes: [Linking.createURL("/")],
         config: {
+            // 딥링크로 콜드 스타트해도 Main 이 항상 아래에 깔리게 한다. 뒤로 가기 · popTo 의 목적지다.
+            initialRouteName: ROUTES.Main,
             screens: {
                 [ROUTES.Main]: {
                     screens: {

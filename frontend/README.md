@@ -28,6 +28,7 @@ npx expo start
 경로는 `save-result/needs-confirmation`, `save-result/analyzing`, `save-result/no-place`, `save-result/failed`,
 `detail/sungsimdang`, `nearby`, `map`, `archive`, `settings` 가 있다.
 후보가 1곳인 확인 필요(02b)는 `save-result/needs-confirmation-one` 이다.
+없는 id 로 열면 저장물 없음(12)이 뜬다. 예: `save-result/unknown`, `detail/unknown`.
 
 빈 상태(06 · 07b)는 `src/shared/api/mock/index.ts` 의 `MOCK_SCENARIO` 플래그를 `true` 로 바꾸고 reload 해서 본다.
 

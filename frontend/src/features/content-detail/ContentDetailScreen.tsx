@@ -1,6 +1,7 @@
 // 장소 상세. 위는 지도, 아래는 겹쳐 올라온 시트. 지도는 아직 bg/subtle 자리표시다.
 import {
     type RouteProp,
+    StackActions,
     useNavigation,
     useRoute,
 } from "@react-navigation/native";
@@ -9,6 +10,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { placeDetailsMock } from "../../shared/api/mock";
 import Icon from "../../shared/ui/Icon";
+import NotFound from "../../shared/ui/NotFound";
 import {
     colors,
     effects,
@@ -33,7 +35,22 @@ export default function ContentDetailScreen() {
     const insets = useSafeAreaInsets();
 
     const detail = details[route.params.placeId];
-    if (!detail) return null;
+    // 삭제·만료된 장소. 12 를 재사용하고 push 화면이라 ← 를 쓴다.
+    if (!detail) {
+        return (
+            <NotFound
+                topIcon="arrowLeft"
+                heading="이 장소를 찾을 수 없어요"
+                body="삭제됐거나 기간이 지난 저장이에요."
+                onClose={() => navigation.goBack()}
+                onGoArchive={() =>
+                    navigation.dispatch(
+                        StackActions.popTo("Main", { screen: "Archive" }),
+                    )
+                }
+            />
+        );
+    }
 
     return (
         <View style={styles.screen}>

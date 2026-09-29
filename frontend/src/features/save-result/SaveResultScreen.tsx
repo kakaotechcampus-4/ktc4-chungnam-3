@@ -3,6 +3,7 @@
 // "다시 시도" 는 목에서 화면 안의 상태만 분석 중으로 바꾼다. 서버 호출은 runtime 작업 때 붙인다.
 import {
     type RouteProp,
+    StackActions,
     useNavigation,
     useRoute,
 } from "@react-navigation/native";
@@ -14,6 +15,7 @@ import { saveResultsMock } from "../../shared/api/mock";
 import type { BadgeStatus } from "../../shared/ui/Badge";
 import Button from "../../shared/ui/Button";
 import Icon from "../../shared/ui/Icon";
+import NotFound from "../../shared/ui/NotFound";
 import {
     colors,
     metrics,
@@ -94,7 +96,22 @@ export default function SaveResultScreen() {
     // 05 "다시 시도" 는 같은 저장물을 다시 분석한다. 원본 영상 영역은 그대로 두고 상태만 03 으로 바꾼다.
     const [retrying, setRetrying] = useState(false);
 
-    if (!result) return null;
+    // 삭제·만료된 저장물 (12). "기억 목록으로" 는 모달을 닫고 기억 탭으로 간다.
+    if (!result) {
+        return (
+            <NotFound
+                topIcon="close"
+                heading="이 저장물을 찾을 수 없어요"
+                body="삭제됐거나 기간이 지난 저장이에요."
+                onClose={() => navigation.goBack()}
+                onGoArchive={() =>
+                    navigation.dispatch(
+                        StackActions.popTo("Main", { screen: "Archive" }),
+                    )
+                }
+            />
+        );
+    }
 
     const state: SaveResultState = retrying ? "analyzing" : result.state;
     const close = () => navigation.goBack();
