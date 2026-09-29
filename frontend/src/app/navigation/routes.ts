@@ -4,18 +4,22 @@ import type { NavigatorScreenParams } from "@react-navigation/native";
 export const ROUTES = {
     Main: "Main",
     Nearby: "Nearby",
+    Map: "Map",
     Archive: "Archive",
+    Settings: "Settings",
     ContentDetail: "ContentDetail",
     SaveResult: "SaveResult",
 } as const;
 
 export type MainTabParamList = {
     [ROUTES.Nearby]: undefined;
+    [ROUTES.Map]: undefined;
     [ROUTES.Archive]: undefined;
 };
 
 export type RootStackParamList = {
     [ROUTES.Main]: NavigatorScreenParams<MainTabParamList>;
+    [ROUTES.Settings]: undefined;
     [ROUTES.ContentDetail]: { placeId: string };
     [ROUTES.SaveResult]: { resultId: string };
 };

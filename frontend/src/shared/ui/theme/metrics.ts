@@ -1,11 +1,17 @@
 // Figma 변수 아님, 노드 실측값. 변수에 바인딩되지 않은 치수를 컴포넌트별로 둔다.
 export const metrics = {
-    // C/TopTabs 2054:172. 탭 높이 28(글자 20 + 간격 6 + 밑줄 2) → 상하 10 씩 48dp. 좌우 10 은 탭 간격 20 의 절반.
-    topTabs: {
-        labelGap: 6,
-        underlineWidth: 24,
-        underlineHeight: 2,
-        hitSlop: { top: 10, bottom: 10, left: 10, right: 10 },
+    // C/BottomNav 2101:419. 높이 64 = 위아래 8 + pill(4 + 아이콘 22 + 4) + 간격 2 + 라벨 16.
+    bottomNav: {
+        iconSize: 22,
+        labelGap: 2,
+    },
+    // 01 · 06 · 07 · 07b Header (2061:762). 높이 36, 톱니 버튼 40 → 사방 4 씩 48dp.
+    screenHeader: {
+        height: 36,
+        locationIconSize: 16,
+        settingsButtonSize: 40,
+        settingsIconSize: 22,
+        settingsHitSlop: { top: 4, bottom: 4, left: 4, right: 4 },
     },
     // C/Thumb 2054:102. 9:16 세로. 재생 배지(source/Shorts 2054:104)와 그 안의 Play 위치.
     thumb: {
@@ -39,10 +45,10 @@ export const metrics = {
         summaryMaxLines: 2,
     },
     // 01 근처 2061:760.
+    // 위치 줄이 헤더로 올라가 소개 영역 위 padding 이 16 이 됐다 (01 Intro 2061:764).
     proposal: {
-        introPaddingTop: 24,
+        introPaddingTop: 16,
         introGap: 6,
-        locationIconSize: 16,
         listPaddingTop: 16,
     },
     // 06 근처 빈 상태 2061:881. 링크 높이 20 → 상하 14 씩 48dp.

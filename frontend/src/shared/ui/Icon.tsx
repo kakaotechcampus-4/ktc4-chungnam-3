@@ -3,8 +3,12 @@ import type { LucideIcon } from "lucide-react-native";
 import ArrowLeft from "lucide-react-native/icons/arrow-left";
 import Check from "lucide-react-native/icons/check";
 import ChevronRight from "lucide-react-native/icons/chevron-right";
+import Footprints from "lucide-react-native/icons/footprints";
+import Images from "lucide-react-native/icons/images";
+import MapIcon from "lucide-react-native/icons/map";
 import MapPin from "lucide-react-native/icons/map-pin";
 import Pencil from "lucide-react-native/icons/pencil";
+import Settings from "lucide-react-native/icons/settings";
 import X from "lucide-react-native/icons/x";
 import Svg, { Path } from "react-native-svg";
 
@@ -17,6 +21,10 @@ export type IconName =
     | "check"
     | "chevronRight"
     | "pencil"
+    | "footprints"
+    | "map"
+    | "images"
+    | "settings"
     | "play";
 
 const LUCIDE: Record<Exclude<IconName, "play">, LucideIcon> = {
@@ -26,6 +34,10 @@ const LUCIDE: Record<Exclude<IconName, "play">, LucideIcon> = {
     check: Check,
     chevronRight: ChevronRight,
     pencil: Pencil,
+    footprints: Footprints,
+    map: MapIcon,
+    images: Images,
+    settings: Settings,
 };
 
 const STROKE_WIDTH = 1.75;

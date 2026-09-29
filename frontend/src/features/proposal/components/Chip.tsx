@@ -48,6 +48,7 @@ const styles = StyleSheet.create({
     },
     default: {
         borderColor: colors.border.default,
+        backgroundColor: colors.bg.surface,
     },
     selected: {
         borderColor: "transparent",

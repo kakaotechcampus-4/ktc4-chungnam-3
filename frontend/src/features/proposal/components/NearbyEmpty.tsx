@@ -5,15 +5,14 @@ import Icon from "../../../shared/ui/Icon";
 import Thumb from "../../../shared/ui/Thumb";
 import { colors, metrics, spacing, typography } from "../../../shared/ui/theme";
 
+// 현재 위치(area)는 화면 헤더가 그린다.
 export type NearbyEmptyProps = {
-    area: string;
     nearestDistance: string;
     nearestArea: string;
     stackThumbUris: readonly string[];
 };
 
 export default function NearbyEmpty({
-    area,
     nearestDistance,
     nearestArea,
     stackThumbUris,
@@ -21,10 +20,6 @@ export default function NearbyEmpty({
     return (
         <View>
             <View style={styles.intro}>
-                <View style={styles.location}>
-                    <Icon name="pin" size={metrics.proposal.locationIconSize} />
-                    <Text style={styles.caption}>지금 {area}</Text>
-                </View>
                 <Text style={styles.heading}>여기선 저장해둔 곳이 없어요</Text>
                 <Text style={styles.body}>
                     가장 가까운 기억은 {nearestDistance} 떨어진 {nearestArea}에
@@ -81,11 +76,6 @@ const styles = StyleSheet.create({
         paddingTop: metrics.proposal.introPaddingTop,
         paddingHorizontal: spacing.lg,
         gap: metrics.proposal.introGap,
-    },
-    location: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: spacing.xs,
     },
     caption: {
         ...typography.captionMeta,

@@ -13,9 +13,11 @@ export function buildLinkingConfig(): LinkingOptions<RootStackParamList> {
                 [ROUTES.Main]: {
                     screens: {
                         [ROUTES.Nearby]: "nearby",
+                        [ROUTES.Map]: "map",
                         [ROUTES.Archive]: "archive",
                     },
                 },
+                [ROUTES.Settings]: "settings",
                 [ROUTES.ContentDetail]: "detail/:placeId",
                 [ROUTES.SaveResult]: "save-result/:resultId",
             },
