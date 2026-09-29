@@ -70,3 +70,9 @@ target/
 *.sqlite3
 *.db
 .terraform/
+
+# ── 개인 작업 메모 (팀 공유 문서는 backend/docs/ 참고) ──
+backend/Remembrall/CLAUDE.md
+
+# 개인 Codex 작업 인계 메모
+backend/Remembrall/src/main/java/com/ktc/chungnam3/remembrall/save/docs/AGENTS.md
