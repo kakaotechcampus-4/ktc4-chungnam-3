@@ -99,10 +99,9 @@ export const metrics = {
         paddingHorizontal: 16,
         hitSlop: { top: 2, bottom: 2 },
     },
-    // 08 장소 상세 2061:971. 시트는 지도 위로 38 겹친다(top 292). 뒤로가기 38 → 사방 5 씩 48dp.
+    // 08 장소 상세 2061:971. 뒤로가기 38 → 사방 5 씩 48dp.
+    // 시트 높이는 고정값이 아니라 내용 높이다(08 · 08b 측정). 기본 지점에서 메모는 2줄로 줄인다.
     contentDetail: {
-        mapHeight: 330,
-        sheetOverlap: 38,
         backLeft: 16,
         backIconSize: 22,
         backHitSlop: { top: 5, bottom: 5, left: 5, right: 5 },
@@ -117,6 +116,7 @@ export const metrics = {
         tagGap: 6,
         tagPaddingVertical: 2,
         sourcePaddingLeft: 14,
+        noteCollapsedLines: 2,
     },
     // push 화면 상단 바 (11 설정 2103:633 · 02c 2105:593). 뒤로가기 아이콘 24 → 사방 12 씩 48dp.
     topBar: {

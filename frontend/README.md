@@ -29,9 +29,10 @@ npx expo start
 `detail/sungsimdang`, `nearby`, `map`, `archive`, `settings` 가 있다.
 후보가 1곳인 확인 필요(02b)는 `save-result/needs-confirmation-one` 이다.
 장소 직접 찾기(02c)는 `save-result/needs-confirmation/search` 이다.
+빈 필드 장소 상세(08b)는 `detail/daeheung-cathedral` 이다.
 없는 id 로 열면 저장물 없음(12)이 뜬다. 예: `save-result/unknown`, `detail/unknown`.
 
-빈 상태(06 · 07b)는 `src/shared/api/mock/index.ts` 의 `MOCK_SCENARIO` 플래그를 `true` 로 바꾸고 reload 해서 본다.
+빈 상태(06 · 07b), 위치 권한, 깨진 썸네일은 `src/shared/api/mock/scenario.ts` 의 `MOCK_SCENARIO` 플래그를 바꾸고 reload 해서 본다.
 
 ## 문서
 
