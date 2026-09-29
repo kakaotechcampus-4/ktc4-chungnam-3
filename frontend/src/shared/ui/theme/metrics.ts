@@ -118,6 +118,20 @@ export const metrics = {
         tagPaddingVertical: 2,
         sourcePaddingLeft: 14,
     },
+    // 11 설정 2103:626. 뒤로가기 아이콘 24 → 사방 12 씩 48dp.
+    settings: {
+        backHitSlop: { top: 12, bottom: 12, left: 12, right: 12 },
+        rowPaddingHorizontal: 16,
+        rowPaddingVertical: 14,
+    },
+    // C/Switch 2101:424. 손잡이는 트랙 안쪽 3 떨어져 있다. 켜짐·꺼짐 전환은 150ms 슬라이드.
+    settingsSwitch: {
+        width: 48,
+        height: 28,
+        knobSize: 22,
+        knobInset: 3,
+        durationMs: 150,
+    },
     // 03 분석 중 스켈레톤 2061:831.
     skeleton: {
         padding: 16,
