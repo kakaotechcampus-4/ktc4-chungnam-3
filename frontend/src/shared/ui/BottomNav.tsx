@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Icon, { type IconName } from "./Icon";
-import { colors, metrics, radius, spacing, stroke, typography } from "./theme";
+import { colors, metrics, spacing, stroke, typography } from "./theme";
 
 export type BottomNavKey = "nearby" | "map" | "archive";
 
@@ -70,6 +70,9 @@ export default function BottomNav({ active, onChange }: Props) {
     );
 }
 
+// pill 높이 = 위아래 space/xs + 아이콘. radius/full(999) 대신 높이의 절반을 넣는다.
+const INDICATOR_RADIUS = (metrics.bottomNav.iconSize + spacing.xs * 2) / 2;
+
 const styles = StyleSheet.create({
     bar: {
         flexDirection: "row",
@@ -84,10 +87,12 @@ const styles = StyleSheet.create({
         alignItems: "center",
         gap: metrics.bottomNav.labelGap,
     },
+    // 선택 안 된 pill 도 처음부터 바 색(bg/surface) 배경을 가진다. 선택되면 색만 바뀐다.
     indicator: {
         paddingHorizontal: spacing.lg,
         paddingVertical: spacing.xs,
-        borderRadius: radius.full,
+        borderRadius: INDICATOR_RADIUS,
+        backgroundColor: colors.bg.surface,
     },
     indicatorActive: {
         backgroundColor: colors.bg.subtle,
