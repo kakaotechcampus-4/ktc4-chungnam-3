@@ -14,7 +14,7 @@ const COLUMNS = 3;
 
 type ArchiveItem = {
     id: string;
-    label?: string;
+    placeName?: string;
     videoTitle?: string;
     thumbUri?: string;
     fade: ThumbFade;
@@ -87,7 +87,7 @@ export default function ArchiveScreen() {
                                         item ? (
                                             <AlbumCell
                                                 key={item.id}
-                                                label={item.label}
+                                                placeName={item.placeName}
                                                 videoTitle={item.videoTitle}
                                                 thumbUri={item.thumbUri}
                                                 fade={item.fade}

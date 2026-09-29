@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
     },
     info: {
         flex: 1,
-        gap: metrics.contentDetail.infoGap,
+        gap: spacing.xs,
     },
     time: {
         ...typography.headingScreen,
@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
     },
     sourceText: {
         flex: 1,
-        gap: metrics.contentDetail.sourceTextGap,
+        gap: spacing.xs,
     },
     sourceTitle: {
         ...typography.labelButton,

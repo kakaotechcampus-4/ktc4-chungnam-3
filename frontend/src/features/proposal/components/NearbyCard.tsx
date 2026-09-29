@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
         color: colors.text.onPrimary,
     },
     head: {
-        gap: metrics.nearbyCard.headGap,
+        gap: spacing.xs,
     },
     time: {
         ...typography.headingScreen,

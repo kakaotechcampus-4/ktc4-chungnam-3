@@ -28,6 +28,7 @@ export const colors = {
         default: "#4d4145",
         onPrimary: "#fffcfa",
         brand: "#6b4e7a",
+        secondary: "#6a5d61",
     },
     status: {
         infoFg: "#515c6b",

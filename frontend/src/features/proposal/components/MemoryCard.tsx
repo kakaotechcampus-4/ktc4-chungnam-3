@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
         gap: spacing.sm,
     },
     head: {
-        gap: metrics.memoryCard.headGap,
+        gap: spacing.xs,
     },
     time: {
         ...typography.headingScreen,

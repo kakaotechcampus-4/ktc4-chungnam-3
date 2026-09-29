@@ -2,8 +2,11 @@
 const img = (id: number) => `https://picsum.photos/id/${id}/360/640`;
 
 // 01 근처 · 다시 꺼낸 곳 (2061:760)
+// total: 근처 반경 안의 장소 확정 저장물 전체 수. 필터 칩과 무관하다.
+//   임시 필드명이다. 반경 값과 필드는 백엔드 목록·카테고리 계약에서 확정한다.
 export const nearbyMock = {
     area: "대흥동",
+    total: 5,
     nearby: [
         {
             id: "sungsimdang",
@@ -41,6 +44,16 @@ export const nearbyMock = {
             },
         ],
         [
+            {
+                id: "skyroad",
+                time: "4개월 전",
+                place: "으능정이 스카이로드",
+                meta: "도보 8분 · 가볼 곳",
+                summary: "해가 지면 거리 천장에 영상이 켜진다는 영상",
+                tags: ["저녁", "산책"],
+                thumbUri: img(674),
+                fade: "months",
+            },
             {
                 id: "hanbat-kalguksu",
                 time: "5개월 전",
