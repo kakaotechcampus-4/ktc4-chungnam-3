@@ -1,6 +1,7 @@
 // 저장 결과 모달. 분석 중 / 확인 필요 / 장소 없음 / 실패 상태별로 렌더한다.
-// 서버를 거쳐야 하는 버튼(저장·직접 찾기·장소 붙이기·보관)은 아직 동작하지 않는다.
-// "다시 시도" 는 목에서 화면 안의 상태만 분석 중으로 바꾼다. 서버 호출은 runtime 작업 때 붙인다.
+// "직접 찾을게요" · "장소 직접 붙이기" 는 02c 로, "장소 없이 보관할게요" 는 모달 닫기로 간다.
+// "다시 시도" 는 목에서 화면 안의 상태만 분석 중으로 바꾼다. 저장 · 보관 · 재시도 서버 호출은 runtime 작업 때 붙인다.
+// 02 의 "{장소}으로 저장" 은 아직 동작하지 않는다.
 import {
     type RouteProp,
     StackActions,
@@ -28,6 +29,7 @@ import PlaceOption from "./components/PlaceOption";
 import SourceHeader, {
     type SourceHeaderProps,
 } from "./components/SourceHeader";
+import { withRo } from "./particle";
 
 // UI 타입이다. 서버 이름과의 대응은 백엔드 계약이 생기면 mappers 에서 한다.
 type SaveResultState = "analyzing" | "needsConfirmation" | "noPlace" | "failed";
@@ -69,24 +71,11 @@ function confirmCopy(count: number) {
     };
 }
 
-// 받침이 있으면 "으로", 없거나 ㄹ 받침이면 "로". 마지막 글자가 한글이 아니면 "(으)로".
-function withRo(word: string): string {
-    const code = word.charCodeAt(word.length - 1) - 0xac00;
-    if (code < 0 || code > 0xd7a3 - 0xac00) return `${word}(으)로`;
-    const jong = code % 28;
-    return jong === 0 || jong === 8 ? `${word}로` : `${word}으로`;
-}
-
 export default function SaveResultScreen() {
     const navigation = useNavigation();
-    // RootParamList 는 interface 라 ParamListBase 제약을 못 맞춘다. Pick 으로 타입 별칭을 만든다.
+    // SaveResult 모달 안 중첩 스택의 첫 화면(Result)이다.
     const route =
-        useRoute<
-            RouteProp<
-                Pick<ReactNavigation.RootParamList, "SaveResult">,
-                "SaveResult"
-            >
-        >();
+        useRoute<RouteProp<{ Result: { resultId: string } }, "Result">>();
     const insets = useSafeAreaInsets();
 
     const result = results[route.params.resultId];
@@ -115,6 +104,12 @@ export default function SaveResultScreen() {
 
     const state: SaveResultState = retrying ? "analyzing" : result.state;
     const close = () => navigation.goBack();
+    // 02 · 02b "직접 찾을게요" 와 04 "장소 직접 붙이기" → 02c (모달 안에 push).
+    const openSearch = () =>
+        navigation.navigate("SaveResult", {
+            screen: "PlaceSearch",
+            params: { resultId: route.params.resultId },
+        });
     const selected = candidates.find(
         (candidate) => candidate.id === selectedId,
     );
@@ -159,6 +154,7 @@ export default function SaveResultScreen() {
                         <Pressable
                             accessibilityRole="button"
                             hitSlop={metrics.directOption.hitSlop}
+                            onPress={openSearch}
                             style={styles.direct}
                         >
                             <Icon name="pencil" size={size.iconSm} />
@@ -221,8 +217,16 @@ export default function SaveResultScreen() {
                 )}
                 {state === "noPlace" && (
                     <>
-                        <Button kind="primary" label="장소 직접 붙이기" />
-                        <Button kind="text" label="장소 없이 보관할게요" />
+                        <Button
+                            kind="primary"
+                            label="장소 직접 붙이기"
+                            onPress={openSearch}
+                        />
+                        <Button
+                            kind="text"
+                            label="장소 없이 보관할게요"
+                            onPress={close}
+                        />
                     </>
                 )}
                 {state === "failed" && (

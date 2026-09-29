@@ -118,9 +118,25 @@ export const metrics = {
         tagPaddingVertical: 2,
         sourcePaddingLeft: 14,
     },
-    // 11 설정 2103:626. 뒤로가기 아이콘 24 → 사방 12 씩 48dp.
-    settings: {
+    // push 화면 상단 바 (11 설정 2103:633 · 02c 2105:593). 뒤로가기 아이콘 24 → 사방 12 씩 48dp.
+    topBar: {
         backHitSlop: { top: 12, bottom: 12, left: 12, right: 12 },
+    },
+    // C/SearchField 2104:567. 지우기 아이콘 18 → 사방 15 씩 48dp.
+    // inputPadding 은 Android TextInput 기본 여백을 없애 높이 48 안에서 글자를 가운데 둔다.
+    searchField: {
+        paddingLeft: 14,
+        iconSize: 20,
+        clearHitSlop: { top: 15, bottom: 15, left: 15, right: 15 },
+        inputPadding: 0,
+    },
+    // 02c · 02d 장소 직접 찾기 2105:586 · 2105:642.
+    placeSearch: {
+        resultsPaddingTop: 16,
+        emptyPaddingTop: 40,
+    },
+    // 11 설정 2103:626.
+    settings: {
         rowPaddingHorizontal: 16,
         rowPaddingVertical: 14,
     },

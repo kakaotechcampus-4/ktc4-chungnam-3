@@ -21,7 +21,14 @@ export function buildLinkingConfig(): LinkingOptions<RootStackParamList> {
                 },
                 [ROUTES.Settings]: "settings",
                 [ROUTES.ContentDetail]: "detail/:placeId",
-                [ROUTES.SaveResult]: "save-result/:resultId",
+                // 기존 경로는 그대로 Result 로 열린다. search 로 열어도 Result 가 아래에 깔린다.
+                [ROUTES.SaveResult]: {
+                    initialRouteName: ROUTES.Result,
+                    screens: {
+                        [ROUTES.Result]: "save-result/:resultId",
+                        [ROUTES.PlaceSearch]: "save-result/:resultId/search",
+                    },
+                },
             },
         },
     };

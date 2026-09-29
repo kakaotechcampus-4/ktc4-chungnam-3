@@ -9,6 +9,7 @@ import ArchiveScreen from "../../features/archive/ArchiveScreen";
 import ContentDetailScreen from "../../features/content-detail/ContentDetailScreen";
 import MapViewScreen from "../../features/map-view/MapViewScreen";
 import ProposalScreen from "../../features/proposal/ProposalScreen";
+import PlaceSearchScreen from "../../features/save-result/PlaceSearchScreen";
 import SaveResultScreen from "../../features/save-result/SaveResultScreen";
 import SettingsScreen from "../../features/settings/SettingsScreen";
 import BottomNav, { type BottomNavKey } from "../../shared/ui/BottomNav";
@@ -16,10 +17,31 @@ import {
     type MainTabParamList,
     ROUTES,
     type RootStackParamList,
+    type SaveResultStackParamList,
 } from "./routes";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
+const SaveResultStack = createNativeStackNavigator<SaveResultStackParamList>();
+
+// 저장 결과 모달 안의 중첩 스택. 뒤로 가기는 02c → 02, 첫 화면에서 닫으면 모달이 닫힌다.
+function SaveResultFlow() {
+    return (
+        <SaveResultStack.Navigator
+            initialRouteName={ROUTES.Result}
+            screenOptions={{ headerShown: false }}
+        >
+            <SaveResultStack.Screen
+                name={ROUTES.Result}
+                component={SaveResultScreen}
+            />
+            <SaveResultStack.Screen
+                name={ROUTES.PlaceSearch}
+                component={PlaceSearchScreen}
+            />
+        </SaveResultStack.Navigator>
+    );
+}
 
 const TAB_ROUTE: Record<BottomNavKey, keyof MainTabParamList> = {
     nearby: ROUTES.Nearby,
@@ -83,7 +105,7 @@ export default function RootNavigator() {
             />
             <Stack.Screen
                 name={ROUTES.SaveResult}
-                component={SaveResultScreen}
+                component={SaveResultFlow}
                 options={{
                     presentation: "modal",
                     animation: "slide_from_bottom",

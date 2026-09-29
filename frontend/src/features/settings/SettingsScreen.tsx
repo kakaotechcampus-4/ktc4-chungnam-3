@@ -3,14 +3,7 @@
 import { useNavigation } from "@react-navigation/native";
 import Constants from "expo-constants";
 import { useState } from "react";
-import {
-    Linking,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
-} from "react-native";
+import { Linking, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
@@ -18,14 +11,8 @@ import {
     type MockLocationPermission,
     settingsMock,
 } from "../../shared/api/mock";
-import Icon from "../../shared/ui/Icon";
-import {
-    colors,
-    metrics,
-    size,
-    spacing,
-    typography,
-} from "../../shared/ui/theme";
+import { spacing } from "../../shared/ui/theme";
+import TopBar from "../../shared/ui/TopBar";
 import SettingsGroup from "./components/SettingsGroup";
 import SettingsRow from "./components/SettingsRow";
 
@@ -46,17 +33,7 @@ export default function SettingsScreen() {
 
     return (
         <View style={styles.screen}>
-            <View style={[styles.topBar, { marginTop: insets.top }]}>
-                <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="뒤로"
-                    hitSlop={metrics.settings.backHitSlop}
-                    onPress={() => navigation.goBack()}
-                >
-                    <Icon name="arrowLeft" size={size.iconMd} />
-                </Pressable>
-                <Text style={styles.title}>설정</Text>
-            </View>
+            <TopBar title="설정" onBack={() => navigation.goBack()} />
 
             <ScrollView
                 contentContainerStyle={{
@@ -105,15 +82,5 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
     screen: {
         flex: 1,
-    },
-    topBar: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: spacing.sm,
-        padding: spacing.md,
-    },
-    title: {
-        ...typography.titleCard,
-        color: colors.text.primary,
     },
 });

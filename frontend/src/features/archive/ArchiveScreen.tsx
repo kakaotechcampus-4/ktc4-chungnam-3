@@ -68,7 +68,11 @@ export default function ArchiveScreen() {
 
     const pressHandler = ({ resultId, detailId }: ArchiveItem) => {
         if (resultId)
-            return () => navigation.navigate("SaveResult", { resultId });
+            return () =>
+                navigation.navigate("SaveResult", {
+                    screen: "Result",
+                    params: { resultId },
+                });
         if (detailId)
             return () =>
                 navigation.navigate("ContentDetail", { placeId: detailId });

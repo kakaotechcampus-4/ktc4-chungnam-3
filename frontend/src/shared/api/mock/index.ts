@@ -16,5 +16,6 @@ export const MOCK_SCENARIO: {
 export { archiveMock } from "./archive";
 export { nearbyEmptyMock, nearbyMock } from "./nearby";
 export { placeDetailsMock } from "./placeDetails";
+export { placeSearchMock } from "./placeSearch";
 export { saveResultsMock } from "./saveResults";
 export { settingsMock } from "./settings";
