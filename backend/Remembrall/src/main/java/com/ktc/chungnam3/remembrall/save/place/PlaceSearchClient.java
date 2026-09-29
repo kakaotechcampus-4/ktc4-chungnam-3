@@ -17,7 +17,7 @@ import java.util.List;
  * SDK를 쓴다 - 좌표 확보와 분리.
  */
 @Component
-public class PlaceSearchClient {
+public class PlaceSearchClient implements PlaceLookup {
 
     private static final String BASE_URL = "https://us1.locationiq.com/v1";
 
@@ -63,6 +63,7 @@ public class PlaceSearchClient {
      * <p>
      * 일치하는 장소가 없으면 빈 리스트를 반환한다 (정상 케이스, 예외 아님).
      */
+    @Override
     public List<PlaceSearchResult> search(String name, String branchName, String regionHint) {
         String query = buildQuery(name, regionHint);
 

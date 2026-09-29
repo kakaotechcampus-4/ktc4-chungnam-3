@@ -9,16 +9,31 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PlaceResolverTest {
 
     // 기본값: 반경 내 상가업소 데이터가 전혀 없는 경우(교통시설·공공기관 등)를 흉내낸다 -
-    // hasNearbyStoreMismatch가 false를 반환해야 하는 케이스.
-    private final PlaceResolver resolver = new PlaceResolver((lon, lat, radiusMeters) -> List.of());
+    // hasNearbyStoreMismatch가 false를 반환해야 하는 케이스. PlaceLookup은 기존 테스트 전부
+    // branchName이 없거나 regionHint가 시·도뿐이라 기준점 경로 자체가 안 타므로 빈 값으로 충분하다.
+    private final PlaceResolver resolver =
+            new PlaceResolver((lon, lat, radiusMeters) -> List.of(), (name, branch, region) -> List.of());
 
     private static PlaceResolver resolverWithNearbyStores(
             List<DataportalStoreClient.StoreResult> nearbyStores) {
-        return new PlaceResolver((lon, lat, radiusMeters) -> nearbyStores);
+        return new PlaceResolver((lon, lat, radiusMeters) -> nearbyStores, (name, branch, region) -> List.of());
+    }
+
+    private static PlaceResolver resolverForAnchor(
+            List<PlaceSearchClient.PlaceSearchResult> anchorCandidates,
+            List<DataportalStoreClient.StoreResult> nearbyStores) {
+        return new PlaceResolver(
+                (lon, lat, radiusMeters) -> nearbyStores,
+                (name, branch, region) -> anchorCandidates);
     }
 
     private static DataportalStoreClient.StoreResult store(String bizesNm) {
         return new DataportalStoreClient.StoreResult(bizesNm, "", "음식", "어딘가", 0, 0);
+    }
+
+    private static DataportalStoreClient.StoreResult store(
+            String bizesNm, String brchNm, String roadAddress, double lat, double lon) {
+        return new DataportalStoreClient.StoreResult(bizesNm, brchNm, "음식", roadAddress, lat, lon);
     }
 
     private static PlaceSearchClient.PlaceSearchResult result(String displayName, double lat, double lon) {
@@ -182,5 +197,67 @@ class PlaceResolverTest {
 
         assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
         assertThat(resolved.resolvedPlace().address()).isEqualTo("성심당 본점, 대전");
+    }
+
+    @Test
+    void 지점명과_세부_지역힌트가_있으면_기준점_공공데이터로_확정한다() {
+        // "스타벅스 강남역점" - LocationIQ 후보(searchResults)엔 진짜 강남역 지점이 아예 없는 상황을
+        // 흉내낸다. 기준점("강남") 검색으로 강남역 좌표를 찾고, 그 주변 공공데이터에서 상호명이
+        // 일치하는 업소를 찾아 확정해야 한다 - 원래 흐름(searchResults)은 아예 안 씀.
+        var anchor = result("강남역, 서울특별시", 37.498, 127.028);
+        var branchStore = store("스타벅스", "강남역점", "서울 강남구 어딘가", 37.498, 127.028);
+        var resolver = resolverForAnchor(List.of(anchor), List.of(branchStore));
+
+        var uselessSearchResults = List.of(
+                result("스타벅스, 은평구, 서울특별시", 37.65, 126.93));
+
+        PlaceResolver.Result resolved = resolver.resolve(
+                "p1", "스타벅스", "강남역점", "서울 강남", uselessSearchResults);
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+        assertThat(resolved.resolvedPlace().address()).isEqualTo("서울 강남구 어딘가");
+    }
+
+    @Test
+    void 기준점_주변에_상호명이_일치하는_업소가_없으면_기존_흐름으로_폴백한다() {
+        var anchor = result("홍대입구역, 서울특별시", 37.557, 126.924);
+        var resolver = resolverForAnchor(List.of(anchor), List.of(store("전혀다른가게")));
+
+        var fallbackSearchResults = List.of(result("이디야커피, 서울특별시", 37.56, 126.92));
+
+        PlaceResolver.Result resolved = resolver.resolve(
+                "p1", "이디야커피", "홍대점", "서울 홍대", fallbackSearchResults);
+
+        // 기준점 경로가 못 찾았으니(폴백) 기존 ①~④ 흐름대로 판정된다 - 1건, 지점명 불일치라 되묻기.
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.NEEDS_CONFIRMATION);
+    }
+
+    @Test
+    void regionHint가_시도뿐이면_기준점_경로를_시도하지_않는다() {
+        // "대전"만으로는 기준점을 특정할 수 없으니 기준점 경로 자체를 건너뛰고 기존 흐름으로 간다.
+        var resolver = resolverForAnchor(List.of(result("아무거나", 0, 0)), List.of(store("아무거나")));
+
+        var searchResults = List.of(result("성심당, 대전광역시", 36.33, 127.43));
+
+        PlaceResolver.Result resolved = resolver.resolve(
+                "p1", "성심당", "본점", "대전", searchResults);
+
+        // 기준점 경로를 탔다면 "아무거나"가 엉뚱하게 확정됐을 것 - 그 대신 기존 흐름대로
+        // 지점명("본점") 불일치로 되묻기가 나와야 한다.
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.NEEDS_CONFIRMATION);
+    }
+
+    @Test
+    void 지점명으로_한번더_좁혀_같은_브랜드_여러곳_중_정확한_지점을_고른다() {
+        var anchor = result("종로, 서울특별시", 37.57, 126.99);
+        var wrongBranch = store("교보문고", "잠실점", "서울 송파구 어딘가", 37.51, 127.10);
+        var rightBranch = store("교보문고", "광화문점", "서울 종로구 어딘가", 37.571, 126.978);
+        var resolver = resolverForAnchor(List.of(anchor), List.of(wrongBranch, rightBranch));
+
+        PlaceResolver.Result resolved = resolver.resolve(
+                "p1", "교보문고", "광화문점", "서울 종로", List.of());
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+        assertThat(resolved.resolvedPlace().address()).isEqualTo("서울 종로구 어딘가");
     }
 }

@@ -5,14 +5,18 @@ import com.ktc.chungnam3.remembrall.save.dto.ResolvedPlaceDto;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
  * LocationIQ 검색 결과를 걸러서 장소를 확정할지, 사용자에게 되물을지, 확정할 수 없다고 볼지
  * 판단한다 (저장 파이프라인.md 3장 "판정" 기준, 도구 검토 문서 2026-09-23 "개선 ①" 반영).
  * <p>
- * 판정 순서: ① 결과 이름에 찾던 이름이 없으면 버림 ② 도로·동네급 결과(class=highway/place)는 버림
+ * 판정 순서: ⓪ 지점명이 있고 regionHint에 시·도보다 세부적인 지역명(구·동·역 등)이 있으면
+ * {@link #resolveViaAnchor}를 먼저 시도한다 (2026-09-29 추가, 아래 설명). 실패하면 기존 순서로:
+ * ① 결과 이름에 찾던 이름이 없으면 버림 ② 도로·동네급 결과(class=highway/place)는 버림
  * ③ 시·도가 명백히 다른 결과는 버림 ④ 남은 개수로 확정/되묻기/장소없음 판정, 이때 후보가 1건이어도
  * 지점명이 다르면, 또는 좌표 반경 내 실제 상가업소 중에 이름이 일치하는 게 하나도 없으면(아래
  * {@link #hasNearbyStoreMismatch} 참고) 확정하지 않고 되묻는다 (검색어 자체엔 지점명을 안 넣으므로 -
@@ -24,6 +28,16 @@ import java.util.stream.IntStream;
  * 데이터가 전혀 없으면(교통시설·공공기관처럼 애초에 상가업소로 등록 안 되는 장소일 수 있음) 판단을
  * 보류하고 그대로 두지만, 데이터는 있는데 이름이 하나도 안 맞으면 후보 좌표가 실제로는 다른 곳일
  * 가능성이 높다고 보고 되묻는다.
+ * <p>
+ * <b>프랜차이즈 지점(개선③, 2026-09-29)</b>: "스타벅스 강남역점"처럼 지점이 전국에 흩어진 브랜드는
+ * ①~④만으로는 못 푼다 - LocationIQ에 "스타벅스 서울"만 물어보면(지점명은 검색어에서 뺌) 상위 몇 건이
+ * 강남역과 무관한 지점일 수 있고, 지점명("강남역점")은 애초에 주소 텍스트에 안 나오는 상호 내부
+ * 표기라 문자열로 못 찾는다. 그래서 순서를 뒤집는다 - 지점명에 딸려오는 지역 단서(regionHint의
+ * 시·도 이후 부분, 예: "강남")로 **먼저 기준점(역·동네 등)을 LocationIQ로 정확히 찾고**(교통시설·
+ * 랜드마크는 원래 정확도가 높음, LocationIQ 검색 정확도 테스트 참고), 그 좌표 주변을 공공 상가정보로
+ * 뒤져서 상호명이 일치하는 실제 등록 업소를 찾는다. 기준점을 못 찾거나 주변에 상호명이 일치하는
+ * 업소가 없으면 기존 ①~④ 흐름으로 그대로 폴백한다 - 이 경로는 어디까지나 "찾으면 더 좋은" 보강이지,
+ * 기존 동작을 깨면 안 된다.
  */
 @Component
 public class PlaceResolver {
@@ -38,10 +52,16 @@ public class PlaceResolver {
     // 기본값(다른 임계값들과 마찬가지로 실측 데이터로 조정 가능).
     private static final int NEARBY_STORE_RADIUS_METERS = 100;
 
-    private final NearbyStoreLookup nearbyStoreLookup;
+    // 기준점(역·동네 등) 주변에서 프랜차이즈 지점을 찾는 반경 - 위보다 넓게 잡는다. 기준점은 "정확한
+    // 지점 좌표"가 아니라 "그 근방을 대표하는 좌표"(예: 역 출구 하나)라 오차가 더 클 수 있어서다.
+    private static final int FRANCHISE_ANCHOR_RADIUS_METERS = 300;
 
-    public PlaceResolver(NearbyStoreLookup nearbyStoreLookup) {
+    private final NearbyStoreLookup nearbyStoreLookup;
+    private final PlaceLookup placeLookup;
+
+    public PlaceResolver(NearbyStoreLookup nearbyStoreLookup, PlaceLookup placeLookup) {
         this.nearbyStoreLookup = nearbyStoreLookup;
+        this.placeLookup = placeLookup;
     }
 
     public enum Decision {
@@ -55,6 +75,13 @@ public class PlaceResolver {
 
     public Result resolve(String candidateId, String name, String branchName, String regionHint,
                            List<PlaceSearchClient.PlaceSearchResult> searchResults) {
+        if (branchName != null && !branchName.isBlank()) {
+            Optional<Result> viaAnchor = resolveViaAnchor(candidateId, name, branchName, regionHint);
+            if (viaAnchor.isPresent()) {
+                return viaAnchor.get();
+            }
+        }
+
         List<PlaceSearchClient.PlaceSearchResult> filtered =
                 filterByRegion(regionHint, filterByNameAndClass(name, searchResults));
 
@@ -150,6 +177,92 @@ public class PlaceResolver {
             return false;
         }
         return nearby.stream().noneMatch(store -> containsIgnoreCase(store.bizesNm(), name));
+    }
+
+    /**
+     * regionHint에서 시·도를 뺀 나머지("서울 강남" → "강남")를 기준점 검색어로 뽑는다. 시·도만 있고
+     * 그 이상 정보가 없으면(예: "대전"만) 기준점을 특정할 수 없으니 빈 값을 반환한다 - 이 경우
+     * 호출부가 기존 ①~④ 흐름으로 폴백한다. 토큰 단위로 비교해서 "서울대입구"처럼 시·도 이름을
+     * 접두어로 포함하는 다른 지명까지 잘못 잘라내지 않는다.
+     */
+    private Optional<String> extractAnchorQuery(String regionHint) {
+        if (regionHint == null || regionHint.isBlank()) {
+            return Optional.empty();
+        }
+
+        List<String> tokens = List.of(regionHint.trim().split("\\s+"));
+        String remainder = tokens.stream()
+                .filter(token -> !KoreanProvinces.ROMANIZED_ALIASES.containsKey(token))
+                .collect(Collectors.joining(" "));
+
+        return remainder.isBlank() ? Optional.empty() : Optional.of(remainder);
+    }
+
+    /**
+     * 프랜차이즈 지점 판정(개선③) - regionHint의 세부 지역명으로 기준점을 먼저 찾고, 그 주변을
+     * 공공 상가정보로 뒤져서 상호명이 일치하는 실제 업소를 찾는다. 기준점을 못 찾거나, 기준점은
+     * 찾았는데 주변에 상호명이 일치하는 업소가 하나도 없으면 빈 값을 반환한다 - 이 경우 호출부가
+     * 기존 ①~④ 흐름으로 폴백하므로, 이 메서드는 "찾으면 확정/되묻기, 못 찾으면 모르겠다"만 답한다.
+     */
+    private Optional<Result> resolveViaAnchor(String candidateId, String name, String branchName, String regionHint) {
+        Optional<String> anchorQuery = extractAnchorQuery(regionHint);
+        if (anchorQuery.isEmpty()) {
+            return Optional.empty();
+        }
+
+        List<PlaceSearchClient.PlaceSearchResult> anchorCandidates;
+        try {
+            anchorCandidates = placeLookup.search(anchorQuery.get(), null, regionHint);
+        } catch (RuntimeException e) {
+            return Optional.empty();
+        }
+
+        // 기준점은 "정확한 업체"가 아니라 "그 근방 좌표"만 있으면 되므로, class 필터는 안 걸고
+        // 이름만 대충 맞으면 첫 번째 것을 쓴다 - 같은 역 이름의 여러 표기(출구별 등)는 서로 몇십m
+        // 안쪽이라 반경 검색에 지장 없음.
+        Optional<PlaceSearchClient.PlaceSearchResult> anchor = anchorCandidates.stream()
+                .filter(c -> containsIgnoreCase(c.displayName(), anchorQuery.get()))
+                .findFirst();
+        if (anchor.isEmpty()) {
+            return Optional.empty();
+        }
+
+        List<DataportalStoreClient.StoreResult> nearby;
+        try {
+            nearby = nearbyStoreLookup.searchByRadius(
+                    anchor.get().lon(), anchor.get().lat(), FRANCHISE_ANCHOR_RADIUS_METERS);
+        } catch (RuntimeException e) {
+            return Optional.empty();
+        }
+
+        List<DataportalStoreClient.StoreResult> brandMatches = nearby.stream()
+                .filter(s -> containsIgnoreCase(s.bizesNm(), name))
+                .toList();
+        if (brandMatches.isEmpty()) {
+            return Optional.empty();
+        }
+
+        // 지점이 여럿 남으면 지점명(brchNm)으로 한 번 더 좁혀본다 - 안 좁혀지면(brchNm이 비어있거나
+        // 표기가 다르면) 그냥 남은 후보 전체로 되묻는다.
+        List<DataportalStoreClient.StoreResult> narrowed = brandMatches.stream()
+                .filter(s -> containsIgnoreCase(s.brchNm(), branchName))
+                .toList();
+        List<DataportalStoreClient.StoreResult> finalMatches = narrowed.isEmpty() ? brandMatches : narrowed;
+
+        if (finalMatches.size() == 1) {
+            DataportalStoreClient.StoreResult m = finalMatches.get(0);
+            ResolvedPlaceDto place = new ResolvedPlaceDto(candidateId, name, branchName, m.roadAddress(), m.lat(), m.lon());
+            return Optional.of(new Result(Decision.RESOLVED, place, null));
+        }
+
+        List<ResolvedPlaceDto> options = IntStream.range(0, finalMatches.size())
+                .mapToObj(i -> {
+                    DataportalStoreClient.StoreResult m = finalMatches.get(i);
+                    return new ResolvedPlaceDto(candidateId + "-" + (i + 1), name, branchName, m.roadAddress(), m.lat(), m.lon());
+                })
+                .toList();
+        ConfirmRequestDto confirm = new ConfirmRequestDto("어느 지점이 맞을까요?", options);
+        return Optional.of(new Result(Decision.NEEDS_CONFIRMATION, null, confirm));
     }
 
     private boolean containsIgnoreCase(String haystack, String needle) {
