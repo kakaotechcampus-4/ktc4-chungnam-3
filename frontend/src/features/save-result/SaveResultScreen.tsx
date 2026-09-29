@@ -1,7 +1,6 @@
 // 저장 결과 모달. 분석 중 / 확인 필요 / 장소 없음 / 실패 상태별로 렌더한다.
-// "직접 찾을게요" · "장소 직접 붙이기" 는 02c 로, "장소 없이 보관할게요" 는 모달 닫기로 간다.
+// "직접 찾을게요" · "장소 직접 붙이기" 는 02c 로 간다. 저장 · 보관 · 나중에 계열 버튼은 모두 모달을 닫는다(목에서는 성공 처리).
 // "다시 시도" 는 목에서 화면 안의 상태만 분석 중으로 바꾼다. 저장 · 보관 · 재시도 서버 호출은 runtime 작업 때 붙인다.
-// 02 의 "{장소}으로 저장" 은 아직 동작하지 않는다.
 import {
     type RouteProp,
     StackActions,
@@ -199,6 +198,7 @@ export default function SaveResultScreen() {
                             <Button
                                 kind="primary"
                                 label={`${withRo(selected.name)} 저장`}
+                                onPress={close}
                             />
                         )}
                         <Button
