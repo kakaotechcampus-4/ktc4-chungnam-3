@@ -25,6 +25,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MOCK_SCENARIO, placeDetailsMock } from "../../shared/api/mock";
 import Icon from "../../shared/ui/Icon";
 import NotFound from "../../shared/ui/NotFound";
+import SheetHandle from "../../shared/ui/SheetHandle";
 import {
     colors,
     effects,
@@ -34,13 +35,12 @@ import {
 } from "../../shared/ui/theme";
 import DetailFooter, { footerHeight } from "./components/DetailFooter";
 import DetailSheet, { type DetailSheetProps } from "./components/DetailSheet";
-import SheetHandle from "./components/SheetHandle";
 
 const details: Readonly<Record<string, DetailSheetProps>> = placeDetailsMock;
 
 const EXPANDED = 1;
 const HANDLE_HEIGHT =
-    metrics.contentDetail.sheetPaddingTop + metrics.contentDetail.handleHeight;
+    metrics.sheetHandle.paddingTop + metrics.sheetHandle.height;
 
 export default function ContentDetailScreen() {
     const navigation = useNavigation();

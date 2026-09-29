@@ -98,7 +98,7 @@ frontend/
 
 - 두 개 이상의 feature 에서 쓰면 `shared/ui/`, 한 feature 에서만 쓰면 `features/*/components/`.
 - `app/navigation` 이 하단 바로 쓰는 BottomNav 는 `shared/ui/` 에 둔다.
-- 두 feature 이상이 쓰는 것: ScreenHeader(근처 · 기억 헤더), Chip(근처 · 지도 필터), PhotoMarker(지도 탭 · 08 지도), NotFound(저장 결과 · 장소 상세).
+- 두 feature 이상이 쓰는 것: ScreenHeader(근처 · 기억 헤더), Chip(근처 · 지도 필터), PhotoMarker(지도 탭 · 08 지도), SheetHandle(08 · 10b 시트), NotFound(저장 결과 · 장소 상세).
 - 지도 스타일은 Figma 색 토큰으로 만든 값이라 `shared/ui/theme/mapStyle.ts` 에 둔다.
 
 ## 테마 토큰
@@ -134,7 +134,12 @@ RootStack
 - 하단 바의 선택 표시는 `bg/subtle` pill 이다. 브랜드 색을 쓰지 않는다.
 - 없는 저장 결과 id · 장소 id 로 들어오면 NotFound(12)를 보여준다. "기억 목록으로" → 기억 탭.
 - 08 시트 멈춤 지점은 기본 · 펼침이다. 지도 탭에서만 요약(10b) 지점이 추가된다.
+- 10b 요약 시트는 핀을 누르면 뜬다. 요약을 누르거나 위로 끌면 08 로 가고, 지도 빈 곳 · 아래로 끌기 · 뒤로 가기는 닫는다.
+- 06 "{동네} 기억 보기"는 `Main > Map` 에 `area` 를 넘긴다. 지도는 그 동네로 가운데를 잡고 `area` 를 비운다.
+- 지도 핀 크기는 fade 로 정한다(recent 40 · weeks 26 · months 22). 위치 권한이 "denied" 면 현재 위치 · 내 위치 버튼 · 도보 시간을 숨긴다.
+- 지도 구조: 근처 감지는 OS 지오펜싱, 앱 안 표시는 Google Maps SDK, 장소 좌표는 LocationIQ 지오코딩. UI 단계는 표시와 핀만 한다.
 - 시트는 `@gorhom/bottom-sheet`, 지도는 `react-native-maps`(Google provider)로 구현한다.
+- 지도(10·08)는 Expo Go에서 표시되지 않는다. 우리 Google Maps API 키를 넣은 개발 빌드에서 확인한다.
 
 ## 목 데이터
 

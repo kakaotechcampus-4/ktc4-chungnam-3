@@ -1,14 +1,7 @@
 // 필터 칩. Figma C/Chip. 높이 size.chip 고정, 선택 상태는 투명 테두리로 두 상태 크기를 맞춘다.
 import { Pressable, StyleSheet, Text } from "react-native";
 
-import {
-    colors,
-    metrics,
-    radius,
-    size,
-    stroke,
-    typography,
-} from "../../../shared/ui/theme";
+import { colors, metrics, radius, size, stroke, typography } from "./theme";
 
 type Props = {
     label: string;

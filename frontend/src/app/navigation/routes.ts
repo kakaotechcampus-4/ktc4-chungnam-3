@@ -15,7 +15,8 @@ export const ROUTES = {
 
 export type MainTabParamList = {
     [ROUTES.Nearby]: undefined;
-    [ROUTES.Map]: undefined;
+    // area: 06 링크가 넘기는 동네 이름. 지도 탭은 그 동네로 가운데를 잡은 뒤 파라미터를 비운다.
+    [ROUTES.Map]: { area?: string } | undefined;
     [ROUTES.Archive]: undefined;
 };
 

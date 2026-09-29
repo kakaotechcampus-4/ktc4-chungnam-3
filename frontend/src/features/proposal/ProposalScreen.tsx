@@ -9,9 +9,9 @@ import {
     nearbyEmptyMock,
     nearbyMock,
 } from "../../shared/api/mock";
+import Chip from "../../shared/ui/Chip";
 import ScreenHeader from "../../shared/ui/ScreenHeader";
 import { colors, metrics, spacing, typography } from "../../shared/ui/theme";
-import Chip from "./components/Chip";
 import MemoryCard from "./components/MemoryCard";
 import NearbyCard from "./components/NearbyCard";
 import NearbyEmpty from "./components/NearbyEmpty";
@@ -26,6 +26,9 @@ export default function ProposalScreen() {
     const openDetail = (placeId: string) =>
         navigation.navigate("ContentDetail", { placeId });
     const openSettings = () => navigation.navigate("Settings");
+    // 06 "{동네} 기억 보기". 지도 탭을 그 동네 가운데로 연다.
+    const openArea = (area: string) =>
+        navigation.navigate("Main", { screen: "Map", params: { area } });
 
     if (MOCK_SCENARIO.nearbyEmpty) {
         return (
@@ -35,7 +38,12 @@ export default function ProposalScreen() {
                     onSettingsPress={openSettings}
                 />
                 <ScrollView contentContainerStyle={styles.content}>
-                    <NearbyEmpty {...nearbyEmptyMock} />
+                    <NearbyEmpty
+                        {...nearbyEmptyMock}
+                        onOpenArea={() =>
+                            openArea(nearbyEmptyMock.nearestArea)
+                        }
+                    />
                 </ScrollView>
             </View>
         );

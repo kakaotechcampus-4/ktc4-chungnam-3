@@ -105,11 +105,8 @@ export const metrics = {
         backLeft: 16,
         backIconSize: 22,
         backHitSlop: { top: 5, bottom: 5, left: 5, right: 5 },
-        sheetPaddingTop: 10,
         sheetPaddingBottom: 24,
         sheetGap: 16,
-        handleWidth: 36,
-        handleHeight: 4,
         headGap: 16,
         thumbWidth: 72,
         noteGap: 6,
@@ -117,6 +114,46 @@ export const metrics = {
         tagPaddingVertical: 2,
         sourcePaddingLeft: 14,
         noteCollapsedLines: 2,
+    },
+    // 끌 수 있는 시트 핸들 (08 2061:993 · 10b 2103:573). 시트 위 10, 36 × 4.
+    sheetHandle: {
+        paddingTop: 10,
+        width: 36,
+        height: 4,
+    },
+    // 지도 사진 핀 (10 2103:471 · 2103:439 · 2103:449). 9:16, 폭과 테두리는 fade 로 정한다.
+    // 선택 라벨(10b 2103:570)은 핀 아래 7 떨어진다. 라벨 높이 = captionMeta 16 + 위아래 3.
+    photoMarker: {
+        recent: { width: 40, borderWidth: 3 },
+        weeks: { width: 26, borderWidth: 2 },
+        months: { width: 22, borderWidth: 2 },
+        labelGap: 7,
+        labelPaddingHorizontal: 8,
+        labelPaddingVertical: 3,
+    },
+    // 현재 위치 (10 2103:469 · 2103:470). 바깥 원은 status/info-fg 15%, 안쪽 점은 bg/surface 테두리 3.
+    currentLocation: {
+        haloSize: 44,
+        haloOpacity: 0.15,
+        dotSize: 14,
+        dotBorderWidth: 3,
+    },
+    // 10 지도 탭 2103:427 · 10b 2103:525.
+    // 필터는 상태바 아래 8, 좌우 16. 내 위치 버튼 44(안쪽 11 + 아이콘 22)는 오른쪽 16, 하단 바 위 20, 시트 위 16.
+    // 요약 시트: 위 10 + 핸들 4 + 간격 16 + 요약(썸네일 56 × 9:16) + 아래 20.
+    mapView: {
+        filtersPaddingHorizontal: 16,
+        locateRight: 16,
+        locateBottom: 20,
+        locateSheetGap: 16,
+        locatePadding: 11,
+        locateIconSize: 22,
+        locateHitSlop: { top: 2, bottom: 2, left: 2, right: 2 },
+        sheetGap: 16,
+        sheetPaddingBottom: 20,
+        summaryGap: 16,
+        summaryThumbWidth: 56,
+        summaryChevronSize: 20,
     },
     // push 화면 상단 바 (11 설정 2103:633 · 02c 2105:593). 뒤로가기 아이콘 24 → 사방 12 씩 48dp.
     topBar: {

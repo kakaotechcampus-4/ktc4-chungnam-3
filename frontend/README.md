@@ -32,6 +32,8 @@ npx expo start
 빈 필드 장소 상세(08b)는 `detail/daeheung-cathedral` 이다.
 없는 id 로 열면 저장물 없음(12)이 뜬다. 예: `save-result/unknown`, `detail/unknown`.
 
+지도(10·08)는 Expo Go에서 표시되지 않는다. 우리 Google Maps API 키를 넣은 개발 빌드에서 확인한다.
+
 빈 상태(06 · 07b), 위치 권한, 깨진 썸네일은 `src/shared/api/mock/scenario.ts` 의 `MOCK_SCENARIO` 플래그를 바꾸고 reload 해서 본다.
 
 ## 문서

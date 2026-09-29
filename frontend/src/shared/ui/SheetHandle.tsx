@@ -1,7 +1,7 @@
-// 08 시트 핸들. Figma 2061:993 (위 10, 36 × 4, bg/placeholder).
+// 끌 수 있는 시트 핸들. Figma 08 2061:993 · 10b 2103:573 (위 10, 36 × 4, bg/placeholder).
 import { StyleSheet, View } from "react-native";
 
-import { colors, metrics } from "../../../shared/ui/theme";
+import { colors, metrics } from "./theme";
 
 export default function SheetHandle() {
     return (
@@ -14,12 +14,12 @@ export default function SheetHandle() {
 const styles = StyleSheet.create({
     row: {
         alignItems: "center",
-        paddingTop: metrics.contentDetail.sheetPaddingTop,
+        paddingTop: metrics.sheetHandle.paddingTop,
     },
     handle: {
-        width: metrics.contentDetail.handleWidth,
-        height: metrics.contentDetail.handleHeight,
-        borderRadius: metrics.contentDetail.handleHeight / 2,
+        width: metrics.sheetHandle.width,
+        height: metrics.sheetHandle.height,
+        borderRadius: metrics.sheetHandle.height / 2,
         backgroundColor: colors.bg.placeholder,
     },
 });

@@ -12,11 +12,16 @@ export type NearbyEmptyProps = {
     stackThumbUris: readonly string[];
 };
 
+type Props = NearbyEmptyProps & {
+    onOpenArea: () => void;
+};
+
 export default function NearbyEmpty({
     nearestDistance,
     nearestArea,
     stackThumbUris,
-}: NearbyEmptyProps) {
+    onOpenArea,
+}: Props) {
     return (
         <View>
             <View style={styles.intro}>
@@ -25,11 +30,10 @@ export default function NearbyEmpty({
                     가장 가까운 기억은 {nearestDistance} 떨어진 {nearestArea}에
                     있어요.
                 </Text>
-                {/* 동작이 연결되면 disabled 를 뺀다. */}
                 <Pressable
                     accessibilityRole="link"
-                    accessibilityState={{ disabled: true }}
                     hitSlop={metrics.nearbyEmpty.linkHitSlop}
+                    onPress={onOpenArea}
                     style={styles.link}
                 >
                     <Text style={styles.linkLabel}>

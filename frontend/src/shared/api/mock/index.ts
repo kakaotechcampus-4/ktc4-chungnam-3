@@ -2,6 +2,7 @@
 export { MOCK_SCENARIO, type MockLocationPermission } from "./scenario";
 
 export { archiveMock } from "./archive";
+export { mapViewMock } from "./mapView";
 export { nearbyEmptyMock, nearbyMock } from "./nearby";
 export { placeDetailsMock } from "./placeDetails";
 export { placeSearchMock } from "./placeSearch";

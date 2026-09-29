@@ -5,6 +5,7 @@ import Check from "lucide-react-native/icons/check";
 import ChevronRight from "lucide-react-native/icons/chevron-right";
 import Footprints from "lucide-react-native/icons/footprints";
 import Images from "lucide-react-native/icons/images";
+import LocateFixed from "lucide-react-native/icons/locate-fixed";
 import MapIcon from "lucide-react-native/icons/map";
 import MapPin from "lucide-react-native/icons/map-pin";
 import Pencil from "lucide-react-native/icons/pencil";
@@ -29,6 +30,7 @@ export type IconName =
     | "settings"
     | "refresh"
     | "search"
+    | "locateFixed"
     | "play";
 
 const LUCIDE: Record<Exclude<IconName, "play">, LucideIcon> = {
@@ -44,6 +46,7 @@ const LUCIDE: Record<Exclude<IconName, "play">, LucideIcon> = {
     settings: Settings,
     refresh: RefreshCw,
     search: Search,
+    locateFixed: LocateFixed,
 };
 
 const STROKE_WIDTH = 1.75;

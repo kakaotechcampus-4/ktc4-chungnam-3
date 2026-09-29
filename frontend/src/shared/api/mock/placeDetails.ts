@@ -29,4 +29,63 @@ export const placeDetailsMock = {
         sourceMeta: "@red.brick.walk · YouTube Shorts",
         sourceTitle: "해질녘 대흥동 성당 산책",
     },
+    // 아래는 10 지도 핀이 여는 08. 최소 필드만 둔다. 메모 · 태그를 일부러 비운 곳은 08b 빈 필드 규칙을 본다.
+    "afternoon-four": {
+        time: "2주 전",
+        place: "오후 네시",
+        address: "대전 중구 대흥동",
+        walk: "도보 9분",
+        thumbUri: img(1060),
+        fade: "weeks",
+        note: "창가 자리에서 골목이 내려다보인다. 오후 4시쯤 볕이 제일 좋다고 함.",
+        tags: ["조용한", "창가"],
+        sourceMeta: "@slow.alley.cafe · YouTube Shorts",
+        sourceTitle: "대흥동 골목 조용한 카페",
+    },
+    // 메모 없음, 태그만.
+    skyroad: {
+        time: "4개월 전",
+        place: "으능정이 스카이로드",
+        address: "대전 중구 은행동",
+        walk: "도보 8분",
+        thumbUri: img(674),
+        fade: "months",
+        tags: ["저녁", "산책"],
+        sourceMeta: "@night.daejeon · YouTube Shorts",
+        sourceTitle: "해가 지면 켜지는 거리 천장",
+    },
+    // 태그 없음, 메모만.
+    "hanbat-kalguksu": {
+        time: "5개월 전",
+        place: "한밭 손칼국수",
+        address: "대전 중구 대흥동",
+        walk: "도보 13분",
+        thumbUri: img(292),
+        fade: "months",
+        note: "국물이 진하다. 만두는 따로 주문해야 한다.",
+        sourceMeta: "@noodle.map · YouTube Shorts",
+        sourceTitle: "대전 칼국수 노포 한 그릇",
+    },
+    // 메모 · 태그 없음.
+    "old-chungnam-office": {
+        time: "4개월 전",
+        place: "옛 충남도청",
+        address: "대전 중구 선화동",
+        walk: "도보 12분",
+        thumbUri: img(1031),
+        fade: "months",
+        sourceMeta: "@red.brick.walk · YouTube Shorts",
+        sourceTitle: "근대 건축 따라 걷는 대전",
+    },
+    // 메모 · 태그 없음.
+    "jungang-market": {
+        time: "5개월 전",
+        place: "대전 중앙시장",
+        address: "대전 동구 원동",
+        walk: "도보 10분",
+        thumbUri: img(1036),
+        fade: "months",
+        sourceMeta: "@market.bites · YouTube Shorts",
+        sourceTitle: "중앙시장 먹거리 한 바퀴",
+    },
 } as const;
