@@ -1,4 +1,4 @@
-// 버튼. Figma C/Button (Primary / Secondary / Text).
+// 버튼. Figma C/Button (Primary / Secondary / Text). 앞 아이콘(icon)은 선택이다.
 import {
     Pressable,
     type StyleProp,
@@ -7,6 +7,7 @@ import {
     type ViewStyle,
 } from "react-native";
 
+import Icon, { type IconName } from "./Icon";
 import { colors, radius, size, spacing, stroke, typography } from "./theme";
 
 export type ButtonKind = "primary" | "secondary" | "text";
@@ -14,11 +15,18 @@ export type ButtonKind = "primary" | "secondary" | "text";
 type Props = {
     kind: ButtonKind;
     label: string;
+    icon?: IconName;
     onPress?: () => void;
     style?: StyleProp<ViewStyle>;
 };
 
-export default function Button({ kind, label, onPress, style }: Props) {
+const ICON_COLOR: Record<ButtonKind, string> = {
+    primary: colors.icon.onPrimary,
+    secondary: colors.icon.default,
+    text: colors.icon.default,
+};
+
+export default function Button({ kind, label, icon, onPress, style }: Props) {
     return (
         <Pressable
             accessibilityRole="button"
@@ -30,6 +38,9 @@ export default function Button({ kind, label, onPress, style }: Props) {
                 style,
             ]}
         >
+            {icon && (
+                <Icon name={icon} size={size.iconSm} color={ICON_COLOR[kind]} />
+            )}
             <Text style={[typography.labelButton, labelStyles[kind]]}>
                 {label}
             </Text>
@@ -39,8 +50,10 @@ export default function Button({ kind, label, onPress, style }: Props) {
 
 const styles = StyleSheet.create({
     base: {
+        flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
+        gap: spacing.sm,
         height: size.button,
         paddingHorizontal: spacing.lg,
         borderRadius: radius.md,

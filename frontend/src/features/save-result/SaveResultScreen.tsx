@@ -1,5 +1,6 @@
 // 저장 결과 모달. 분석 중 / 확인 필요 / 장소 없음 / 실패 상태별로 렌더한다.
-// 서버를 거쳐야 하는 버튼(저장·직접 찾기·장소 붙이기·보관·다시 시도)은 아직 동작하지 않는다.
+// 서버를 거쳐야 하는 버튼(저장·직접 찾기·장소 붙이기·보관)은 아직 동작하지 않는다.
+// "다시 시도" 는 목에서 화면 안의 상태만 분석 중으로 바꾼다. 서버 호출은 runtime 작업 때 붙인다.
 import {
     type RouteProp,
     useNavigation,
@@ -90,9 +91,12 @@ export default function SaveResultScreen() {
     const candidates =
         result?.state === "needsConfirmation" ? result.candidates : [];
     const [selectedId, setSelectedId] = useState(candidates[0]?.id);
+    // 05 "다시 시도" 는 같은 저장물을 다시 분석한다. 원본 영상 영역은 그대로 두고 상태만 03 으로 바꾼다.
+    const [retrying, setRetrying] = useState(false);
 
     if (!result) return null;
 
+    const state: SaveResultState = retrying ? "analyzing" : result.state;
     const close = () => navigation.goBack();
     const selected = candidates.find(
         (candidate) => candidate.id === selectedId,
@@ -120,9 +124,9 @@ export default function SaveResultScreen() {
                 </Pressable>
             </View>
 
-            <SourceHeader {...result.source} status={BADGE[result.state]} />
+            <SourceHeader {...result.source} status={BADGE[state]} />
 
-            {result.state === "needsConfirmation" && (
+            {state === "needsConfirmation" && (
                 <>
                     <Message heading={copy.heading} body={copy.body} />
                     <View style={styles.options} accessibilityRole="radiogroup">
@@ -149,7 +153,7 @@ export default function SaveResultScreen() {
                 </>
             )}
 
-            {result.state === "analyzing" && (
+            {state === "analyzing" && (
                 <>
                     <Message
                         heading="영상 속 장소를 찾고 있어요"
@@ -159,14 +163,14 @@ export default function SaveResultScreen() {
                 </>
             )}
 
-            {result.state === "noPlace" && (
+            {state === "noPlace" && (
                 <Message
                     heading="이 영상에선 장소를 못 찾았어요"
                     body="장소 이름이 나오지 않는 영상이었어요. 어딘지 알고 있다면 직접 붙여둘 수 있어요."
                 />
             )}
 
-            {result.state === "failed" && (
+            {state === "failed" && (
                 <Message
                     heading="영상을 불러오지 못했어요"
                     body="비공개로 바뀌었거나 연결이 잠깐 불안정했어요. 링크는 그대로 보관해둘게요."
@@ -176,7 +180,7 @@ export default function SaveResultScreen() {
             <View style={styles.spacer} />
 
             <View style={styles.actions}>
-                {result.state === "needsConfirmation" && (
+                {state === "needsConfirmation" && (
                     <>
                         {selected && (
                             <Button
@@ -191,22 +195,27 @@ export default function SaveResultScreen() {
                         />
                     </>
                 )}
-                {result.state === "analyzing" && (
+                {state === "analyzing" && (
                     <Button
                         kind="secondary"
                         label="닫고 기다릴게요"
                         onPress={close}
                     />
                 )}
-                {result.state === "noPlace" && (
+                {state === "noPlace" && (
                     <>
                         <Button kind="primary" label="장소 직접 붙이기" />
                         <Button kind="text" label="장소 없이 보관할게요" />
                     </>
                 )}
-                {result.state === "failed" && (
+                {state === "failed" && (
                     <>
-                        <Button kind="secondary" label="다시 시도" />
+                        <Button
+                            kind="secondary"
+                            label="다시 시도"
+                            icon="refresh"
+                            onPress={() => setRetrying(true)}
+                        />
                         <Button
                             kind="text"
                             label="나중에 할게요"

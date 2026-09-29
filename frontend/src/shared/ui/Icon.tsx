@@ -8,6 +8,7 @@ import Images from "lucide-react-native/icons/images";
 import MapIcon from "lucide-react-native/icons/map";
 import MapPin from "lucide-react-native/icons/map-pin";
 import Pencil from "lucide-react-native/icons/pencil";
+import RefreshCw from "lucide-react-native/icons/refresh-cw";
 import Settings from "lucide-react-native/icons/settings";
 import X from "lucide-react-native/icons/x";
 import Svg, { Path } from "react-native-svg";
@@ -25,6 +26,7 @@ export type IconName =
     | "map"
     | "images"
     | "settings"
+    | "refresh"
     | "play";
 
 const LUCIDE: Record<Exclude<IconName, "play">, LucideIcon> = {
@@ -38,6 +40,7 @@ const LUCIDE: Record<Exclude<IconName, "play">, LucideIcon> = {
     map: MapIcon,
     images: Images,
     settings: Settings,
+    refresh: RefreshCw,
 };
 
 const STROKE_WIDTH = 1.75;

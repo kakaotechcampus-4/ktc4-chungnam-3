@@ -32,6 +32,13 @@ export const archiveMock = {
                     thumbUri: img(312),
                     fade: "recent",
                 },
+                // 05 와 같은 저장물. 영상을 불러오지 못해 이미지와 제목이 없다.
+                {
+                    id: "failed-video",
+                    fade: "recent",
+                    status: "failed",
+                    resultId: "failed",
+                },
             ],
         },
         {

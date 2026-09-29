@@ -149,8 +149,9 @@ const styles = StyleSheet.create({
         ...typography.headingScreen,
         color: colors.text.primary,
     },
+    // 줄 사이 space/md, 칸 사이 space/sm (Figma 2061:910).
     grid: {
-        gap: spacing.sm,
+        gap: spacing.md,
     },
     row: {
         flexDirection: "row",
