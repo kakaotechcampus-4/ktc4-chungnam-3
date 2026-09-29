@@ -1,5 +1,6 @@
 // 02c 장소 직접 찾기 / 02d 결과 없음. 저장 결과 모달 안에 push 된다.
 // 저장하면 모달 하나만 닫아 흐름을 끝낸다. 뒤로 가기는 02 로 간다. 검색은 목 데이터로 거른다.
+// 08 "이 장소가 아니에요"에서 열면 바꾸기 모드다. 모달에 이 화면만 있고, 바꾸면 모달을 닫아 08 로 돌아간다.
 import {
     type RouteProp,
     StackActions,
@@ -16,7 +17,11 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { placeSearchMock, saveResultsMock } from "../../shared/api/mock";
+import {
+    placeDetailsMock,
+    placeSearchMock,
+    saveResultsMock,
+} from "../../shared/api/mock";
 import Button from "../../shared/ui/Button";
 import NotFound from "../../shared/ui/NotFound";
 import {
@@ -31,11 +36,15 @@ import SearchField from "./components/SearchField";
 import { withRo } from "./particle";
 
 type Place = { id: string; name: string; address: string };
+type Saved = { source: { meta: string; title?: string } };
+type Detail = { place: string; sourceTitle?: string };
+
+// resultId 로 들어오면 저장 모드(02 · 02b · 04 에서), placeId 로 들어오면 바꾸기 모드(08 에서).
+type Params = { resultId: string } | { placeId: string };
 
 const places: readonly Place[] = placeSearchMock;
-type Saved = { source: { meta: string; title?: string } };
-
 const sources: Readonly<Record<string, Saved>> = saveResultsMock;
+const details: Readonly<Record<string, Detail>> = placeDetailsMock;
 
 function search(query: string): readonly Place[] {
     const q = query.trim();
@@ -48,21 +57,31 @@ function search(query: string): readonly Place[] {
 export default function PlaceSearchScreen() {
     const navigation = useNavigation();
     const route =
-        useRoute<
-            RouteProp<{ PlaceSearch: { resultId: string } }, "PlaceSearch">
-        >();
+        useRoute<RouteProp<{ PlaceSearch: Params }, "PlaceSearch">>();
     const insets = useSafeAreaInsets();
 
     const [query, setQuery] = useState("");
     const results = useMemo(() => search(query), [query]);
     const [selectedId, setSelectedId] = useState<string>();
 
-    const saved = sources[route.params.resultId];
-    if (!saved) {
+    const params = route.params;
+    const replacing = "placeId" in params;
+    const title = replacing
+        ? details[params.placeId]?.sourceTitle
+        : sources[params.resultId]?.source.title;
+    const found = replacing
+        ? details[params.placeId] != null
+        : sources[params.resultId] != null;
+
+    if (!found) {
         return (
             <NotFound
                 topIcon="arrowLeft"
-                heading="이 저장물을 찾을 수 없어요"
+                heading={
+                    replacing
+                        ? "이 장소를 찾을 수 없어요"
+                        : "이 저장물을 찾을 수 없어요"
+                }
                 body="삭제됐거나 기간이 지난 저장이에요."
                 onClose={() => navigation.goBack()}
                 onGoArchive={() =>
@@ -79,12 +98,15 @@ export default function PlaceSearchScreen() {
         setQuery(text);
         setSelectedId(search(text)[0]?.id);
     };
-    // 모달 하나만 닫는다(SaveResult). 목에서는 저장 · 보관을 성공으로 본다.
+    // 모달 하나만 닫는다(SaveResult). 목에서는 저장 · 보관 · 바꾸기를 성공으로 본다.
+    // 바꾸기 모드는 중첩 스택에 PlaceSearch 만 있어 뒤로 가기도 모달을 닫고 08 로 돌아간다.
     const closeFlow = () => navigation.getParent()?.goBack();
 
     const selected = results.find((place) => place.id === selectedId);
     const noResult = query.trim().length > 0 && results.length === 0;
-    const title = saved.source.title;
+    // 바꾸기 모드의 결과 없음(02d)에는 하단 버튼이 없다.
+    const showActions = selected != null || (noResult && !replacing);
+    const verb = replacing ? "바꾸기" : "저장";
 
     return (
         <KeyboardAvoidingView behavior="padding" style={styles.screen}>
@@ -130,7 +152,7 @@ export default function PlaceSearchScreen() {
                 )}
             </ScrollView>
 
-            {(selected || noResult) && (
+            {showActions && (
                 <View
                     style={[
                         styles.actions,
@@ -140,11 +162,11 @@ export default function PlaceSearchScreen() {
                     {selected && (
                         <Button
                             kind="primary"
-                            label={`${withRo(selected.name)} 저장`}
+                            label={`${withRo(selected.name)} ${verb}`}
                             onPress={closeFlow}
                         />
                     )}
-                    {noResult && (
+                    {noResult && !replacing && (
                         <Button
                             kind="text"
                             label="장소 없이 보관할게요"

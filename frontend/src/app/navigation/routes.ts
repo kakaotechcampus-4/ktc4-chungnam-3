@@ -20,9 +20,10 @@ export type MainTabParamList = {
 };
 
 // SaveResult 모달 안의 중첩 스택. Result(02~05 · 02b) → PlaceSearch(02c · 02d).
+// PlaceSearch 는 resultId 면 저장 모드, placeId 면 08 에서 여는 바꾸기 모드다.
 export type SaveResultStackParamList = {
     [ROUTES.Result]: { resultId: string };
-    [ROUTES.PlaceSearch]: { resultId: string };
+    [ROUTES.PlaceSearch]: { resultId: string } | { placeId: string };
 };
 
 export type RootStackParamList = {

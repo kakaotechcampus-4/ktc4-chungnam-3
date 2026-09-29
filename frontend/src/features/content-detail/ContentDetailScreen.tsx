@@ -94,8 +94,18 @@ export default function ContentDetailScreen() {
     const measureBody = (event: LayoutChangeEvent) => {
         if (bodyHeight == null) setBodyHeight(event.nativeEvent.layout.height);
     };
+    // 바꾸기 모드 02c. 저장 결과 모달 안에 PlaceSearch 하나만 올린다.
+    const openReplace = () =>
+        navigation.navigate("SaveResult", {
+            screen: "PlaceSearch",
+            params: { placeId: route.params.placeId },
+        });
     const renderFooter = (props: BottomSheetFooterProps) => (
-        <DetailFooter {...props} bottomInset={insets.bottom} />
+        <DetailFooter
+            {...props}
+            bottomInset={insets.bottom}
+            onNotThisPlace={openReplace}
+        />
     );
 
     return (
