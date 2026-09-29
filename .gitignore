@@ -70,3 +70,5 @@ target/
 *.sqlite3
 *.db
 .terraform/
+AI/CLAUDE.md
+AI/NOTES.md
