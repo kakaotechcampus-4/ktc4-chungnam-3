@@ -76,3 +76,6 @@ backend/Remembrall/CLAUDE.md
 
 # 개인 Codex 작업 인계 메모
 backend/Remembrall/src/main/java/com/ktc/chungnam3/remembrall/save/docs/AGENTS.md
+
+# 개인 Claude Code 스킬 (CLAUDE.md에서 옮긴 상세 디버깅 기록, 팀 공유 대상 아님)
+.claude/skills/place-resolution-history/
