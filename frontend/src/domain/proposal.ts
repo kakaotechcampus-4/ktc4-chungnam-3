@@ -6,14 +6,14 @@ export type ProposalId = string;
 export type ProposalKind = string;
 
 export interface ProposalItem {
-  contentId: string;
-  placeId: string | null;
-  order: number | null;
+    contentId: string;
+    placeId: string | null;
+    order: number | null;
 }
 
 export interface Proposal {
-  id: ProposalId;
-  kind: ProposalKind;
-  reason: string;
-  items: ProposalItem[];
+    id: ProposalId;
+    kind: ProposalKind;
+    reason: string;
+    items: ProposalItem[];
 }

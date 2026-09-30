@@ -4,12 +4,12 @@
 export type TraceEventKind = string;
 
 export interface TraceEvent {
-  kind: TraceEventKind;
-  detail: string;
-  occurredAt: string;
+    kind: TraceEventKind;
+    detail: string;
+    occurredAt: string;
 }
 
 export interface ExecutionTrace {
-  proposalId: string;
-  events: TraceEvent[];
+    proposalId: string;
+    events: TraceEvent[];
 }

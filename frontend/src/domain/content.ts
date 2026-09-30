@@ -6,10 +6,10 @@ export type ContentId = string;
 export type AnalysisState = string;
 
 export interface Content {
-  id: ContentId;
-  sourceUrl: string;
-  title: string;
-  summary: string;
-  analysisState: AnalysisState;
-  savedAt: string;
+    id: ContentId;
+    sourceUrl: string;
+    title: string;
+    summary: string;
+    analysisState: AnalysisState;
+    savedAt: string;
 }
