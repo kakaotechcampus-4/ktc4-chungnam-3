@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { MOCK_SCENARIO, mapViewMock } from "../../shared/api/mock";
 import Chip from "../../shared/ui/Chip";
+import CurrentLocation from "../../shared/ui/CurrentLocation";
 import Icon from "../../shared/ui/Icon";
 import PhotoMarker from "../../shared/ui/PhotoMarker";
 import SheetHandle from "../../shared/ui/SheetHandle";
@@ -32,7 +33,6 @@ import {
     radius,
     spacing,
 } from "../../shared/ui/theme";
-import CurrentLocation from "./components/CurrentLocation";
 import PinSummary from "./components/PinSummary";
 
 // 카테고리 enum 확정 전까지 목 데이터 한정. 01 처럼 선택은 표시만 바꾸고 핀을 거르지 않는다.

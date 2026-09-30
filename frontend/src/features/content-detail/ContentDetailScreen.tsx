@@ -1,4 +1,5 @@
-// 장소 상세. 지도 위에 끌 수 있는 시트. 지도는 아직 bg/subtle 자리표시다(8번 커밋에서 실제 지도).
+// 장소 상세. Google 지도 위에 끌 수 있는 시트. 지도에는 이 장소 핀 · 현재 위치 · 점선 경로를 그린다.
+// 현재 위치 · 경로는 위치 권한이 "denied" 일 때만 숨긴다. 경로는 경로 API 전까지 직선 자리표시다.
 // 시트 멈춤 지점: 기본(08, 메모 2줄 상태의 내용 높이를 처음 한 번 재서 고정) · 펼침(08c, 상태바 아래까지).
 // 뒤로가기 버튼은 Figma 레이어 순서대로 시트 아래에 있어 펼치면 가려진다.
 import BottomSheet, {
@@ -16,19 +17,32 @@ import { useCallback, useRef, useState } from "react";
 import {
     BackHandler,
     type LayoutChangeEvent,
+    PixelRatio,
     Pressable,
     StyleSheet,
     View,
 } from "react-native";
+import MapView, {
+    type LatLng,
+    Polyline,
+    PROVIDER_GOOGLE,
+} from "react-native-maps";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { MOCK_SCENARIO, placeDetailsMock } from "../../shared/api/mock";
+import {
+    MOCK_SCENARIO,
+    mapViewMock,
+    placeDetailsMock,
+} from "../../shared/api/mock";
+import CurrentLocation from "../../shared/ui/CurrentLocation";
 import Icon from "../../shared/ui/Icon";
 import NotFound from "../../shared/ui/NotFound";
+import PhotoMarker from "../../shared/ui/PhotoMarker";
 import SheetHandle from "../../shared/ui/SheetHandle";
 import {
     colors,
     effects,
+    mapStyle,
     metrics,
     radius,
     spacing,
@@ -36,7 +50,10 @@ import {
 import DetailFooter, { footerHeight } from "./components/DetailFooter";
 import DetailSheet, { type DetailSheetProps } from "./components/DetailSheet";
 
-const details: Readonly<Record<string, DetailSheetProps>> = placeDetailsMock;
+const details: Readonly<
+    Record<string, DetailSheetProps & { coordinate: LatLng }>
+> = placeDetailsMock;
+const { current, initialRegion: mapRegion } = mapViewMock;
 
 const EXPANDED = 1;
 const HANDLE_HEIGHT =
@@ -53,6 +70,7 @@ export default function ContentDetailScreen() {
             >
         >();
     const insets = useSafeAreaInsets();
+    const mapRef = useRef<MapView>(null);
     const sheetRef = useRef<BottomSheet>(null);
     const sheetIndex = useRef(0);
     const [bodyHeight, setBodyHeight] = useState<number>();
@@ -88,8 +106,46 @@ export default function ContentDetailScreen() {
         );
     }
 
+    const { coordinate, ...sheet } = detail;
     const showWalk = MOCK_SCENARIO.locationPermission !== "denied";
     const footer = footerHeight(insets.bottom);
+    const sheetHeight =
+        bodyHeight == null
+            ? 0
+            : HANDLE_HEIGHT +
+              bodyHeight +
+              metrics.contentDetail.sheetGap +
+              footer;
+    // 핀 · 경로가 뒤로가기와 시트에 가리지 않게 지도 영역을 줄인다. Google 로고도 시트 위로 올라온다.
+    const mapPadding = {
+        top:
+            insets.top +
+            spacing.md +
+            metrics.contentDetail.backSize +
+            spacing.md,
+        right: insets.right,
+        bottom: sheetHeight,
+        left: insets.left,
+    };
+    // 현재 위치와 장소가 함께 보이게 맞춘다. 핀은 좌표 위로 솟으므로 위 여백은 핀 높이다.
+    // Android 의 edgePadding 은 px 다(mapPadding 은 dp).
+    const fitRoute = () => {
+        if (!showWalk) return;
+        const px = PixelRatio.getPixelSizeForLayoutSize;
+        const fit = metrics.contentDetail.mapFitPadding;
+        mapRef.current?.fitToCoordinates([current, coordinate], {
+            edgePadding: {
+                top: px(
+                    metrics.photoMarker[detail.fade].width /
+                        metrics.thumb.aspectRatio,
+                ),
+                right: px(fit),
+                bottom: px(fit),
+                left: px(fit),
+            },
+            animated: false,
+        });
+    };
     // 본문 높이는 메모 2줄 상태로 한 번만 잰다. 이후 메모를 펼쳐도 기본 지점은 바뀌지 않는다.
     const measureBody = (event: LayoutChangeEvent) => {
         if (bodyHeight == null) setBodyHeight(event.nativeEvent.layout.height);
@@ -110,7 +166,7 @@ export default function ContentDetailScreen() {
 
     return (
         <View style={styles.screen}>
-            {/* 기본 지점 높이를 재기 위한 본문. 불투명한 지도 영역 아래 레이어라 보이지 않는다. 한 번 재면 치운다. */}
+            {/* 기본 지점 높이를 재기 위한 본문. 한 번 재면 치운다. */}
             {bodyHeight == null && (
                 <View
                     pointerEvents="none"
@@ -118,14 +174,51 @@ export default function ContentDetailScreen() {
                     onLayout={measureBody}
                 >
                     <DetailSheet
-                        {...detail}
+                        {...sheet}
                         showWalk={showWalk}
                         noteExpanded={false}
                     />
                 </View>
             )}
 
-            <View style={styles.map} />
+            {/* 시트 높이를 안 뒤에 띄워 처음부터 줄어든 지도 영역 가운데에 장소를 둔다. */}
+            {bodyHeight != null && (
+                <MapView
+                    ref={mapRef}
+                    provider={PROVIDER_GOOGLE}
+                    style={StyleSheet.absoluteFill}
+                    customMapStyle={mapStyle}
+                    initialRegion={{
+                        ...coordinate,
+                        latitudeDelta: mapRegion.latitudeDelta,
+                        longitudeDelta: mapRegion.longitudeDelta,
+                    }}
+                    mapPadding={mapPadding}
+                    onMapReady={fitRoute}
+                    moveOnMarkerPress={false}
+                    toolbarEnabled={false}
+                    showsCompass={false}
+                >
+                    {showWalk && (
+                        <Polyline
+                            coordinates={[current, coordinate]}
+                            strokeColor={colors.text.secondary}
+                            strokeWidth={metrics.contentDetail.routeWidth}
+                            lineDashPattern={[
+                                ...metrics.contentDetail.routeDashPattern,
+                            ]}
+                        />
+                    )}
+                    {showWalk && <CurrentLocation coordinate={current} />}
+                    <PhotoMarker
+                        coordinate={coordinate}
+                        fade={detail.fade}
+                        uri={detail.thumbUri}
+                        label={detail.place}
+                        selected
+                    />
+                </MapView>
+            )}
 
             <Pressable
                 accessibilityRole="button"
@@ -144,13 +237,7 @@ export default function ContentDetailScreen() {
                 <BottomSheet
                     ref={sheetRef}
                     index={0}
-                    snapPoints={[
-                        HANDLE_HEIGHT +
-                            bodyHeight +
-                            metrics.contentDetail.sheetGap +
-                            footer,
-                        "100%",
-                    ]}
+                    snapPoints={[sheetHeight, "100%"]}
                     topInset={insets.top}
                     enableDynamicSizing={false}
                     enablePanDownToClose={false}
@@ -172,7 +259,7 @@ export default function ContentDetailScreen() {
                         }}
                     >
                         <DetailSheet
-                            {...detail}
+                            {...sheet}
                             showWalk={showWalk}
                             noteExpanded={noteExpanded}
                         />
@@ -184,15 +271,15 @@ export default function ContentDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+    // 지도 타일이 뜨기 전에는 땅 색이 보인다.
     screen: {
         flex: 1,
+        backgroundColor: colors.bg.screen,
     },
-    map: {
-        ...StyleSheet.absoluteFill,
-        backgroundColor: colors.bg.subtle,
-    },
+    // 화면 아래 바깥에 두어 보이지 않게 잰다.
     measure: {
         position: "absolute",
+        top: "100%",
         width: "100%",
     },
     sheet: {

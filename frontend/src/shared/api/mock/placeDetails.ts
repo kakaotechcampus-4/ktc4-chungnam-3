@@ -1,5 +1,6 @@
 // 장소 상세 목 데이터. placeId 로 찾는다. 화면 props 모양 그대로이며 서버 계약이 아니다.
 // 문구는 Figma 08 · 08b · 08c 그대로. 태그의 # 은 컴포넌트가 붙인다. 이미지는 01 · 07 의 같은 장소와 같다.
+// coordinate 는 10 지도 핀(mapViewMock.pins)과 같은 좌표다.
 // 도보 시간(walk)은 위치 권한이 "denied" 면 화면이 숨긴다.
 // sourceTitle 은 08 시트에는 안 보이고, 바꾸기 모드 02c 의 캡션에 쓴다(영상 제목).
 import { img } from "./img";
@@ -10,6 +11,7 @@ export const placeDetailsMock = {
         time: "3주 전",
         place: "성심당 본점",
         address: "대전 중구 은행동",
+        coordinate: { latitude: 36.3277, longitude: 127.4274 },
         walk: "도보 4분",
         thumbUri: img(1080),
         fade: "recent",
@@ -23,6 +25,7 @@ export const placeDetailsMock = {
         time: "6주 전",
         place: "대흥동 성당",
         address: "대전 중구 대흥동",
+        coordinate: { latitude: 36.3256, longitude: 127.4222 },
         walk: "도보 11분",
         thumbUri: img(488),
         fade: "weeks",
@@ -34,6 +37,7 @@ export const placeDetailsMock = {
         time: "2주 전",
         place: "오후 네시",
         address: "대전 중구 대흥동",
+        coordinate: { latitude: 36.3244, longitude: 127.4246 },
         walk: "도보 9분",
         thumbUri: img(1060),
         fade: "weeks",
@@ -47,6 +51,7 @@ export const placeDetailsMock = {
         time: "4개월 전",
         place: "으능정이 스카이로드",
         address: "대전 중구 은행동",
+        coordinate: { latitude: 36.3292, longitude: 127.4282 },
         walk: "도보 8분",
         thumbUri: img(674),
         fade: "months",
@@ -59,6 +64,7 @@ export const placeDetailsMock = {
         time: "5개월 전",
         place: "한밭 손칼국수",
         address: "대전 중구 대흥동",
+        coordinate: { latitude: 36.3229, longitude: 127.4263 },
         walk: "도보 13분",
         thumbUri: img(292),
         fade: "months",
@@ -71,6 +77,7 @@ export const placeDetailsMock = {
         time: "4개월 전",
         place: "옛 충남도청",
         address: "대전 중구 선화동",
+        coordinate: { latitude: 36.3275, longitude: 127.4204 },
         walk: "도보 12분",
         thumbUri: img(1031),
         fade: "months",
@@ -82,6 +89,7 @@ export const placeDetailsMock = {
         time: "5개월 전",
         place: "대전 중앙시장",
         address: "대전 동구 원동",
+        coordinate: { latitude: 36.3289, longitude: 127.4331 },
         walk: "도보 10분",
         thumbUri: img(1036),
         fade: "months",

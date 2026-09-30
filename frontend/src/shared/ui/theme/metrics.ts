@@ -114,6 +114,12 @@ export const metrics = {
         tagPaddingVertical: 2,
         sourcePaddingLeft: 14,
         noteCollapsedLines: 2,
+        // 지도: 현재 위치 → 장소 점선 경로(text/secondary, 두께 2 는 stroke 토큰에 없음, 점선 4 · 4).
+        // 지도 위쪽은 뒤로가기(38) 아래 md 부터 쓴다. 현재 위치 · 장소를 맞출 때 좌우 · 아래 여백은 구현값이다.
+        routeWidth: 2,
+        routeDashPattern: [4, 4],
+        backSize: 38,
+        mapFitPadding: 48,
     },
     // 끌 수 있는 시트 핸들 (08 2061:993 · 10b 2103:573). 시트 위 10, 36 × 4.
     sheetHandle: {

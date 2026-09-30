@@ -15,7 +15,8 @@ type Props = {
     uri?: string;
     label: string;
     selected: boolean;
-    onPress: () => void;
+    // 08 핀은 누를 곳이 없다.
+    onPress?: () => void;
 };
 
 const LABEL_HEIGHT =

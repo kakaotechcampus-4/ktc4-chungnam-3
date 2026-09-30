@@ -1,8 +1,8 @@
-// 현재 위치 표시. Figma 10 2103:469 · 2103:470. 바깥 원 위 가운데에 점을 겹친다.
+// 현재 위치 표시. Figma 10 2103:469 · 2103:470, 08 2061:971. 바깥 원 위 가운데에 점을 겹친다.
 import { StyleSheet, View } from "react-native";
 import { type LatLng, Marker } from "react-native-maps";
 
-import { colors, metrics, radius } from "../../../shared/ui/theme";
+import { colors, metrics, radius } from "./theme";
 
 type Props = {
     coordinate: LatLng;

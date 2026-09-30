@@ -101,7 +101,7 @@ frontend/
 
 - 두 개 이상의 feature 에서 쓰면 `shared/ui/`, 한 feature 에서만 쓰면 `features/*/components/`.
 - `app/navigation` 이 하단 바로 쓰는 BottomNav 는 `shared/ui/` 에 둔다.
-- 두 feature 이상이 쓰는 것: ScreenHeader(근처 · 기억 헤더), Chip(근처 · 지도 필터), PhotoMarker(지도 탭 · 08 지도), SheetHandle(08 · 10b 시트), NotFound(저장 결과 · 장소 상세).
+- 두 feature 이상이 쓰는 것: ScreenHeader(근처 · 기억 헤더), Chip(근처 · 지도 필터), PhotoMarker · CurrentLocation(지도 탭 · 08 지도), SheetHandle(08 · 10b 시트), NotFound(저장 결과 · 장소 상세).
 - 지도 스타일은 Figma 색 토큰으로 만든 값이라 `shared/ui/theme/mapStyle.ts` 에 둔다.
 
 ## 테마 토큰
@@ -137,6 +137,9 @@ RootStack
 - 하단 바의 선택 표시는 `bg/subtle` pill 이다. 브랜드 색을 쓰지 않는다.
 - 없는 저장 결과 id · 장소 id 로 들어오면 NotFound(12)를 보여준다. "기억 목록으로" → 기억 탭.
 - 08 시트 멈춤 지점은 기본 · 펼침이다. 지도 탭에서만 요약(10b) 지점이 추가된다.
+- 08 지도에는 이 장소 핀(선택 상태 · 이름표) · 현재 위치 · 현재 위치에서 장소까지의 점선 경로만 그린다.
+  현재 위치 · 경로는 위치 권한이 "denied" 일 때만 숨긴다. 경로는 경로 API 가 정해지기 전까지 직선 자리표시다.
+  지도 영역은 뒤로가기 아래부터 시트 기본 지점 위까지이며(mapPadding), 그 안에 현재 위치와 장소를 함께 맞춘다.
 - 10b 요약 시트는 핀을 누르면 뜬다. 요약을 누르거나 위로 끌면 08 로 가고, 지도 빈 곳 · 아래로 끌기 · 뒤로 가기는 닫는다.
 - 06 "{동네} 기억 보기"는 `Main > Map` 에 `area` 를 넘긴다. 지도는 그 동네로 가운데를 잡고 `area` 를 비운다.
 - 지도 핀 크기는 fade 로 정한다(recent 40 · weeks 26 · months 22). 위치 권한이 "denied" 면 현재 위치 · 내 위치 버튼 · 도보 시간을 숨긴다.
