@@ -1,13 +1,10 @@
 package com.ktc.chungnam3.remembrall.auth.service;
 
-import com.ktc.chungnam3.remembrall.auth.dto.TokenResponse;
+import com.ktc.chungnam3.remembrall.auth.dto.SessionResponse;
 import com.ktc.chungnam3.remembrall.auth.kakao.KakaoUserClient;
-import com.ktc.chungnam3.remembrall.auth.token.JwtProperties;
-import com.ktc.chungnam3.remembrall.auth.token.JwtTokenProvider;
-import com.ktc.chungnam3.remembrall.auth.token.RefreshTokenGenerator;
-import com.ktc.chungnam3.remembrall.auth.token.RefreshTokenHasher;
-import com.ktc.chungnam3.remembrall.common.exception.ApiException;
-import com.ktc.chungnam3.remembrall.common.exception.ErrorCode;
+import com.ktc.chungnam3.remembrall.auth.token.SessionProperties;
+import com.ktc.chungnam3.remembrall.auth.token.SessionTokenGenerator;
+import com.ktc.chungnam3.remembrall.auth.token.SessionTokenHasher;
 import com.ktc.chungnam3.remembrall.domain.device.Device;
 import com.ktc.chungnam3.remembrall.domain.member.AuthProvider;
 import com.ktc.chungnam3.remembrall.domain.member.Member;
@@ -28,10 +25,9 @@ public class AuthService {
     private final KakaoUserClient kakaoUserClient;
     private final MemberRepository memberRepository;
     private final DeviceRepository deviceRepository;
-    private final JwtTokenProvider jwtTokenProvider;
-    private final RefreshTokenGenerator refreshTokenGenerator;
-    private final RefreshTokenHasher refreshTokenHasher;
-    private final JwtProperties jwtProperties;
+    private final SessionTokenGenerator sessionTokenGenerator;
+    private final SessionTokenHasher sessionTokenHasher;
+    private final SessionProperties sessionProperties;
     private final Clock clock;
     private final TransactionTemplate transactionTemplate;
 
@@ -39,25 +35,23 @@ public class AuthService {
             KakaoUserClient kakaoUserClient,
             MemberRepository memberRepository,
             DeviceRepository deviceRepository,
-            JwtTokenProvider jwtTokenProvider,
-            RefreshTokenGenerator refreshTokenGenerator,
-            RefreshTokenHasher refreshTokenHasher,
-            JwtProperties jwtProperties,
+            SessionTokenGenerator sessionTokenGenerator,
+            SessionTokenHasher sessionTokenHasher,
+            SessionProperties sessionProperties,
             Clock clock,
             PlatformTransactionManager transactionManager
     ) {
         this.kakaoUserClient = kakaoUserClient;
         this.memberRepository = memberRepository;
         this.deviceRepository = deviceRepository;
-        this.jwtTokenProvider = jwtTokenProvider;
-        this.refreshTokenGenerator = refreshTokenGenerator;
-        this.refreshTokenHasher = refreshTokenHasher;
-        this.jwtProperties = jwtProperties;
+        this.sessionTokenGenerator = sessionTokenGenerator;
+        this.sessionTokenHasher = sessionTokenHasher;
+        this.sessionProperties = sessionProperties;
         this.clock = clock;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
-    public TokenResponse loginWithKakao(String kakaoAccessToken) {
+    public SessionResponse loginWithKakao(String kakaoAccessToken) {
         String providerUserId = kakaoUserClient.getProviderUserId(kakaoAccessToken);
 
         return Objects.requireNonNull(transactionTemplate.execute(status -> {
@@ -71,54 +65,41 @@ public class AuthService {
 
             Member member = memberRepository
                     .findByAuthProviderAndProviderUserId(AuthProvider.KAKAO, providerUserId)
-                    .orElseThrow(() -> new IllegalStateException("Member 생성 또는 조회에 실패했습니다."));
+                    .orElseThrow(() -> new IllegalStateException("회원 생성 또는 조회에 실패했습니다."));
 
             Device device = deviceRepository.findByMemberId(member.getId()).orElse(null);
-            return issueAndStoreTokens(member.getId(), device, now);
+            return issueAndStoreSession(member.getId(), device, now);
         }));
     }
 
-    public TokenResponse refresh(String refreshToken) {
-        String refreshTokenHash = refreshTokenHasher.hash(refreshToken);
-
-        return Objects.requireNonNull(transactionTemplate.execute(status -> {
-            Instant now = clock.instant();
-            Device device = deviceRepository.findByRefreshTokenHash(refreshTokenHash)
-                    .orElseThrow(() -> new ApiException(ErrorCode.INVALID_REFRESH_TOKEN));
-
-            if (!device.getRefreshTokenExpiresAt().isAfter(now)) {
-                throw new ApiException(ErrorCode.EXPIRED_REFRESH_TOKEN);
-            }
-            return issueAndStoreTokens(device.getMemberId(), device, now);
-        }));
+    public void logout(UUID memberId, UUID deviceId, String sessionTokenHash) {
+        transactionTemplate.executeWithoutResult(status -> memberRepository
+                .findByIdForUpdate(memberId)
+                .ifPresent(member -> deviceRepository.clearCurrentSession(
+                        deviceId,
+                        memberId,
+                        sessionTokenHash,
+                        clock.instant()
+                ))
+        );
     }
 
-    public void logout(UUID memberId) {
-        transactionTemplate.executeWithoutResult(status -> deviceRepository.deleteByMemberId(memberId));
-    }
-
-    private TokenResponse issueAndStoreTokens(UUID memberId, Device device, Instant now) {
-        JwtTokenProvider.AccessToken accessToken = jwtTokenProvider.issueAccessToken(memberId);
-        String refreshToken = refreshTokenGenerator.generate();
-        String refreshTokenHash = refreshTokenHasher.hash(refreshToken);
-        Instant refreshTokenExpiresAt = now.plus(jwtProperties.refreshTokenTtl());
+    private SessionResponse issueAndStoreSession(UUID memberId, Device device, Instant now) {
+        String sessionToken = sessionTokenGenerator.generate();
+        String sessionTokenHash = sessionTokenHasher.hash(sessionToken);
+        Instant sessionExpiresAt = now.plus(sessionProperties.ttl());
 
         if (device == null) {
             deviceRepository.save(Device.create(
                     memberId,
-                    refreshTokenHash,
-                    refreshTokenExpiresAt,
+                    sessionTokenHash,
+                    sessionExpiresAt,
                     now
             ));
         } else {
-            device.rotateRefreshToken(refreshTokenHash, refreshTokenExpiresAt, now);
+            device.replaceSession(sessionTokenHash, sessionExpiresAt, now);
         }
 
-        return new TokenResponse(
-                accessToken.value(),
-                refreshToken,
-                accessToken.expiresAt(),
-                refreshTokenExpiresAt
-        );
+        return new SessionResponse(sessionToken, sessionExpiresAt);
     }
 }
