@@ -1,17 +1,17 @@
 // 근처 탭. 지금 위치 근처의 저장물을 꺼내 보여준다. 저장물이 없으면 06 빈 상태.
+// 헤더는 스크롤 영역 밖에 고정한다. 하단 inset 은 하단 바가 맡는다.
 import { useNavigation } from "@react-navigation/native";
 import { useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
     MOCK_SCENARIO,
     nearbyEmptyMock,
     nearbyMock,
 } from "../../shared/api/mock";
-import Icon from "../../shared/ui/Icon";
+import Chip from "../../shared/ui/Chip";
+import ScreenHeader from "../../shared/ui/ScreenHeader";
 import { colors, metrics, spacing, typography } from "../../shared/ui/theme";
-import Chip from "./components/Chip";
 import MemoryCard from "./components/MemoryCard";
 import NearbyCard from "./components/NearbyCard";
 import NearbyEmpty from "./components/NearbyEmpty";
@@ -21,19 +21,31 @@ const FILTERS = ["전체", "식당", "카페", "가볼 곳"] as const;
 
 export default function ProposalScreen() {
     const navigation = useNavigation();
-    const insets = useSafeAreaInsets();
     const [filter, setFilter] = useState<(typeof FILTERS)[number]>("전체");
 
     const openDetail = (placeId: string) =>
         navigation.navigate("ContentDetail", { placeId });
+    const openSettings = () => navigation.navigate("Settings");
+    // 06 "{동네} 기억 보기". 지도 탭을 그 동네 가운데로 연다.
+    const openArea = (area: string) =>
+        navigation.navigate("Main", { screen: "Map", params: { area } });
 
     if (MOCK_SCENARIO.nearbyEmpty) {
         return (
-            <ScrollView
-                contentContainerStyle={{ paddingBottom: insets.bottom }}
-            >
-                <NearbyEmpty {...nearbyEmptyMock} />
-            </ScrollView>
+            <View style={styles.screen}>
+                <ScreenHeader
+                    location={nearbyEmptyMock.area}
+                    onSettingsPress={openSettings}
+                />
+                <ScrollView contentContainerStyle={styles.content}>
+                    <NearbyEmpty
+                        {...nearbyEmptyMock}
+                        onOpenArea={() =>
+                            openArea(nearbyEmptyMock.nearestArea)
+                        }
+                    />
+                </ScrollView>
+            </View>
         );
     }
 
@@ -41,63 +53,79 @@ export default function ProposalScreen() {
     const { area, total, nearby, memoryGroups } = nearbyMock;
 
     return (
-        <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom }}>
-            <View style={styles.intro}>
-                <View style={styles.location}>
-                    <Icon name="pin" size={metrics.proposal.locationIconSize} />
-                    <Text style={styles.caption}>지금 {area}</Text>
+        <View style={styles.screen}>
+            <ScreenHeader location={area} onSettingsPress={openSettings} />
+            <ScrollView contentContainerStyle={styles.content}>
+                <View style={styles.intro}>
+                    <Text style={styles.heading}>
+                        잊고 있던 곳 {total}개를 찾았어요
+                    </Text>
+                    <Text style={styles.caption}>
+                        가까이 갈수록 사진에 색이 돌아와요
+                    </Text>
                 </View>
-                <Text style={styles.heading}>
-                    잊고 있던 곳 {total}개를 찾았어요
-                </Text>
-                <Text style={styles.caption}>
-                    가까이 갈수록 사진에 색이 돌아와요
-                </Text>
-            </View>
 
-            <View style={styles.filters}>
-                {FILTERS.map((label) => (
-                    <Chip
-                        key={label}
-                        label={label}
-                        selected={label === filter}
-                        onPress={() => setFilter(label)}
-                    />
-                ))}
-            </View>
-
-            <View style={styles.list}>
-                <View>
-                    {nearby.map(({ id, detailId, ...card }) => (
-                        <NearbyCard
-                            key={id}
-                            {...card}
-                            onPress={() => openDetail(detailId)}
+                <View style={styles.filters}>
+                    {FILTERS.map((label) => (
+                        <Chip
+                            key={label}
+                            label={label}
+                            selected={label === filter}
+                            onPress={() => setFilter(label)}
                         />
                     ))}
                 </View>
-                {memoryGroups.map((group) => (
-                    <View key={group[0].id} style={styles.group}>
-                        {group.map(({ id, ...card }) => (
-                            <MemoryCard key={id} {...card} />
+
+                <View style={styles.list}>
+                    <View>
+                        {nearby.map(({ id, detailId, ...card }) => (
+                            <NearbyCard
+                                key={id}
+                                {...card}
+                                onPress={() => openDetail(detailId)}
+                            />
                         ))}
                     </View>
-                ))}
-            </View>
-        </ScrollView>
+                    {memoryGroups.map((group) => (
+                        <View key={group[0].id} style={styles.group}>
+                            {group.map((item) => {
+                                const { id, ...card } = item;
+                                const detailId =
+                                    "detailId" in item
+                                        ? item.detailId
+                                        : undefined;
+                                return (
+                                    <MemoryCard
+                                        key={id}
+                                        {...card}
+                                        onPress={
+                                            detailId
+                                                ? () => openDetail(detailId)
+                                                : undefined
+                                        }
+                                    />
+                                );
+                            })}
+                        </View>
+                    ))}
+                </View>
+            </ScrollView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
+    screen: {
+        flex: 1,
+    },
+    // 목록 끝이 하단 바에 붙지 않게 한다. Figma 는 목록이 잘려 있어 값이 없다.
+    content: {
+        paddingBottom: spacing.lg,
+    },
     intro: {
         paddingTop: metrics.proposal.introPaddingTop,
         paddingHorizontal: spacing.lg,
         gap: metrics.proposal.introGap,
-    },
-    location: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: spacing.xs,
     },
     caption: {
         ...typography.captionMeta,

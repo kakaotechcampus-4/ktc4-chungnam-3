@@ -1,6 +1,6 @@
 // 앨범 셀. 썸네일 + 상태 배지 + 한 줄 이름. 폭은 부모가 정한다.
 // 이름 규칙: 장소 확정이면 장소명, 미확정이면 영상 제목을 “ ”로 감싼다.
-// partial(부분 성공)은 확정으로 보고 대표 장소명 하나를 보여준다.
+// 제목을 모르는 실패 셀은 "불러오지 못한 영상" 이다 (흐름 메모 2106:775).
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import Badge, { type BadgeStatus } from "../../../shared/ui/Badge";
@@ -29,7 +29,9 @@ function cellName({
     status,
 }: Pick<AlbumCellProps, "placeName" | "videoTitle" | "status">) {
     const unconfirmed = status != null && UNCONFIRMED.includes(status);
-    return unconfirmed && videoTitle != null ? `“${videoTitle}”` : placeName;
+    if (!unconfirmed) return placeName;
+    if (videoTitle != null) return `“${videoTitle}”`;
+    return status === "failed" ? "불러오지 못한 영상" : placeName;
 }
 
 export default function AlbumCell({

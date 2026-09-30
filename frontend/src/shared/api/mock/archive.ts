@@ -2,7 +2,7 @@
 // 셀 이름: 장소 확정이면 placeName, 미확정(status 가 있는 셀)이면 videoTitle. videoTitle 에는 따옴표를 넣지 않는다.
 // 확인 필요 셀은 02, 분석 중 셀은 03 과 같은 저장물이다.
 // 01 근처와 같은 장소는 같은 이미지를 쓴다.
-const img = (id: number) => `https://picsum.photos/id/${id}/360/640`;
+import { img } from "./img";
 
 // 07 전체 기억 · 시간순 앨범 (2061:901)
 export const archiveMock = {
@@ -32,6 +32,13 @@ export const archiveMock = {
                     thumbUri: img(312),
                     fade: "recent",
                 },
+                // 05 와 같은 저장물. 영상을 불러오지 못해 이미지와 제목이 없다.
+                {
+                    id: "failed-video",
+                    fade: "recent",
+                    status: "failed",
+                    resultId: "failed",
+                },
             ],
         },
         {
@@ -52,6 +59,7 @@ export const archiveMock = {
                 },
                 {
                     id: "daeheung-cathedral",
+                    detailId: "daeheung-cathedral",
                     placeName: "대흥동 성당",
                     thumbUri: img(488),
                     fade: "weeks",

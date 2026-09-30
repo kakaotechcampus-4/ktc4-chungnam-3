@@ -1,5 +1,5 @@
 // 근처 탭 목 데이터. 화면 props 모양 그대로이며 서버 계약이 아니다. 문구는 Figma 01 · 06 그대로.
-const img = (id: number) => `https://picsum.photos/id/${id}/360/640`;
+import { img } from "./img";
 
 // 01 근처 · 다시 꺼낸 곳 (2061:760)
 // total: 근처 반경 안의 장소 확정 저장물 전체 수. 필터 칩과 무관하다.
@@ -34,6 +34,7 @@ export const nearbyMock = {
             },
             {
                 id: "daeheung-cathedral",
+                detailId: "daeheung-cathedral",
                 time: "6주 전",
                 place: "대흥동 성당",
                 meta: "도보 11분 · 가볼 곳",
