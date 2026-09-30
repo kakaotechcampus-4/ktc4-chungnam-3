@@ -298,16 +298,25 @@ public class VideoContentAnalyzer {
     }
 
     private String joinOrNone(List<String> values) {
-        return (values == null || values.isEmpty()) ? "없음" : String.join(", ", values);
+        if (values == null || values.isEmpty()) {
+            return "없음";
+        }
+        // 외부 API 응답 리스트라 null 원소가 섞여 있을 수 있어 미리 걸러낸다 (리뷰 반영).
+        List<String> filtered = values.stream().filter(java.util.Objects::nonNull).toList();
+        return filtered.isEmpty() ? "없음" : String.join(", ", filtered);
     }
 
     private String joinComments(List<String> comments) {
         if (comments == null || comments.isEmpty()) {
             return "없음";
         }
+        List<String> filtered = comments.stream().filter(java.util.Objects::nonNull).toList();
+        if (filtered.isEmpty()) {
+            return "없음";
+        }
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < comments.size(); i++) {
-            sb.append(i + 1).append(". ").append(comments.get(i)).append('\n');
+        for (int i = 0; i < filtered.size(); i++) {
+            sb.append(i + 1).append(". ").append(filtered.get(i)).append('\n');
         }
         return sb.toString();
     }
