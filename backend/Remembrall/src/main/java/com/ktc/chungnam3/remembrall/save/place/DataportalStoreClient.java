@@ -68,14 +68,14 @@ public class DataportalStoreClient implements NearbyStoreLookup {
     public List<StoreResult> searchByRadius(double lon, double lat, int radiusMeters) {
         StoreListResponse response = restClient.get()
                 .uri(uriBuilder -> uriBuilder.path("/storeListInRadius")
-                        .queryParam("serviceKey", apiKey)
+                        .queryParam("serviceKey", "{serviceKey}")
                         .queryParam("type", "json")
                         .queryParam("numOfRows", 50)
                         .queryParam("pageNo", 1)
                         .queryParam("cx", lon)
                         .queryParam("cy", lat)
                         .queryParam("radius", radiusMeters)
-                        .build())
+                        .build(Map.of("serviceKey", apiKey)))
                 .retrieve()
                 .body(StoreListResponse.class);
 
