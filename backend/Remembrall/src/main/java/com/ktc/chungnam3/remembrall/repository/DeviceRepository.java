@@ -16,6 +16,21 @@ public interface DeviceRepository extends JpaRepository<Device, UUID> {
 
     Optional<Device> findBySessionTokenHash(String sessionTokenHash);
 
+    @Query("""
+            SELECT device FROM Device device WHERE device.memberId = :memberId
+              AND device.sessionTokenHash IS NOT NULL AND device.sessionExpiresAt > :now
+              AND device.fcmToken IS NOT NULL
+            """)
+    Optional<Device> findActiveWithFcmToken(@Param("memberId") UUID memberId, @Param("now") Instant now);
+
+    @Modifying
+    @Query("""
+            UPDATE Device device SET device.fcmToken = NULL, device.updatedAt = :now
+             WHERE device.id = :deviceId AND device.fcmToken = :token
+            """)
+    int clearFcmTokenIfMatches(@Param("deviceId") UUID deviceId, @Param("token") String token,
+                              @Param("now") Instant now);
+
     @Modifying
     @Query("""
             UPDATE Device device

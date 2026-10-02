@@ -1,34 +1,31 @@
 ## 트리거 - Trigger
 
-개인 저장물을 다시 꺼내기 위한 위치 조건을 관리합니다.  
-`PersonalSave`와 `ContentPlace`를 연결하며 지오펜스 반경과 활성 상태를 저장합니다.  
-하나의 콘텐츠에 여러 장소가 연결되어 있으면 장소별로 트리거를 생성할 수 있으며, 공용 후보는 트리거를 생성하지 않습니다.
+사용자가 저장한 장소에서 꺼내기 실행을 촉발하는 연결입니다. **회원과 장소의 조합마다 하나만 생성합니다.** 같은 장소를 다룬 콘텐츠를 여러 개 저장해도 트리거는 하나이며, 공용 후보만으로는 생성하지 않습니다.
+트리거는 어떤 저장물을 제안할지 결정하지 않습니다. 장소 이벤트가 발생하면 에이전트가 그 회원의 관련 저장물을 조회해 판단합니다.
 
 ### 필드
 
-| 필드               | 타입          | 제약조건                                | 설명                                                     |
-| ---------------- | ----------- | ----------------------------------- | ------------------------------------------------------ |
-| `id`             | UUID        | PK, NOT NULL                        | 트리거 식별자입니다.                                            |
-| `personalSaveId` | UUID        | FK, NOT NULL                        | 트리거의 소유자가 되는 개인 저장물 식별자입니다.                            |
-| `contentPlaceId` | UUID        | FK, NOT NULL                        | 트리거 대상이 되는 콘텐츠와 장소의 연결 식별자입니다.                         |
-| `radiusMeters`   | INTEGER     | NOT NULL, CHECK                     | 지오펜스 반경을 미터 단위로 저장합니다.                                 |
-| `active`         | BOOLEAN     | NOT NULL, DEFAULT TRUE              | 트리거 사용 여부입니다.                                          |
-| `createdAt`      | TIMESTAMPTZ | NOT NULL, DEFAULT CURRENT_TIMESTAMP | 트리거가 생성된 시각입니다.                                        |
-| `updatedAt`      | TIMESTAMPTZ | NOT NULL, DEFAULT CURRENT_TIMESTAMP | 트리거가 마지막으로 변경된 시각입니다.                                  |
-| `opendAt`        | TIMESTAMPTZ | NULL                                | 사용자가 푸시 알림을 눌러 제안을 처음 연 시각입니다. 열지 않은 경우 `NULL`로 유지합니다. |
+|필드|타입|제약조건|설명|
+|---|---|---|---|
+|`id`|UUID|PK, NOT NULL|트리거 식별자입니다.|
+|`memberId`|UUID|FK, NOT NULL|장소를 저장한 회원의 식별자입니다.|
+|`placeId`|UUID|FK, NOT NULL|이벤트를 발생시키는 장소의 식별자입니다.|
+|`createdAt`|TIMESTAMPTZ|NOT NULL, DEFAULT CURRENT_TIMESTAMP|트리거가 생성된 시각입니다.|
 
 ### 제약조건
 
-```sql
-UNIQUE (personal_save_id, content_place_id)
-FOREIGN KEY (personal_save_id) REFERENCES personal_save(id) ON DELETE CASCADE
-FOREIGN KEY (content_place_id) REFERENCES content_place(id) ON DELETE CASCADE
-CHECK (radius_meters > 0)
+```
+UNIQUE (member_id, place_id)
+FOREIGN KEY (member_id) REFERENCES member(id) ON DELETE CASCADE
+FOREIGN KEY (place_id) REFERENCES place(id) ON DELETE CASCADE
 ```
 
-동일한 개인 저장물과 장소 연결에는 하나의 트리거만 생성합니다.  
-트리거를 생성할 때 `PersonalSave.contentId`와 `ContentPlace.contentId`가 같은지 애플리케이션 트랜잭션에서 검사합니다.  
-이미 분석이 완료된 콘텐츠를 저장하면 연결된 `ContentPlace`를 기준으로 트리거를 생성하고, 저장 이후 분석이 완료되면 장소 검증과 `ContentPlace` 생성 후 트리거를 생성합니다.  
-개인 저장물이나 `ContentPlace`가 삭제되면 연결된 트리거도 함께 삭제합니다.  
-`active`는 서버에서 해당 트리거를 사용할지 나타내며, 실제 기기에 지오펜스가 등록되었는지는 의미하지 않습니다. 기기별 등록 상태는 `Device`와 트리거의 동기화 구조에서 별도로 관리합니다.  
-지오펜스 반경의 기본값은 DB에 고정하지 않고 실제 위치 정확도 테스트 후 애플리케이션 설정으로 결정합니다.
+### 생성과 삭제
+
+- 개인 저장물에 검증된 `ContentPlace`가 연결되면 해당 회원과 장소의 트리거를 생성합니다. 이미 있으면 추가로 생성하지 않습니다.
+- 검증된 ContentPlace가 있는 콘텐츠를 다른 회원이 저장한 경우에도 그 회원의 트리거를 생성합니다.
+- 저장물을 삭제해도 같은 회원이 해당 장소와 연결된 다른 저장물을 갖고 있다면 트리거를 유지합니다. 더는 연결된 저장물이 없을 때 삭제합니다.
+- 위치 동의가 철회되면 서버는 해당 트리거의 이벤트를 처리하지 않으며, 앱은 등록한 지오펜스를 해제합니다.
+
+앱은 장소당 지오펜스 하나를 등록합니다. 장소 이벤트가 오면 서버는 `memberId`와 `placeId`로 트리거 하나를 찾고, `RecallExecution`을 한 건 생성합니다.
+지오펜스 반경은 등록 설정에서 관리합니다. 

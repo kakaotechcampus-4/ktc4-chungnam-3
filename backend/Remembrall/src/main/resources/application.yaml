@@ -25,3 +25,13 @@ kakao:
 auth:
   session:
     ttl: ${session.ttl:30d}
+
+recall:
+  max-event-age: 30m
+  member-cooldown: 10m
+  agent-version: stub-v1
+
+notification:
+  max-title-length: 120
+  max-body-length: 200
+  fcm-credentials-path: ${FCM_CREDENTIALS_PATH:}
