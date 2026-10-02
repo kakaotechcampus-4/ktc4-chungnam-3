@@ -2,6 +2,7 @@ package com.ktc.chungnam3.remembrall.save.place;
 
 import com.ktc.chungnam3.remembrall.save.dto.ConfirmRequestDto;
 import com.ktc.chungnam3.remembrall.save.dto.ResolvedPlaceDto;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -66,6 +67,7 @@ import java.util.stream.IntStream;
  * bus_stop만 예외로 살려둔다({@link #ALLOWED_HIGHWAY_TYPE}) - 실제 도로 구간(주거도로·간선도로 등)은
  * 여전히 걸러진다.
  */
+@Slf4j
 @Component
 public class PlaceResolver {
 
@@ -286,6 +288,7 @@ public class PlaceResolver {
         try {
             nearby = nearbyStoreLookup.searchByRadius(candidate.lon(), candidate.lat(), NEARBY_STORE_RADIUS_METERS);
         } catch (RuntimeException e) {
+            log.warn("공공 상가정보 조회 실패 - 반경 검증 없이 확정합니다: {}", e.getMessage());
             return false;
         }
 

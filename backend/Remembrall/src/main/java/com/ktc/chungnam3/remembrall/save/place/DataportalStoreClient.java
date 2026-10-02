@@ -118,10 +118,12 @@ public class DataportalStoreClient implements NearbyStoreLookup {
     }
 
     private List<StoreResult> call(double lon, double lat, int radiusMeters, String industryLargeCategoryCode) {
+        // serviceKey는 {serviceKey} 자리표시자 + build(Map.of(...))로 넣는다(팀원 doheelab-coder 리뷰
+        // 반영) - 리터럴로 바로 넣으면 키에 '+'가 있을 때 인코딩이 안 돼 서버가 공백으로 읽어버린다.
         StoreListResponse response = restClient.get()
                 .uri(uriBuilder -> {
                     UriBuilder builder = uriBuilder.path("/storeListInRadius")
-                            .queryParam("serviceKey", apiKey)
+                            .queryParam("serviceKey", "{serviceKey}")
                             .queryParam("type", "json")
                             .queryParam("numOfRows", 1000)
                             .queryParam("pageNo", 1)
@@ -131,7 +133,7 @@ public class DataportalStoreClient implements NearbyStoreLookup {
                     if (industryLargeCategoryCode != null) {
                         builder = builder.queryParam("indsLclsCd", industryLargeCategoryCode);
                     }
-                    return builder.build();
+                    return builder.build(Map.of("serviceKey", apiKey));
                 })
                 .retrieve()
                 .body(StoreListResponse.class);
