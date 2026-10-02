@@ -119,9 +119,9 @@ public class DataportalStoreClient implements NearbyStoreLookup {
 
     private List<StoreResult> call(double lon, double lat, int radiusMeters, String industryLargeCategoryCode) {
         StoreListResponse response = restClient.get()
-                .uri(uriBuilder -> {
+.uri(uriBuilder -> {
                     UriBuilder builder = uriBuilder.path("/storeListInRadius")
-                            .queryParam("serviceKey", apiKey)
+                            .queryParam("serviceKey", "{serviceKey}")
                             .queryParam("type", "json")
                             .queryParam("numOfRows", 1000)
                             .queryParam("pageNo", 1)
@@ -131,9 +131,8 @@ public class DataportalStoreClient implements NearbyStoreLookup {
                     if (industryLargeCategoryCode != null) {
                         builder = builder.queryParam("indsLclsCd", industryLargeCategoryCode);
                     }
-                    return builder.build();
-                })
-                .retrieve()
+                    return builder.build(Map.of("serviceKey", apiKey));
+                }).retrieve()
                 .body(StoreListResponse.class);
 
         if (response == null || response.header() == null) {
