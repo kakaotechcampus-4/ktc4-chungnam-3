@@ -23,6 +23,9 @@ public interface ContentRepository extends JpaRepository<Content, UUID> {
     @Query("SELECT content.id FROM Content content WHERE content.videoId = :videoId")
     Optional<UUID> findIdByVideoId(@Param("videoId") String videoId);
 
+    @Query(value = "SELECT id FROM content WHERE id = :contentId FOR UPDATE", nativeQuery = true)
+    Optional<UUID> findIdForUpdate(@Param("contentId") UUID contentId);
+
     @Modifying
     @Query(value = """
             UPDATE content

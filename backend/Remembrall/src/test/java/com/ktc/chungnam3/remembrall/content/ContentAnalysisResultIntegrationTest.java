@@ -17,6 +17,7 @@ import com.ktc.chungnam3.remembrall.repository.ContentRepository;
 import com.ktc.chungnam3.remembrall.repository.MemberRepository;
 import com.ktc.chungnam3.remembrall.repository.PersonalSaveRepository;
 import com.ktc.chungnam3.remembrall.repository.PlaceRepository;
+import com.ktc.chungnam3.remembrall.repository.TriggerRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -71,6 +72,9 @@ class ContentAnalysisResultIntegrationTest {
     private ContentPlaceRepository contentPlaceRepository;
 
     @Autowired
+    private TriggerRepository triggerRepository;
+
+    @Autowired
     private PlatformTransactionManager transactionManager;
 
     @Autowired
@@ -92,6 +96,8 @@ class ContentAnalysisResultIntegrationTest {
                 personalSaveRepository,
                 placeRepository,
                 contentPlaceRepository,
+                memberRepository,
+                triggerRepository,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 transactionManager
         );

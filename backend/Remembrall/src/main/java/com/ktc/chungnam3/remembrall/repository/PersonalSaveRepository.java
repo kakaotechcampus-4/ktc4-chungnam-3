@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -26,4 +27,21 @@ public interface PersonalSaveRepository extends JpaRepository<PersonalSave, UUID
     );
 
     Optional<PersonalSave> findByMemberIdAndContentId(UUID memberId, UUID contentId);
+
+    @Query("SELECT ps.memberId FROM PersonalSave ps WHERE ps.contentId = :contentId")
+    List<UUID> findMemberIdsByContentId(@Param("contentId") UUID contentId);
+
+    @Query("""
+            SELECT ps.contentId FROM PersonalSave ps
+             WHERE ps.id = :personalSaveId AND ps.memberId = :memberId
+            """)
+    Optional<UUID> findOwnedContentId(
+            @Param("personalSaveId") UUID personalSaveId,
+            @Param("memberId") UUID memberId
+    );
+
+    @Modifying
+    @Query(value = "DELETE FROM personal_save WHERE id = :personalSaveId AND member_id = :memberId",
+            nativeQuery = true)
+    int deleteOwnedSave(@Param("personalSaveId") UUID personalSaveId, @Param("memberId") UUID memberId);
 }

@@ -39,4 +39,7 @@ public interface ContentPlaceRepository extends JpaRepository<ContentPlace, UUID
     List<ContentPlace> findAllByContent_Id(UUID contentId);
 
     List<ContentPlace> findAllByPlace_Id(UUID placeId);
+
+    @Query("SELECT cp.place.id FROM ContentPlace cp WHERE cp.content.id = :contentId")
+    List<UUID> findPlaceIdsByContentId(@Param("contentId") UUID contentId);
 }

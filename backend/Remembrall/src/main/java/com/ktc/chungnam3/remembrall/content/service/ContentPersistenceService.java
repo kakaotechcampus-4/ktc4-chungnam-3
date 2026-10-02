@@ -1,5 +1,7 @@
 package com.ktc.chungnam3.remembrall.content.service;
 
+import com.ktc.chungnam3.remembrall.common.exception.ApiException;
+import com.ktc.chungnam3.remembrall.common.exception.ErrorCode;
 import com.ktc.chungnam3.remembrall.content.dto.AnalysisOutcome;
 import com.ktc.chungnam3.remembrall.content.dto.ContentSaveClaim;
 import com.ktc.chungnam3.remembrall.domain.content.Content;
@@ -8,14 +10,18 @@ import com.ktc.chungnam3.remembrall.domain.place.VerificationProvider;
 import com.ktc.chungnam3.remembrall.domain.personalsave.PersonalSave;
 import com.ktc.chungnam3.remembrall.repository.ContentPlaceRepository;
 import com.ktc.chungnam3.remembrall.repository.ContentRepository;
+import com.ktc.chungnam3.remembrall.repository.MemberRepository;
 import com.ktc.chungnam3.remembrall.repository.PersonalSaveRepository;
 import com.ktc.chungnam3.remembrall.repository.PlaceRepository;
+import com.ktc.chungnam3.remembrall.repository.TriggerRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -26,6 +32,8 @@ public class ContentPersistenceService {
     private final PersonalSaveRepository personalSaveRepository;
     private final PlaceRepository placeRepository;
     private final ContentPlaceRepository contentPlaceRepository;
+    private final MemberRepository memberRepository;
+    private final TriggerRepository triggerRepository;
     private final Clock clock;
     private final TransactionTemplate transactionTemplate;
 
@@ -34,6 +42,8 @@ public class ContentPersistenceService {
             PersonalSaveRepository personalSaveRepository,
             PlaceRepository placeRepository,
             ContentPlaceRepository contentPlaceRepository,
+            MemberRepository memberRepository,
+            TriggerRepository triggerRepository,
             Clock clock,
             PlatformTransactionManager transactionManager
     ) {
@@ -41,6 +51,8 @@ public class ContentPersistenceService {
         this.personalSaveRepository = personalSaveRepository;
         this.placeRepository = placeRepository;
         this.contentPlaceRepository = contentPlaceRepository;
+        this.memberRepository = memberRepository;
+        this.triggerRepository = triggerRepository;
         this.clock = clock;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
@@ -57,9 +69,15 @@ public class ContentPersistenceService {
             UUID contentId = contentRepository.findIdByVideoId(videoId)
                     .orElseThrow(() -> new IllegalStateException("Content insert or lookup failed"));
 
+            contentRepository.findIdForUpdate(contentId)
+                    .orElseThrow(() -> new IllegalStateException("Content disappeared before save"));
+            lockMember(memberId);
+
             int inserted = personalSaveRepository.insertIfAbsent(UUID.randomUUID(), memberId, contentId, now);
             PersonalSave personalSave = personalSaveRepository.findByMemberIdAndContentId(memberId, contentId)
                     .orElseThrow(() -> new IllegalStateException("PersonalSave insert or lookup failed"));
+
+            createTriggers(memberId, contentPlaceRepository.findPlaceIdsByContentId(contentId), now);
 
             boolean claimed = contentRepository.claimAnalysis(contentId, now) == 1;
             Content content = contentRepository.findById(contentId)
@@ -80,6 +98,9 @@ public class ContentPersistenceService {
         Objects.requireNonNull(outcome, "outcome");
 
         return Boolean.TRUE.equals(transactionTemplate.execute(transaction -> {
+            if (contentRepository.findIdForUpdate(contentId).isEmpty()) {
+                return false;
+            }
             Instant now = clock.instant();
             int updatedRows = contentRepository.applyOutcome(
                     contentId,
@@ -98,9 +119,50 @@ public class ContentPersistenceService {
                 return false;
             }
 
-            outcome.places().forEach(place -> savePlaceAndLink(contentId, place, now));
+            List<UUID> memberIds = personalSaveRepository.findMemberIdsByContentId(contentId)
+                    .stream().sorted().toList();
+            memberIds.forEach(this::lockMember);
+            if (outcome.places().isEmpty()) {
+                return true;
+            }
+            outcome.places().stream()
+                    .sorted(Comparator.comparing(AnalysisOutcome.PlaceResult::verificationPlaceId))
+                    .forEach(place -> savePlaceAndLink(contentId, place, now));
+            List<UUID> placeIds = contentPlaceRepository.findPlaceIdsByContentId(contentId);
+            memberIds.forEach(memberId -> createTriggers(memberId, placeIds, now));
             return true;
         }));
+    }
+
+    public boolean deletePersonalSave(UUID memberId, UUID personalSaveId) {
+        Objects.requireNonNull(memberId, "memberId");
+        Objects.requireNonNull(personalSaveId, "personalSaveId");
+
+        return Boolean.TRUE.equals(transactionTemplate.execute(transaction -> {
+            UUID contentId = personalSaveRepository.findOwnedContentId(personalSaveId, memberId)
+                    .orElse(null);
+            if (contentId == null || contentRepository.findIdForUpdate(contentId).isEmpty()) {
+                return false;
+            }
+            lockMember(memberId);
+            if (personalSaveRepository.deleteOwnedSave(personalSaveId, memberId) != 1) {
+                return false;
+            }
+
+            contentPlaceRepository.findPlaceIdsByContentId(contentId)
+                    .forEach(placeId -> triggerRepository.deleteIfUnreferenced(memberId, placeId));
+            return true;
+        }));
+    }
+
+    private void lockMember(UUID memberId) {
+        memberRepository.findByIdForUpdate(memberId)
+                .orElseThrow(() -> new ApiException(ErrorCode.INVALID_SESSION));
+    }
+
+    private void createTriggers(UUID memberId, List<UUID> placeIds, Instant now) {
+        placeIds.forEach(placeId -> triggerRepository.insertIfAbsent(
+                UUID.randomUUID(), memberId, placeId, now));
     }
 
     private void savePlaceAndLink(
