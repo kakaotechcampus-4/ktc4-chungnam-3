@@ -2,6 +2,7 @@ package com.ktc.chungnam3.remembrall.save.place;
 
 import com.ktc.chungnam3.remembrall.save.dto.ConfirmRequestDto;
 import com.ktc.chungnam3.remembrall.save.dto.ResolvedPlaceDto;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -66,6 +67,7 @@ import java.util.stream.IntStream;
  * bus_stop만 예외로 살려둔다({@link #ALLOWED_HIGHWAY_TYPE}) - 실제 도로 구간(주거도로·간선도로 등)은
  * 여전히 걸러진다.
  */
+@Slf4j
 @Component
 public class PlaceResolver {
 
