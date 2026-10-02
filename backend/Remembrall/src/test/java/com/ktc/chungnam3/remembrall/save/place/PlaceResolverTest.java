@@ -12,11 +12,11 @@ class PlaceResolverTest {
     // hasNearbyStoreMismatch가 false를 반환해야 하는 케이스. PlaceLookup은 기존 테스트 전부
     // branchName이 없거나 regionHint가 시·도뿐이라 기준점 경로 자체가 안 타므로 빈 값으로 충분하다.
     private final PlaceResolver resolver =
-            new PlaceResolver((lon, lat, radiusMeters) -> List.of(), (name, branch, region) -> List.of());
+            new PlaceResolver((lon, lat, radiusMeters) -> List.of(), (name, branch, region) -> List.of(), 1000);
 
     private static PlaceResolver resolverWithNearbyStores(
             List<DataportalStoreClient.StoreResult> nearbyStores) {
-        return new PlaceResolver((lon, lat, radiusMeters) -> nearbyStores, (name, branch, region) -> List.of());
+        return new PlaceResolver((lon, lat, radiusMeters) -> nearbyStores, (name, branch, region) -> List.of(), 1000);
     }
 
     private static PlaceResolver resolverForAnchor(
@@ -24,7 +24,8 @@ class PlaceResolverTest {
             List<DataportalStoreClient.StoreResult> nearbyStores) {
         return new PlaceResolver(
                 (lon, lat, radiusMeters) -> nearbyStores,
-                (name, branch, region) -> anchorCandidates);
+                (name, branch, region) -> anchorCandidates,
+                1000);
     }
 
     private static DataportalStoreClient.StoreResult store(String bizesNm) {

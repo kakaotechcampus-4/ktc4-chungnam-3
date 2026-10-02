@@ -2,6 +2,7 @@ package com.ktc.chungnam3.remembrall.save.place;
 
 import com.ktc.chungnam3.remembrall.save.dto.ConfirmRequestDto;
 import com.ktc.chungnam3.remembrall.save.dto.ResolvedPlaceDto;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.Comparator;
@@ -87,7 +88,11 @@ public class PlaceResolver {
 
     // 기준점(역·동네 등) 주변에서 프랜차이즈 지점을 찾는 반경 - 위보다 넓게 잡는다. 기준점은 "정확한
     // 지점 좌표"가 아니라 "그 근방을 대표하는 좌표"(예: 역 출구 하나)라 오차가 더 클 수 있어서다.
-    private static final int FRANCHISE_ANCHOR_RADIUS_METERS = 300;
+    // 300 → 1000으로 조정(2026-10-02, 실측 근거): "교보문고 광화문점"이 기준점("광화문" 역 주변 좌표)
+    // 에서 500m 이상 떨어져 있어 300m로는 반경 밖이라 NO_PLACE였다 - 공공데이터엔 실제로 "오렌즈교보문고
+    // /광화문점"이라는 정확한 주소로 등록돼 있었는데도 반경 때문에 못 찾은 사례. `application.yaml`
+    // 프로퍼티로 빼서 과도하게 넓혀 무관한 업소가 개수 상한에 걸리는 부작용이 보이면 숫자만 조정한다.
+    private final int franchiseAnchorRadiusMeters;
 
     // 지점명 텍스트로 못 좁혔을 때(개선③ 후속, 2026-09-30) 거리로 대신 좁힌다 - 가장 가까운 곳과
     // 그 다음으로 가까운 곳의 차이가 이 값보다 작으면 "확실히 더 가까운 곳"이 없다고 보고 되묻는다.
@@ -105,9 +110,13 @@ public class PlaceResolver {
     private final NearbyStoreLookup nearbyStoreLookup;
     private final PlaceLookup placeLookup;
 
-    public PlaceResolver(NearbyStoreLookup nearbyStoreLookup, PlaceLookup placeLookup) {
+    public PlaceResolver(
+            NearbyStoreLookup nearbyStoreLookup,
+            PlaceLookup placeLookup,
+            @Value("${franchise.anchor-radius-meters:1000}") int franchiseAnchorRadiusMeters) {
         this.nearbyStoreLookup = nearbyStoreLookup;
         this.placeLookup = placeLookup;
+        this.franchiseAnchorRadiusMeters = franchiseAnchorRadiusMeters;
     }
 
     public enum Decision {
@@ -341,7 +350,7 @@ public class PlaceResolver {
             // DataportalStoreClient 참고). 다른 업종 브랜드는 이 목록에 없으면 여전히 못 찾을 수 있음 -
             // 팀 검토 필요한 임시 목록.
             nearby = nearbyStoreLookup.searchByRadius(
-                    anchor.get().lon(), anchor.get().lat(), FRANCHISE_ANCHOR_RADIUS_METERS,
+                    anchor.get().lon(), anchor.get().lat(), franchiseAnchorRadiusMeters,
                     List.of("I2", "G2"));
         } catch (RuntimeException e) {
             return Optional.empty();

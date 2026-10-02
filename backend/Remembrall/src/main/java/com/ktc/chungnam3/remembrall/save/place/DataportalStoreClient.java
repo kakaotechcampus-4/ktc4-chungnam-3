@@ -2,6 +2,7 @@ package com.ktc.chungnam3.remembrall.save.place;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriBuilder;
@@ -34,9 +35,26 @@ public class DataportalStoreClient implements NearbyStoreLookup {
     private final RestClient restClient;
     private final String apiKey;
 
-    public DataportalStoreClient(@Value("${dataportal.api.key}") String apiKey) {
+    /**
+     * connect/read 타임아웃을 명시적으로 건다(2026-10-01 추가) - 이전엔 둘 다 무제한이라 공공데이터포털이
+     * 멈추면 호출 스레드가 끝없이 블로킹됐다. 기본값은 실측 기반(업종 코드 1개짜리 단일 호출 기준 좌표
+     * 6곳 실측: 평균 578ms, 최댓값 1286ms) - 최댓값의 2배가 조금 넘는 값으로 여유를 뒀다. 이 클라이언트는
+     * 업종 코드 개수만큼 순차 호출하므로({@link #searchByRadius(double, double, int, List)}), 전체
+     * 소요시간은 이 값에 호출 횟수를 곱해서 계산해야 한다 - PR #20 리뷰(팀원 doheelab-coder)의 분석
+     * staleness 문턱 산정에 쓰임.
+     */
+    public DataportalStoreClient(
+            @Value("${dataportal.api.key}") String apiKey,
+            @Value("${dataportal.connect-timeout-ms:2000}") int connectTimeoutMs,
+            @Value("${dataportal.read-timeout-ms:3000}") int readTimeoutMs) {
         this.apiKey = apiKey;
-        this.restClient = RestClient.create(BASE_URL);
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(connectTimeoutMs);
+        requestFactory.setReadTimeout(readTimeoutMs);
+        this.restClient = RestClient.builder()
+                .baseUrl(BASE_URL)
+                .requestFactory(requestFactory)
+                .build();
     }
 
     /** 도로명주소(rdnmAdr)를 기본으로 노출한다 - 지번주소보다 사용자에게 익숙한 표기라서. */
