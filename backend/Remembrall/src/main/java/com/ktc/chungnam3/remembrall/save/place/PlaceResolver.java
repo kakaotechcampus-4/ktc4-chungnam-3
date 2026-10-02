@@ -170,6 +170,7 @@ public class PlaceResolver {
         try {
             nearby = nearbyStoreLookup.searchByRadius(candidate.lon(), candidate.lat(), NEARBY_STORE_RADIUS_METERS);
         } catch (RuntimeException e) {
+            log.warn("공공 상가정보 조회 실패 - 반경 검증 없이 확정합니다: {}", e.getMessage());
             return false;
         }
 
