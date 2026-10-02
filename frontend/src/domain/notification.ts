@@ -4,8 +4,8 @@
 export type NotificationKind = string;
 
 export interface NotificationPayload {
-  kind: NotificationKind;
-  title: string;
-  body: string;
-  targetId: string | null;
+    kind: NotificationKind;
+    title: string;
+    body: string;
+    targetId: string | null;
 }

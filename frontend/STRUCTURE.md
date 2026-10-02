@@ -29,7 +29,14 @@
 
 ```
 frontend/
-├── index.js                  RN 엔트리. 앱 등록 + 백그라운드 태스크 등록만.
+├── index.js                  RN 엔트리. 앱 등록 + (runtime 작업 때) 백그라운드 태스크 등록
+├── app.json                  정적 앱 설정. EAS projectId · owner 포함
+├── app.config.ts             app.json 을 받아 빌드 시점 비밀값(Google Maps 키)을 플러그인에 넣는다
+├── eas.json                  EAS 빌드 프로필. development = 개발 빌드(dev client) APK
+├── assets/
+│   └── fonts/                Noto Sans KR 서브셋 ttf + OFL.txt
+├── scripts/
+│   └── subset-fonts.py       폰트 서브셋 생성 (원본 출처 · 범위 · 실행 방법은 파일 상단)
 ├── android/
 │   └── app/src/main/java/com/remembrall/share/
 │       └── ShareActivity.kt  투명 공유 수신 액티비티 (앱 UI 안 띄움)
@@ -59,21 +66,105 @@ frontend/
     │
     ├── features/             화면
     │   ├── onboarding/
-    │   ├── archive/          홈. 저장 결과 확인의 유일한 창구
-    │   ├── content-detail/   상태별 렌더
-    │   ├── confirmation/     장소 후보 선택
-    │   ├── proposal/         꺼내기 결과 통합 화면
+    │   ├── archive/          기억 탭. 시간순 앨범
+    │   │   └── components/
+    │   ├── proposal/         근처 탭. 지금 위치 근처의 저장물
+    │   │   └── components/
+    │   ├── save-result/      저장 결과 모달. 분석 중 / 확인 필요 / 장소 없음 / 실패 상태별 렌더 + 장소 직접 찾기(02c · 02d)
+    │   │   └── components/
+    │   ├── content-detail/   장소 상세 · 지도. 끌 수 있는 시트(기본 · 펼침)
+    │   │   └── components/
+    │   ├── settings/         설정(11). 알림 · 위치 · 앱 정보
+    │   │   └── components/
     │   ├── execution-trace/  "왜 에이전트인가" 증명 화면
-    │   └── map-view/
+    │   └── map-view/         지도 탭(10). 사진 핀 · 요약 시트
+    │       └── components/
     │
     └── shared/
         ├── api/
         │   ├── client.ts
-        │   └── mappers/      ★ 서버 응답 -> 앱 모델 변환. 백엔드 변경 흡수 지점
+        │   ├── mappers/      ★ 서버 응답 -> 앱 모델 변환. 백엔드 변경 흡수 지점
+        │   └── mock/         UI 개발용 목 데이터. 화면 props 모양. 서버 계약 아님
         ├── storage/
         ├── external-links/   지도 딥링크 (단순 URL 빌더)
-        └── ui/               EmptyState, ErrorState 등 공통
+        └── ui/               두 개 이상 feature 가 쓰는 공통 컴포넌트
+            └── theme/        Figma 토큰 + metrics
 ```
+
+폰트:
+
+- Noto Sans KR(400 · 500)은 한자를 뺀 서브셋을 `assets/fonts/` 에 직접 번들한다.
+  한글 · 라틴 · 기호는 모두 남긴다. `scripts/subset-fonts.py` 로 다시 만든다.
+- Gowun Dodum 은 `@expo-google-fonts` 패키지를 쓴다. 화면 제목이 확정되면 제목 글자만 남기는 서브셋으로 바꾼다.
+
+## 컴포넌트 위치
+
+- 두 개 이상의 feature 에서 쓰면 `shared/ui/`, 한 feature 에서만 쓰면 `features/*/components/`.
+- `app/navigation` 이 하단 바로 쓰는 BottomNav 는 `shared/ui/` 에 둔다.
+- 두 feature 이상이 쓰는 것: ScreenHeader(근처 · 기억 헤더), Chip(근처 · 지도 필터), PhotoMarker · CurrentLocation(지도 탭 · 08 지도), SheetHandle(08 · 10b 시트), NotFound(저장 결과 · 장소 상세).
+- 지도 스타일은 Figma 색 토큰으로 만든 값이라 `shared/ui/theme/mapStyle.ts` 에 둔다.
+
+## 테마 토큰
+
+- 기준은 Figma 의 `C · Color`, `C · Dimension` 컬렉션과 `C 바랜기억/` 텍스트·effect 스타일이다.
+  같은 이름을 가진 다른 컬렉션(`Color`, `A ·`, `B ·`)은 이전 산출물이라 쓰지 않는다.
+- 이름은 그대로 쓴다. 슬래시는 객체 중첩, 하이픈은 camelCase 로만 바꾼다.
+  (`bg/screen` → `colors.bg.screen`, `brand/primary-pressed` → `colors.brand.primaryPressed`, `space/md` → `spacing.md`)
+- 스타일은 `C 바랜기억/` 접두어를 뗀 이름을 camelCase 로 쓴다. (`Heading/Screen` → `typography.headingScreen`)
+- `fade/*` 는 퍼센트다. 100 으로 나눠 opacity 로 쓴다.
+- headingScreen(Gowun Dodum)은 고정 문구와 숫자만 그린다. 장소명·영상 제목 같은 동적 텍스트에 쓰지 않는다.
+  서브셋 이후 빠진 글자가 기본 글꼴로 섞인다.
+- `metrics.ts` 는 **Figma 변수가 아니다.** 변수에 바인딩되지 않은 노드 실측값을 컴포넌트별 키로 둔다. hitSlop 도 여기 둔다.
+- `features/`, `shared/ui/`, `app/` 에는 색·간격·radius·타이포를 리터럴로 쓰지 않는다.
+
+## 내비게이션
+
+```
+RootStack
+├── Main            하단 탭 (근처 | 지도 | 기억). 초기 탭은 근처
+├── Settings        push. 하단 바 없음. 근처 · 기억 헤더의 톱니로 진입
+├── ContentDetail   push
+└── SaveResult      modal. 안에 중첩 스택
+    ├── Result          02~05 · 02b
+    └── PlaceSearch     push (02c · 02d)
+```
+
+- linking prefix 는 `Linking.createURL('/')` 로 만든다. scheme 을 하드코딩하지 않는다.
+- SaveResult(02~05)는 알림 탭 또는 기억 항목 탭으로 진입한다. 실제 알림 연결은 runtime 작업 범위다.
+- 02c 에서 저장하면 SaveResult 모달 하나만 닫아 흐름을 끝낸다. 뒤로 가기는 02c → 02 로 간다.
+- 08 "이 장소가 아니에요"는 SaveResult 모달에 PlaceSearch 하나만 올린 바꾸기 모드(placeId)다. 바꾸기 · 뒤로 가기 모두 모달을 닫고 08 로 돌아간다. 딥링크는 없다.
+- 08 "길 안내 시작"은 동작하지 않는다. 백엔드 협의 이슈 대기.
+- 하단 바의 선택 표시는 `bg/subtle` pill 이다. 브랜드 색을 쓰지 않는다.
+- 없는 저장 결과 id · 장소 id 로 들어오면 NotFound(12)를 보여준다. "기억 목록으로" → 기억 탭.
+- 08 시트 멈춤 지점은 기본 · 펼침이다. 지도 탭에서만 요약(10b) 지점이 추가된다.
+- 08 지도에는 이 장소 핀(선택 상태 · 이름표) · 현재 위치 · 현재 위치에서 장소까지의 점선 경로만 그린다.
+  현재 위치 · 경로는 위치 권한이 "denied" 일 때만 숨긴다. 경로는 경로 API 가 정해지기 전까지 직선 자리표시다.
+  지도 영역은 뒤로가기 아래부터 시트 기본 지점 위까지이며(mapPadding), 그 안에 현재 위치와 장소를 함께 맞춘다.
+- 10b 요약 시트는 핀을 누르면 뜬다. 요약을 누르거나 위로 끌면 08 로 가고, 지도 빈 곳 · 아래로 끌기 · 뒤로 가기는 닫는다.
+- 06 "{동네} 기억 보기"는 `Main > Map` 에 `area` 를 넘긴다. 지도는 그 동네로 가운데를 잡고 `area` 를 비운다.
+- 지도 핀 크기는 fade 로 정한다(recent 40 · weeks 26 · months 22). 위치 권한이 "denied" 면 현재 위치 · 내 위치 버튼 · 도보 시간을 숨긴다.
+- 지도 구조: 근처 감지는 OS 지오펜싱, 앱 안 표시는 Google Maps SDK, 장소 좌표는 LocationIQ 지오코딩. UI 단계는 표시와 핀만 한다.
+- 시트는 `@gorhom/bottom-sheet`, 지도는 `react-native-maps`(Google provider)로 구현한다.
+- 지도(10·08)는 Expo Go SDK 57 안드로이드에서 검은 화면으로 나온다(expo/expo#49323). 우리 Google Maps API 키를 넣은 개발 빌드에서 확인한다.
+
+## 개발 빌드
+
+- `expo-dev-client` 로 만든 개발 빌드가 기본 실행 환경이다. Expo Go 는 지도가 없는 화면 확인용으로만 쓴다(터미널 `s` 로 전환).
+- EAS 프로젝트 `remembrall` 은 Expo 조직 `ktc4-chungnam-3` 소유다. 팀원은 조직 초대로 권한을 받는다.
+- `android/` 는 gitignore 대상이며 빌드 때마다 prebuild(CNG)로 새로 생성된다. 네이티브 설정은 `app.json` · `app.config.ts` 플러그인으로만 바꾼다.
+- Google Maps 키는 `GOOGLE_MAPS_ANDROID_API_KEY` 환경 변수로만 받는다. `EXPO_PUBLIC_` 접두어를 쓰지 않아 JS 번들에 들어가지 않는다.
+  로컬은 `.env.local`, EAS 는 `development` 환경의 secret 변수다. 키가 없으면 경고만 하고 빌드는 막지 않는다.
+- 키 제한: Maps SDK for Android 만, 패키지 `com.remembrall.app` + SHA-1 두 개(EAS 개발 빌드 keystore, 로컬 debug keystore).
+  debug keystore SHA-1 은 모든 RN 프로젝트 공용이라 개발용 키에만 등록한다.
+- 개발 빌드 딥링크 scheme 은 `remembrall://` 이다(`app.json` 의 `scheme`). 실행 · 키 설정 절차는 README 에 둔다.
+
+## 목 데이터
+
+- `shared/api/mock/` 은 화면 props 모양 그대로 둔다. 서버 응답 계약처럼 만들지 않는다.
+- UI 단계 동안 features 는 mock 에서 직접 받는다. `client.ts` 와 `mappers/` 를 거치지 않는다.
+- mock 은 features 의 타입을 import 하지 않는다(shared → features 금지). 구조적 타입으로 맞춘다.
+- 목 이미지 URL(picsum 고정 id)은 이 폴더 안에만 둔다.
+- 위치 권한과 현재 위치는 runtime 작업 전까지 목 플래그(`MOCK_SCENARIO`)와 목 좌표로 둔다.
 
 ## 의존 방향
 
@@ -89,18 +180,31 @@ shared/  ───┘
 - `features/` 끼리는 서로 import 하지 않는다. 공유가 필요하면 `domain/` 이나 `shared/` 로 올린다.
 - `domain/` 은 아무것도 import 하지 않는다. 순수 타입만 둔다.
 - `features/` 는 `domain/extraction/` 을 직접 import 하지 않는다. 항상 매핑을 거친다.
+- `features/` 는 `app/` 을 import 하지 않는다(`import type` 포함).
+  내비게이션 타입은 `routes.ts` 의 `ReactNavigation.RootParamList` 전역 선언으로 받고,
+  라우트 이름은 문자열 리터럴로 쓴다.
 
 ## 확정된 것 (백엔드 코드에 실재)
 
 ```ts
-type ExtractionStatus = 'SUCCESS' | 'PARTIAL' | 'FAILED'
-type EvidenceSource   = 'VIDEO_AUDIO' | 'VIDEO_TEXT' | 'VIDEO_VISUAL' | 'TITLE' | 'DESCRIPTION'
-type FailureStage     = 'METADATA_FETCH' | 'VIDEO_ACCESS' | 'GEMINI_CALL' | 'RESPONSE_MAPPING'
+type ExtractionStatus = "SUCCESS" | "PARTIAL" | "FAILED";
+type EvidenceSource =
+    | "VIDEO_AUDIO"
+    | "VIDEO_TEXT"
+    | "VIDEO_VISUAL"
+    | "TITLE"
+    | "DESCRIPTION";
+type FailureStage =
+    | "METADATA_FETCH"
+    | "VIDEO_ACCESS"
+    | "GEMINI_CALL"
+    | "RESPONSE_MAPPING";
 ```
 
 여기서 따라오는 화면 요구사항:
 
-- **`PARTIAL` 이 있다.** 성공 / 실패 2분기로 UI 를 짜면 안 된다. 부분 성공 화면이 필요하다.
+- **`ExtractionStatus.PARTIAL` 은 백엔드에 있지만 UI 에는 드러내지 않는다.** UI 는 저장 판정
+  (PLACE_RESOLVED / NEEDS_CONFIRMATION / NO_PLACE) 기준으로 표시하고, 부분 성공 배지는 두지 않는다(디자인 결정).
 - **분석 실패와 장소 후보 없음은 다른 화면이다.** 문서에 명시돼 있다.
   빈 `placeCandidates` + `SUCCESS` 와 `FAILED` 는 사용자가 할 행동이 다르다.
 - **`candidateId` 는 전역 장소 키가 아니다.** 한 추출 결과 안에서만 유효한 임시 ID다.
@@ -113,32 +217,37 @@ type FailureStage     = 'METADATA_FETCH' | 'VIDEO_ACCESS' | 'GEMINI_CALL' | 'RES
 아래는 `domain/` 에 타입을 만들어 두되, **백엔드 합의 전까지 확정이 아니다.**
 해당 파일 상단에 미확정임을 주석으로 남긴다.
 
-| 항목 | 현재 상태 | 영향 |
-|---|---|---|
-| 분석 진행 상태 (ANALYZING / READY) | 백엔드에 없음. `ExtractionStatus` 는 완료 후 결과 등급이지 진행 상태가 아니다 | 대기 UI 의 근거 |
-| 장소 판정 결과 (확정 / 확인필요 / 없음) | 백엔드에 없음. `uncertainties: string[]` 자유 문자열뿐 | 되묻기 화면의 근거 |
-| 카테고리 | 백엔드에 없음. 검색은 pgvector 임베딩 기반으로 계획됨 | **필터 칩 UI 의 근거가 없다.** 아카이브를 카테고리 전제로 짜지 않는다 |
-| 꺼내기 제안 유형 | 문서상 가설이 5개 (장소 1곳 / 코스 / 장소 없는 콘텐츠 재노출 / 공용 풀 보충 / 침묵) | **SINGLE·COURSE 2분기로 부족하다.** 열린 형태로 둔다 |
-| 알림 발생원 (FCM / 로컬) | 백엔드에 FCM 의존성 없음 | `runtime/notifications/notificationListener.ts` 안에서만 갈린다 |
-| 완료 통지 방식 (폴링 / SSE / 푸시) | 없음 | **가장 시급.** 이것 없이는 저장 플로우가 완성되지 않는다 |
-| 인증 | 없음 (의존성조차 없음) | API 클라이언트 인터셉터 |
-| 지오펜스 보고 엔드포인트 | 문서에만 서술. 시그니처 없음 | 서버가 조용히 무시할 수 있어 프론트가 결과를 알 방법이 필요 |
+| 항목                                    | 현재 상태                                                                             | 영향                                                                                                                                                                                                                                                                                                                                |
+| --------------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 분석 진행 상태 (ANALYZING / READY)      | 백엔드에 없음. `ExtractionStatus` 는 완료 후 결과 등급이지 진행 상태가 아니다         | 대기 UI(03 분석 중) 의 근거                                                                                                                                                                                                                                                                                                         |
+| 장소 판정 결과 (확정 / 확인필요 / 없음) | 백엔드에 없음. `uncertainties: string[]` 자유 문자열뿐                                | 되묻기 화면(02 확인 필요 · 04 장소 없음) 의 근거                                                                                                                                                                                                                                                                                    |
+| 카테고리                                | 팀 합의: 고정 enum 소수 + 분위기 태그 다수. enum 값은 미확정                          | 01 필터 칩 라벨(전체/식당/카페/가볼 곳)은 enum 확정 전까지 목 데이터 한정                                                                                                                                                                                                                                                           |
+| 비공개·삭제 영상의 링크 보관 여부       | 서버 저장 정책 문제. 백엔드 합의 필요. 05 디자인은 "링크는 그대로 보관" 으로 안내한다 | (b) "다시 시도" 가 모든 실패에 똑같이 노출된다. 재시도가 의미 없는 비공개·삭제(`VIDEO_ACCESS`)에도 보인다. 재시도 가능 여부를 서버가 내려줘야 버튼 노출을 가를 수 있다. (07 실패 셀이 생겨 05 재진입 경로는 해결됐다) |
+| PARTIAL 표현                            | 부분 성공 배지는 제거(디자인 결정)                                                    | 추출 `PARTIAL` 이 저장 판정(PLACE_RESOLVED / NEEDS_CONFIRMATION / NO_PLACE) 중 무엇으로 매핑되는지 백엔드 확인 필요                                                                                                                                                                                                                 |
+| 꺼내기 제안 유형                        | 문서상 가설이 5개 (장소 1곳 / 코스 / 장소 없는 콘텐츠 재노출 / 공용 풀 보충 / 침묵)   | **SINGLE·COURSE 2분기로 부족하다.** 열린 형태로 둔다                                                                                                                                                                                                                                                                                |
+| 알림 발생원 (FCM / 로컬)                | 백엔드에 FCM 의존성 없음                                                              | `runtime/notifications/notificationListener.ts` 안에서만 갈린다                                                                                                                                                                                                                                                                     |
+| 완료 통지 방식 (폴링 / SSE / 푸시)      | 없음                                                                                  | **가장 시급.** 이것 없이는 저장 플로우가 완성되지 않는다                                                                                                                                                                                                                                                                            |
+| 인증                                    | 없음 (의존성조차 없음)                                                                | API 클라이언트 인터셉터                                                                                                                                                                                                                                                                                                             |
+| 지오펜스 보고 엔드포인트                | 문서에만 서술. 시그니처 없음                                                          | 서버가 조용히 무시할 수 있어 프론트가 결과를 알 방법이 필요                                                                                                                                                                                                                                                                         |
 
 ## 화면으로 만들 것 vs 상태로 표현할 것
 
-공유 시 앱이 뜨지 않으므로, 실패 경로 대부분은 화면이 아니라
-알림 문구 + 아카이브 항목 상태로 흡수된다.
+공유 시 앱은 뜨지 않는다. 저장 결과는 알림이나 전체 기억 항목에서 여는
+저장 결과 모달(02~05)로 본다.
 
-| 경우 | 표현 |
-|---|---|
-| 지원하지 않는 링크 | 알림 문구. 저장하지 않음 |
-| 비공개·삭제 영상 (`FAILED` / `VIDEO_ACCESS`) | 알림 문구. 저장하지 않음 |
-| 부분 성공 (`PARTIAL`) | 아카이브 배지 + 상세에 무엇이 빠졌는지 표시 |
-| 장소 후보 없음 (`SUCCESS` + 빈 배열) | 아카이브 배지 + 상세에서 직접 장소 지정 |
-| 분석 중 | 아카이브 배지 + 상세의 대기 상태 |
-| 장소 후보 여러 개 | **화면** (확인 화면) |
-| 저장물 0개 | 아카이브의 빈 상태. 신규 사용자에게는 사실상 튜토리얼 |
-| 제안 성립 안 함 | 알림이 오지 않는다. 화면 없음 |
+| 경우                                         | 표현                                                     |
+| -------------------------------------------- | -------------------------------------------------------- |
+| 지원하지 않는 링크                           | 알림 문구. 저장하지 않음                                 |
+| 비공개·삭제 영상 (`FAILED` / `VIDEO_ACCESS`) | 알림 문구. 저장 여부 미확정 (미확정 표 참조)             |
+| 분석 실패                                    | 05 저장 결과 모달 + 기억 탭 실패 셀 (제목을 모르면 "불러오지 못한 영상") |
+| 부분 성공 (`PARTIAL`)                        | 표현하지 않음 (배지 제거). 매핑은 미확정 표 참조         |
+| 삭제·만료된 저장물 · 장소                    | 12 NotFound. "기억 목록으로" → 기억 탭                   |
+| 장소 후보 없음 (`SUCCESS` + 빈 배열)         | 04 저장 결과 모달 + 전체 기억 배지                       |
+| 분석 중                                      | 03 저장 결과 모달 + 전체 기억 배지                       |
+| 장소 후보 여러 개                            | 02 저장 결과 모달 (기존 확인 화면을 흡수)                |
+| 저장물 0개                                   | 07b 전체 기억 빈 상태. 신규 사용자에게는 사실상 튜토리얼 |
+| 근처에 저장물 없음                           | 06 근처 빈 상태                                          |
+| 제안 성립 안 함                              | 알림이 오지 않는다. 화면 없음                            |
 
 ## 설계 근거
 
