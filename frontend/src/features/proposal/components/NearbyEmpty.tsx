@@ -5,36 +5,35 @@ import Icon from "../../../shared/ui/Icon";
 import Thumb from "../../../shared/ui/Thumb";
 import { colors, metrics, spacing, typography } from "../../../shared/ui/theme";
 
+// 현재 위치(area)는 화면 헤더가 그린다.
 export type NearbyEmptyProps = {
-    area: string;
     nearestDistance: string;
     nearestArea: string;
     stackThumbUris: readonly string[];
 };
 
+type Props = NearbyEmptyProps & {
+    onOpenArea: () => void;
+};
+
 export default function NearbyEmpty({
-    area,
     nearestDistance,
     nearestArea,
     stackThumbUris,
-}: NearbyEmptyProps) {
+    onOpenArea,
+}: Props) {
     return (
         <View>
             <View style={styles.intro}>
-                <View style={styles.location}>
-                    <Icon name="pin" size={metrics.proposal.locationIconSize} />
-                    <Text style={styles.caption}>지금 {area}</Text>
-                </View>
                 <Text style={styles.heading}>여기선 저장해둔 곳이 없어요</Text>
                 <Text style={styles.body}>
                     가장 가까운 기억은 {nearestDistance} 떨어진 {nearestArea}에
                     있어요.
                 </Text>
-                {/* 동작이 연결되면 disabled 를 뺀다. */}
                 <Pressable
                     accessibilityRole="link"
-                    accessibilityState={{ disabled: true }}
                     hitSlop={metrics.nearbyEmpty.linkHitSlop}
+                    onPress={onOpenArea}
                     style={styles.link}
                 >
                     <Text style={styles.linkLabel}>
@@ -82,11 +81,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: spacing.lg,
         gap: metrics.proposal.introGap,
     },
-    location: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: spacing.xs,
-    },
     caption: {
         ...typography.captionMeta,
         color: colors.text.secondary,
@@ -106,7 +100,7 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         alignSelf: "flex-start",
-        gap: metrics.nearbyEmpty.linkGap,
+        gap: spacing.xs,
         paddingTop: spacing.sm,
     },
     linkLabel: {

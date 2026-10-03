@@ -21,6 +21,10 @@ public interface MemberRepository extends JpaRepository<Member, UUID> {
             String providerUserId
     );
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT member FROM Member member WHERE member.id = :memberId")
+    Optional<Member> findByIdForUpdate(@Param("memberId") UUID memberId);
+
 
     @Modifying
     @Query(value = """

@@ -1,5 +1,5 @@
 // 02 장소 후보 한 개. 선택되면 1.5 테두리 + Check.
-// 선택 안 된 후보는 테두리가 얇은 만큼 padding 을 늘려 두 상태 크기를 맞춘다.
+// 테두리는 크기에 포함하지 않는다. padding 에서 테두리 두께를 빼 두 상태 모두 70 · 같은 글자 위치가 된다.
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import Icon from "../../../shared/ui/Icon";
@@ -11,8 +11,6 @@ import {
     stroke,
     typography,
 } from "../../../shared/ui/theme";
-
-const STROKE_DIFF = stroke.medium - stroke.thin;
 
 type Props = {
     name: string;
@@ -61,20 +59,21 @@ const styles = StyleSheet.create({
         backgroundColor: colors.bg.surface,
     },
     selected: {
-        paddingHorizontal: metrics.placeOption.paddingHorizontal,
-        paddingVertical: metrics.placeOption.paddingVertical,
+        paddingHorizontal:
+            metrics.placeOption.paddingHorizontal - stroke.medium,
+        paddingVertical: metrics.placeOption.paddingVertical - stroke.medium,
         borderWidth: stroke.medium,
         borderColor: colors.text.primary,
     },
     unselected: {
-        paddingHorizontal: metrics.placeOption.paddingHorizontal + STROKE_DIFF,
-        paddingVertical: metrics.placeOption.paddingVertical + STROKE_DIFF,
+        paddingHorizontal: metrics.placeOption.paddingHorizontal - stroke.thin,
+        paddingVertical: metrics.placeOption.paddingVertical - stroke.thin,
         borderWidth: stroke.thin,
         borderColor: colors.border.default,
     },
     text: {
         flex: 1,
-        gap: metrics.placeOption.textGap,
+        gap: spacing.xs,
     },
     name: {
         ...typography.titleCard,
