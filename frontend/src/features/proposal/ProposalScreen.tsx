@@ -40,9 +40,7 @@ export default function ProposalScreen() {
                 <ScrollView contentContainerStyle={styles.content}>
                     <NearbyEmpty
                         {...nearbyEmptyMock}
-                        onOpenArea={() =>
-                            openArea(nearbyEmptyMock.nearestArea)
-                        }
+                        onOpenArea={() => openArea(nearbyEmptyMock.nearestArea)}
                     />
                 </ScrollView>
             </View>

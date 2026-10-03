@@ -42,10 +42,16 @@ Expo Go 로 보려면 터미널에서 `s` 를 눌러 Expo Go 모드로 바꾼 �
 `app.config.ts` 가 빌드 시점에 `GOOGLE_MAPS_ANDROID_API_KEY` 를 읽어 react-native-maps 플러그인에 넣는다.
 번들에 들어가지 않도록 `EXPO_PUBLIC_` 접두어를 쓰지 않는다. 키가 없으면 경고만 뜨고 빌드는 된다. 이때 지도는 비어 보인다.
 
-- EAS 빌드: 환경 변수로 등록한다.
+- EAS 빌드: 빌드 프로필의 `environment` 에 환경 변수로 등록한다. 값은 명령줄에 쓰지 않고 프롬프트에 입력한다(셸 히스토리에 남지 않게).
     ```bash
-    npx eas-cli env:create --environment development --name GOOGLE_MAPS_ANDROID_API_KEY --value <키> --visibility secret
+    npx eas-cli env:set development --name GOOGLE_MAPS_ANDROID_API_KEY --type string --visibility secret
     ```
+    preview · production 빌드 전에는 해당 환경에도 등록한다. production 에는 출시용 키(아래 키 제한 참고)를 넣는다.
+    ```bash
+    npx eas-cli env:set preview --name GOOGLE_MAPS_ANDROID_API_KEY --type string --visibility secret
+    npx eas-cli env:set production --name GOOGLE_MAPS_ANDROID_API_KEY --type string --visibility secret
+    ```
+    secret 변수는 빌드 서버에서만 읽힌다. `eas build` 를 시작할 때 로컬에 "키가 없습니다" 경고가 떠도 정상이다.
 - 로컬 빌드(`npx expo run:android`): `frontend/.env.local` 에 `GOOGLE_MAPS_ANDROID_API_KEY=<키>` 를 적는다. gitignore 돼 있다.
 
 Google Cloud 콘솔에서 키를 제한한다.
@@ -88,6 +94,32 @@ Expo Go 에서는:
 없는 id 로 열면 저장물 없음(12)이 뜬다. 예: `save-result/unknown`, `detail/unknown`.
 
 빈 상태(06 · 07b), 위치 권한, 깨진 썸네일은 `src/shared/api/mock/scenario.ts` 의 `MOCK_SCENARIO` 플래그를 바꾸고 reload 해서 본다.
+
+## 포맷
+
+prettier 설정은 `.prettierrc` 에 있고, 버전은 `package.json` 에 고정돼 있다(3.7.4).
+VS Code 의 Prettier 확장은 `npm install` 로 받은 이 버전과 설정을 쓴다. 개인 VS Code 설정의 prettier 옵션은 적용되지 않는다.
+
+```bash
+npm run format        # 전체 포맷
+npm run format:check  # 검사만
+```
+
+Android Studio · IntelliJ 는 `.editorconfig` 로 같은 들여쓰기(4칸)와 줄바꿈(LF)을 따른다.
+
+### 줄바꿈 (LF)
+
+`frontend/.gitattributes` 가 frontend 텍스트 파일을 Windows 에서도 LF 로 받게 한다.
+이 설정이 들어오기 전에 받은 클론은 워킹트리가 CRLF 로 남아 있어 `format:check` 가 모든 파일을 잡는다. 한 번만 다시 받는다.
+
+실행 전에 frontend 의 미커밋 변경을 커밋하거나 stash 한다. 아래 명령은 frontend 의 추적 파일을 HEAD 내용으로 다시 쓴다.
+`frontend` 폴더 안에서 실행하며, frontend 밖 파일(backend · AI 등)은 건드리지 않는다.
+
+```bash
+cd frontend
+git rm -r --cached -q .
+git restore --source=HEAD --staged --worktree .
+```
 
 ## 문서
 

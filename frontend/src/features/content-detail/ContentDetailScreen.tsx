@@ -79,11 +79,14 @@ export default function ContentDetailScreen() {
     // 펼친 상태에서 시스템 뒤로 가기는 먼저 기본 지점으로 접는다. 기본 지점이면 화면을 나간다.
     useFocusEffect(
         useCallback(() => {
-            const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-                if (sheetIndex.current !== EXPANDED) return false;
-                sheetRef.current?.snapToIndex(0);
-                return true;
-            });
+            const sub = BackHandler.addEventListener(
+                "hardwareBackPress",
+                () => {
+                    if (sheetIndex.current !== EXPANDED) return false;
+                    sheetRef.current?.snapToIndex(0);
+                    return true;
+                },
+            );
             return () => sub.remove();
         }, []),
     );
