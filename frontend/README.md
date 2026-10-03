@@ -89,6 +89,32 @@ Expo Go 에서는:
 
 빈 상태(06 · 07b), 위치 권한, 깨진 썸네일은 `src/shared/api/mock/scenario.ts` 의 `MOCK_SCENARIO` 플래그를 바꾸고 reload 해서 본다.
 
+## 포맷
+
+prettier 설정은 `.prettierrc` 에 있고, 버전은 `package.json` 에 고정돼 있다(3.7.4).
+VS Code 의 Prettier 확장은 `npm install` 로 받은 이 버전과 설정을 쓴다. 개인 VS Code 설정의 prettier 옵션은 적용되지 않는다.
+
+```bash
+npm run format        # 전체 포맷
+npm run format:check  # 검사만
+```
+
+Android Studio · IntelliJ 는 `.editorconfig` 로 같은 들여쓰기(4칸)와 줄바꿈(LF)을 따른다.
+
+### 줄바꿈 (LF)
+
+`frontend/.gitattributes` 가 frontend 텍스트 파일을 Windows 에서도 LF 로 받게 한다.
+이 설정이 들어오기 전에 받은 클론은 워킹트리가 CRLF 로 남아 있어 `format:check` 가 모든 파일을 잡는다. 한 번만 다시 받는다.
+
+실행 전에 frontend 의 미커밋 변경을 커밋하거나 stash 한다. 아래 명령은 frontend 의 추적 파일을 HEAD 내용으로 다시 쓴다.
+`frontend` 폴더 안에서 실행하며, frontend 밖 파일(backend · AI 등)은 건드리지 않는다.
+
+```bash
+cd frontend
+git rm -r --cached -q .
+git restore --source=HEAD --staged --worktree .
+```
+
 ## 문서
 
 - [STRUCTURE.md](STRUCTURE.md): 디렉토리 구조, 의존 방향, 테마 토큰 규칙, 확정·미확정 항목

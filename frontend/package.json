@@ -37,6 +37,7 @@
     },
     "devDependencies": {
         "@types/react": "~19.2.2",
+        "prettier": "3.7.4",
         "typescript": "~6.0.3"
     },
     "scripts": {
@@ -44,7 +45,9 @@
         "android": "expo start --android",
         "ios": "expo start --ios",
         "web": "expo start --web",
-        "lint": "expo lint"
+        "lint": "expo lint",
+        "format": "prettier --write .",
+        "format:check": "prettier --check ."
     },
     "private": true
 }

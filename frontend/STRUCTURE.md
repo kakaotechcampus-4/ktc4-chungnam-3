@@ -33,6 +33,10 @@ frontend/
 ├── app.json                  정적 앱 설정. EAS projectId · owner 포함
 ├── app.config.ts             app.json 을 받아 빌드 시점 비밀값(Google Maps 키)을 플러그인에 넣는다
 ├── eas.json                  EAS 빌드 프로필. development = 개발 빌드(dev client) APK
+├── .prettierrc               prettier 설정(tabWidth 4, LF). 버전은 package.json 에 고정
+├── .prettierignore           포맷하지 않는 생성물(package-lock.json, android/ 등)
+├── .editorconfig             prettier 를 쓰지 않는 에디터용. .prettierrc 와 같은 값
+├── .gitattributes            frontend 텍스트 파일을 LF 로 받는다
 ├── assets/
 │   └── fonts/                Noto Sans KR 서브셋 ttf + OFL.txt
 ├── scripts/
