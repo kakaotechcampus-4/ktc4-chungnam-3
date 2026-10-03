@@ -14,10 +14,14 @@
             "environment": "development"
         },
         "preview": {
-            "distribution": "internal"
+            "distribution": "internal",
+            "node": "24.11.0",
+            "environment": "preview"
         },
         "production": {
-            "autoIncrement": true
+            "autoIncrement": true,
+            "node": "24.11.0",
+            "environment": "production"
         }
     },
     "submit": {

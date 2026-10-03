@@ -42,10 +42,16 @@ Expo Go 로 보려면 터미널에서 `s` 를 눌러 Expo Go 모드로 바꾼 �
 `app.config.ts` 가 빌드 시점에 `GOOGLE_MAPS_ANDROID_API_KEY` 를 읽어 react-native-maps 플러그인에 넣는다.
 번들에 들어가지 않도록 `EXPO_PUBLIC_` 접두어를 쓰지 않는다. 키가 없으면 경고만 뜨고 빌드는 된다. 이때 지도는 비어 보인다.
 
-- EAS 빌드: 환경 변수로 등록한다.
+- EAS 빌드: 빌드 프로필의 `environment` 에 환경 변수로 등록한다. 값은 명령줄에 쓰지 않고 프롬프트에 입력한다(셸 히스토리에 남지 않게).
     ```bash
-    npx eas-cli env:create --environment development --name GOOGLE_MAPS_ANDROID_API_KEY --value <키> --visibility secret
+    npx eas-cli env:set development --name GOOGLE_MAPS_ANDROID_API_KEY --type string --visibility secret
     ```
+    preview · production 빌드 전에는 해당 환경에도 등록한다. production 에는 출시용 키(아래 키 제한 참고)를 넣는다.
+    ```bash
+    npx eas-cli env:set preview --name GOOGLE_MAPS_ANDROID_API_KEY --type string --visibility secret
+    npx eas-cli env:set production --name GOOGLE_MAPS_ANDROID_API_KEY --type string --visibility secret
+    ```
+    secret 변수는 빌드 서버에서만 읽힌다. `eas build` 를 시작할 때 로컬에 "키가 없습니다" 경고가 떠도 정상이다.
 - 로컬 빌드(`npx expo run:android`): `frontend/.env.local` 에 `GOOGLE_MAPS_ANDROID_API_KEY=<키>` 를 적는다. gitignore 돼 있다.
 
 Google Cloud 콘솔에서 키를 제한한다.
