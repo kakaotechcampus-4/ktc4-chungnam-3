@@ -88,7 +88,7 @@ export const metrics = {
         thumbWidth: 96,
         infoGap: 6,
     },
-    // 02 장소 후보 2061:799 · 2061:804.
+    // 02 장소 후보 2061:799 · 2061:804. 높이 70. padding 은 Figma 값(테두리 제외)이고 코드에서 테두리 두께를 뺀다.
     placeOption: {
         paddingHorizontal: 16,
         paddingVertical: 14,
@@ -112,6 +112,7 @@ export const metrics = {
         noteGap: 6,
         tagGap: 6,
         tagPaddingVertical: 2,
+        // 원본 영상 행 왼쪽 padding. Figma 값(테두리 제외)이고 코드에서 테두리 두께를 뺀다. 행 높이 64.
         sourcePaddingLeft: 14,
         noteCollapsedLines: 2,
         // 지도: 현재 위치 → 장소 점선 경로(text/secondary, 두께 2 는 stroke 토큰에 없음, 점선 4 · 4).
@@ -167,6 +168,7 @@ export const metrics = {
     },
     // C/SearchField 2104:567. 지우기 아이콘 18 → 사방 15 씩 48dp.
     // inputPadding 은 Android TextInput 기본 여백을 없애 높이 48 안에서 글자를 가운데 둔다.
+    // paddingLeft 는 Figma 값(테두리 제외)이고 코드에서 테두리 두께를 뺀다.
     searchField: {
         paddingLeft: 14,
         iconSize: 20,

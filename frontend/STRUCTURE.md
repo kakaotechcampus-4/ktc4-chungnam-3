@@ -120,6 +120,7 @@ frontend/
   서브셋 이후 빠진 글자가 기본 글꼴로 섞인다.
 - `metrics.ts` 는 **Figma 변수가 아니다.** 변수에 바인딩되지 않은 노드 실측값을 컴포넌트별 키로 둔다. hitSlop 도 여기 둔다.
 - `features/`, `shared/ui/`, `app/` 에는 색·간격·radius·타이포를 리터럴로 쓰지 않는다.
+- 테두리는 크기에 포함하지 않는다. Figma padding 에서 테두리 두께를 빼서 둔다(Chip · PlaceOption · SearchField · 08 원본 영상 행).
 
 ## 내비게이션
 
