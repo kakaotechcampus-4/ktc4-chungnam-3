@@ -77,11 +77,14 @@ export default function MapViewScreen() {
     // 시트가 열려 있으면 시스템 뒤로 가기는 시트만 닫는다.
     useFocusEffect(
         useCallback(() => {
-            const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-                if (selectedId == null) return false;
-                sheetRef.current?.close();
-                return true;
-            });
+            const sub = BackHandler.addEventListener(
+                "hardwareBackPress",
+                () => {
+                    if (selectedId == null) return false;
+                    sheetRef.current?.close();
+                    return true;
+                },
+            );
             return () => sub.remove();
         }, [selectedId]),
     );

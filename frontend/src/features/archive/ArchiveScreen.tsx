@@ -92,7 +92,9 @@ export default function ArchiveScreen() {
                 <View style={styles.album}>
                     {sections.map((section) => (
                         <View key={section.title} style={styles.section}>
-                            <Text style={styles.sectionTitle}>{section.title}</Text>
+                            <Text style={styles.sectionTitle}>
+                                {section.title}
+                            </Text>
                             <View style={styles.grid}>
                                 {toRows(section.items).map((row) => (
                                     <View key={row[0]?.id} style={styles.row}>

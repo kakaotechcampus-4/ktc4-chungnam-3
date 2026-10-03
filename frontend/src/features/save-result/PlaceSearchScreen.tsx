@@ -24,12 +24,7 @@ import {
 } from "../../shared/api/mock";
 import Button from "../../shared/ui/Button";
 import NotFound from "../../shared/ui/NotFound";
-import {
-    colors,
-    metrics,
-    spacing,
-    typography,
-} from "../../shared/ui/theme";
+import { colors, metrics, spacing, typography } from "../../shared/ui/theme";
 import TopBar from "../../shared/ui/TopBar";
 import PlaceOption from "./components/PlaceOption";
 import SearchField from "./components/SearchField";
@@ -56,8 +51,7 @@ function search(query: string): readonly Place[] {
 
 export default function PlaceSearchScreen() {
     const navigation = useNavigation();
-    const route =
-        useRoute<RouteProp<{ PlaceSearch: Params }, "PlaceSearch">>();
+    const route = useRoute<RouteProp<{ PlaceSearch: Params }, "PlaceSearch">>();
     const insets = useSafeAreaInsets();
 
     const [query, setQuery] = useState("");
