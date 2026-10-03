@@ -1,7 +1,7 @@
 // 장소 상세 목 데이터. placeId 로 찾는다. 화면 props 모양 그대로이며 서버 계약이 아니다.
 // 문구는 Figma 08 · 08b · 08c 그대로. 태그의 # 은 컴포넌트가 붙인다. 이미지는 01 · 07 의 같은 장소와 같다.
-// coordinate 는 10 지도 핀(mapViewMock.pins)과 같은 좌표다.
-// 도보 시간(walk)은 위치 권한이 "denied" 면 화면이 숨긴다.
+// coordinate 는 10 지도 핀이 있는 곳이면 mapViewMock.pins 와 같은 좌표다.
+// 거리(walk)는 도보 30분 이내면 "도보 N분", 넘으면 직선거리 "N.Nkm". 위치 권한이 "denied" 면 화면이 숨긴다.
 // sourceTitle 은 08 시트에는 안 보이고, 바꾸기 모드 02c 의 캡션에 쓴다(영상 제목).
 import { img } from "./img";
 
@@ -95,5 +95,29 @@ export const placeDetailsMock = {
         fade: "months",
         sourceMeta: "@market.bites · YouTube Shorts",
         sourceTitle: "중앙시장 먹거리 한 바퀴",
+    },
+    // 아래는 07 에만 있는 확정 셀이 여는 08. 최소 필드만 둔다(메모 · 태그 없음). 10 지도 핀에는 없다.
+    sojedong: {
+        time: "4일 전",
+        place: "소제동 카페거리",
+        address: "대전 동구 소제동",
+        coordinate: { latitude: 36.334, longitude: 127.4385 },
+        walk: "도보 21분",
+        thumbUri: img(312),
+        fade: "recent",
+        sourceMeta: "@sojedong.alley · YouTube Shorts",
+        sourceTitle: "철도관사촌 골목 카페 산책",
+    },
+    // 현재 위치에서 약 8km. 08 지도가 먼 장소를 맞추는 경우를 본다. 도보 30분을 넘어 직선거리로 표시한다.
+    gyejoksan: {
+        time: "5개월 전",
+        place: "계족산 황톳길",
+        address: "대전 대덕구 장동",
+        coordinate: { latitude: 36.3958, longitude: 127.4466 },
+        walk: "8.0km",
+        thumbUri: img(1015),
+        fade: "months",
+        sourceMeta: "@daejeon.trail · YouTube Shorts",
+        sourceTitle: "맨발로 걷는 계족산 황톳길",
     },
 } as const;
