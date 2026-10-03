@@ -161,9 +161,9 @@ export const metrics = {
         summaryThumbWidth: 56,
         summaryChevronSize: 20,
     },
-    // push 화면 상단 바 (11 설정 2103:633 · 02c 2105:593). 뒤로가기 아이콘 24 → 사방 12 씩 48dp.
+    // 상단 바 (11 설정 2103:633 · 02c 2105:593 · 12 2105:682). 뒤로 · 닫기 아이콘 24 → 사방 12 씩 48dp.
     topBar: {
-        backHitSlop: { top: 12, bottom: 12, left: 12, right: 12 },
+        iconHitSlop: { top: 12, bottom: 12, left: 12, right: 12 },
     },
     // C/SearchField 2104:567. 지우기 아이콘 18 → 사방 15 씩 48dp.
     // inputPadding 은 Android TextInput 기본 여백을 없애 높이 48 안에서 글자를 가운데 둔다.
@@ -191,10 +191,9 @@ export const metrics = {
         knobInset: 3,
         durationMs: 150,
     },
-    // 12 저장물 없음 2105:682. 빈 썸네일 자리 96 × 9:16, 닫기 · 뒤로 아이콘 24 → 사방 12 씩 48dp.
+    // 12 저장물 없음 2105:682. 빈 썸네일 자리 96 × 9:16. 상단 바는 topBar 를 쓴다.
     notFound: {
         thumbWidth: 96,
-        closeHitSlop: { top: 12, bottom: 12, left: 12, right: 12 },
     },
     // 03 분석 중 스켈레톤 2061:831.
     skeleton: {

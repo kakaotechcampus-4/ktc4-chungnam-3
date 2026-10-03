@@ -104,7 +104,10 @@ export default function PlaceSearchScreen() {
 
     return (
         <KeyboardAvoidingView behavior="padding" style={styles.screen}>
-            <TopBar title="장소 직접 찾기" onBack={() => navigation.goBack()} />
+            <TopBar
+                title="장소 직접 찾기"
+                onIconPress={() => navigation.goBack()}
+            />
 
             <View style={styles.search}>
                 {title != null && (

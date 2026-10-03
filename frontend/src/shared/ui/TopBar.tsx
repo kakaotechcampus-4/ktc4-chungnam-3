@@ -1,30 +1,44 @@
-// push 화면 상단 바. ← + 제목. 설정(11) · 장소 직접 찾기(02c) 가 쓴다. 상태바 inset 을 포함한다.
+// 상단 바. ← 또는 X + 제목(선택). 설정(11) · 장소 직접 찾기(02c) · 저장물 없음(12) 이 쓴다. 상태바 inset 을 포함한다.
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import Icon from "./Icon";
 import { colors, metrics, size, spacing, typography } from "./theme";
 
+type TopBarIcon = "arrowLeft" | "close";
+
 type Props = {
-    title: string;
-    onBack: () => void;
+    icon?: TopBarIcon;
+    title?: string;
+    onIconPress: () => void;
 };
 
-export default function TopBar({ title, onBack }: Props) {
+const ICON_LABEL: Record<TopBarIcon, string> = {
+    arrowLeft: "뒤로",
+    close: "닫기",
+};
+
+export default function TopBar({
+    icon = "arrowLeft",
+    title,
+    onIconPress,
+}: Props) {
     const insets = useSafeAreaInsets();
     return (
         <View style={[styles.bar, { marginTop: insets.top }]}>
             <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="뒤로"
-                hitSlop={metrics.topBar.backHitSlop}
-                onPress={onBack}
+                accessibilityLabel={ICON_LABEL[icon]}
+                hitSlop={metrics.topBar.iconHitSlop}
+                onPress={onIconPress}
             >
-                <Icon name="arrowLeft" size={size.iconMd} />
+                <Icon name={icon} size={size.iconMd} />
             </Pressable>
-            <Text numberOfLines={1} style={styles.title}>
-                {title}
-            </Text>
+            {title != null && (
+                <Text numberOfLines={1} style={styles.title}>
+                    {title}
+                </Text>
+            )}
         </View>
     );
 }

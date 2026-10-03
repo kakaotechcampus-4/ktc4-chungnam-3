@@ -33,7 +33,7 @@ export default function SettingsScreen() {
 
     return (
         <View style={styles.screen}>
-            <TopBar title="설정" onBack={() => navigation.goBack()} />
+            <TopBar title="설정" onIconPress={() => navigation.goBack()} />
 
             <ScrollView
                 contentContainerStyle={{
