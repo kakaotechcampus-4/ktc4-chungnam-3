@@ -1,6 +1,7 @@
 // 전체 기억 탭 목 데이터. 화면 props 모양 그대로이며 서버 계약이 아니다. 문구는 Figma 07 그대로.
 // 셀 이름: 장소 확정이면 placeName, 미확정(status 가 있는 셀)이면 videoTitle. videoTitle 에는 따옴표를 넣지 않는다.
 // 확인 필요 셀은 02, 분석 중 셀은 03 과 같은 저장물이다.
+// 미확정 셀은 resultId 로 저장 결과(02~05), 확정 셀은 모두 detailId 로 장소 상세(08)를 연다.
 // 01 근처와 같은 장소는 같은 이미지를 쓴다.
 import { img } from "./img";
 
@@ -28,6 +29,7 @@ export const archiveMock = {
                 },
                 {
                     id: "sojedong",
+                    detailId: "sojedong",
                     placeName: "소제동 카페거리",
                     thumbUri: img(312),
                     fade: "recent",
@@ -53,6 +55,7 @@ export const archiveMock = {
                 },
                 {
                     id: "afternoon-four",
+                    detailId: "afternoon-four",
                     placeName: "오후 네시",
                     thumbUri: img(1060),
                     fade: "weeks",
@@ -71,18 +74,21 @@ export const archiveMock = {
             items: [
                 {
                     id: "hanbat-kalguksu",
+                    detailId: "hanbat-kalguksu",
                     placeName: "한밭 손칼국수",
                     thumbUri: img(292),
                     fade: "months",
                 },
                 {
                     id: "skyroad",
+                    detailId: "skyroad",
                     placeName: "으능정이 스카이로드",
                     thumbUri: img(674),
                     fade: "months",
                 },
                 {
                     id: "gyejoksan",
+                    detailId: "gyejoksan",
                     placeName: "계족산 황톳길",
                     thumbUri: img(1015),
                     fade: "months",

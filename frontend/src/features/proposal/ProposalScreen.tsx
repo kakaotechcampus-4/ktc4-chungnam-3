@@ -86,24 +86,13 @@ export default function ProposalScreen() {
                     </View>
                     {memoryGroups.map((group) => (
                         <View key={group[0].id} style={styles.group}>
-                            {group.map((item) => {
-                                const { id, ...card } = item;
-                                const detailId =
-                                    "detailId" in item
-                                        ? item.detailId
-                                        : undefined;
-                                return (
-                                    <MemoryCard
-                                        key={id}
-                                        {...card}
-                                        onPress={
-                                            detailId
-                                                ? () => openDetail(detailId)
-                                                : undefined
-                                        }
-                                    />
-                                );
-                            })}
+                            {group.map(({ id, detailId, ...card }) => (
+                                <MemoryCard
+                                    key={id}
+                                    {...card}
+                                    onPress={() => openDetail(detailId)}
+                                />
+                            ))}
                         </View>
                     ))}
                 </View>

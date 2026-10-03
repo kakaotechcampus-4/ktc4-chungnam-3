@@ -88,7 +88,7 @@ export const metrics = {
         thumbWidth: 96,
         infoGap: 6,
     },
-    // 02 장소 후보 2061:799 · 2061:804.
+    // 02 장소 후보 2061:799 · 2061:804. 높이 70. padding 은 Figma 값(테두리 제외)이고 코드에서 테두리 두께를 뺀다.
     placeOption: {
         paddingHorizontal: 16,
         paddingVertical: 14,
@@ -112,6 +112,7 @@ export const metrics = {
         noteGap: 6,
         tagGap: 6,
         tagPaddingVertical: 2,
+        // 원본 영상 행 왼쪽 padding. Figma 값(테두리 제외)이고 코드에서 테두리 두께를 뺀다. 행 높이 64.
         sourcePaddingLeft: 14,
         noteCollapsedLines: 2,
         // 지도: 현재 위치 → 장소 점선 경로(text/secondary, 두께 2 는 stroke 토큰에 없음, 점선 4 · 4).
@@ -161,12 +162,13 @@ export const metrics = {
         summaryThumbWidth: 56,
         summaryChevronSize: 20,
     },
-    // push 화면 상단 바 (11 설정 2103:633 · 02c 2105:593). 뒤로가기 아이콘 24 → 사방 12 씩 48dp.
+    // 상단 바 (11 설정 2103:633 · 02c 2105:593 · 12 2105:682). 뒤로 · 닫기 아이콘 24 → 사방 12 씩 48dp.
     topBar: {
-        backHitSlop: { top: 12, bottom: 12, left: 12, right: 12 },
+        iconHitSlop: { top: 12, bottom: 12, left: 12, right: 12 },
     },
     // C/SearchField 2104:567. 지우기 아이콘 18 → 사방 15 씩 48dp.
     // inputPadding 은 Android TextInput 기본 여백을 없애 높이 48 안에서 글자를 가운데 둔다.
+    // paddingLeft 는 Figma 값(테두리 제외)이고 코드에서 테두리 두께를 뺀다.
     searchField: {
         paddingLeft: 14,
         iconSize: 20,
@@ -191,10 +193,9 @@ export const metrics = {
         knobInset: 3,
         durationMs: 150,
     },
-    // 12 저장물 없음 2105:682. 빈 썸네일 자리 96 × 9:16, 닫기 · 뒤로 아이콘 24 → 사방 12 씩 48dp.
+    // 12 저장물 없음 2105:682. 빈 썸네일 자리 96 × 9:16. 상단 바는 topBar 를 쓴다.
     notFound: {
         thumbWidth: 96,
-        closeHitSlop: { top: 12, bottom: 12, left: 12, right: 12 },
     },
     // 03 분석 중 스켈레톤 2061:831.
     skeleton: {

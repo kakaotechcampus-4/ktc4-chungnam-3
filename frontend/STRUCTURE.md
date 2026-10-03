@@ -120,6 +120,7 @@ frontend/
   서브셋 이후 빠진 글자가 기본 글꼴로 섞인다.
 - `metrics.ts` 는 **Figma 변수가 아니다.** 변수에 바인딩되지 않은 노드 실측값을 컴포넌트별 키로 둔다. hitSlop 도 여기 둔다.
 - `features/`, `shared/ui/`, `app/` 에는 색·간격·radius·타이포를 리터럴로 쓰지 않는다.
+- 테두리는 크기에 포함하지 않는다. Figma padding 에서 테두리 두께를 빼서 둔다(Chip · PlaceOption · SearchField · 08 원본 영상 행).
 
 ## 내비게이션
 
@@ -169,6 +170,8 @@ RootStack
 - mock 은 features 의 타입을 import 하지 않는다(shared → features 금지). 구조적 타입으로 맞춘다.
 - 목 이미지 URL(picsum 고정 id)은 이 폴더 안에만 둔다.
 - 위치 권한과 현재 위치는 runtime 작업 전까지 목 플래그(`MOCK_SCENARIO`)와 목 좌표로 둔다.
+- 장소 확정 저장물은 모두 상세(`detailId` → 08)를 가진다. 실제 데이터에서도 모든 저장물에 상세가 있다. 미확정 저장물은 저장 결과(02~05)로 간다.
+- 거리 표시: 도보 30분 이내는 "도보 N분", 30분을 넘으면 직선거리 "N.Nkm". 목 데이터는 이 규칙대로 문자열을 넣는다.
 
 ## 의존 방향
 

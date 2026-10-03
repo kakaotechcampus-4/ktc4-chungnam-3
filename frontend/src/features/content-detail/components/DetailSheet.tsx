@@ -164,9 +164,10 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         gap: spacing.md,
-        paddingLeft: metrics.contentDetail.sourcePaddingLeft,
-        paddingRight: spacing.md,
-        paddingVertical: spacing.md,
+        // 테두리는 크기에 포함하지 않는다(행 높이 64).
+        paddingLeft: metrics.contentDetail.sourcePaddingLeft - stroke.thin,
+        paddingRight: spacing.md - stroke.thin,
+        paddingVertical: spacing.md - stroke.thin,
         borderWidth: stroke.thin,
         borderColor: colors.border.default,
         borderRadius: radius.md,

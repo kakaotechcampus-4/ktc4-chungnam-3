@@ -57,8 +57,9 @@ const styles = StyleSheet.create({
         alignItems: "center",
         gap: spacing.sm,
         height: size.button,
-        paddingLeft: metrics.searchField.paddingLeft,
-        paddingRight: spacing.md,
+        // 테두리는 크기에 포함하지 않는다.
+        paddingLeft: metrics.searchField.paddingLeft - stroke.thin,
+        paddingRight: spacing.md - stroke.thin,
         borderWidth: stroke.thin,
         borderRadius: radius.md,
         backgroundColor: colors.bg.surface,
