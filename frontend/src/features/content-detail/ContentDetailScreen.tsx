@@ -55,6 +55,8 @@ const details: Readonly<
     Record<string, DetailSheetProps & { coordinate: LatLng }>
 > = placeDetailsMock;
 const { current, initialRegion: mapRegion } = mapViewMock;
+// 08 지도의 다른 저장 장소(미니 핀). 상세가 있는 곳이 곧 장소 확정 저장물이다.
+const savedPlaces = Object.entries(details);
 
 const EXPANDED = 1;
 const HANDLE_HEIGHT =
@@ -216,6 +218,18 @@ export default function ContentDetailScreen() {
                     )}
                     {showWalk && <CurrentLocation coordinate={current} />}
                     {/* 08 핀은 흰 테두리 그대로 두고 이름표만 붙인다. */}
+                    {/* 다른 저장 장소는 먼저 넣어 이 장소 핀 아래에 그려지게 한다(zIndex 는 쓰지 않는다). 누르는 동작은 없다. */}
+                    {savedPlaces
+                        .filter(([placeId]) => placeId !== route.params.placeId)
+                        .map(([placeId, place]) => (
+                            <PhotoMarker
+                                key={placeId}
+                                coordinate={place.coordinate}
+                                fade={place.fade}
+                                uri={place.thumbUri}
+                                variant="mini"
+                            />
+                        ))}
                     <PhotoMarker
                         coordinate={coordinate}
                         fade={detail.fade}

@@ -1,5 +1,5 @@
 // 지도 사진 핀. Figma 10 pin(2103:471) · C/Thumb. 9:16, 폭과 테두리는 fade 로 정한다.
-// variant 가 있으면 크기 · 테두리 · 그림자는 variant 로 정하고 바램만 fade 를 따른다(detail: 08 장소 핀).
+// variant 가 있으면 크기 · 테두리 · 그림자는 variant 로 정하고 바램만 fade 를 따른다(detail: 08 장소 핀, mini: 08 의 다른 저장 장소).
 // selected 는 테두리를 text/primary 로 바꾼다(10b 2103:545). 이름표는 PinLabel 이 따로 그린다.
 // Android 는 Marker 안의 뷰를 그 크기의 비트맵으로 찍는다. 핀 비트맵 크기는 상태와 무관하게 고정한다.
 // 다시 찍기는 redraw() 로 직접 요청한다. tracksViewChanges 는 자식 스타일 변화(테두리 색 등)를 다시 찍는다는 보장이 없다.
@@ -17,7 +17,7 @@ type Props = {
     coordinate: LatLng;
     fade: ThumbFade;
     uri?: string;
-    variant?: "detail";
+    variant?: "detail" | "mini";
     selected?: boolean;
     // 08 핀은 누를 곳이 없다.
     onPress?: () => void;
