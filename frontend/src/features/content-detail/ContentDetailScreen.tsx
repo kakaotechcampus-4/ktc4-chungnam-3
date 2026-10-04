@@ -37,7 +37,8 @@ import {
 import CurrentLocation from "../../shared/ui/CurrentLocation";
 import Icon from "../../shared/ui/Icon";
 import NotFound from "../../shared/ui/NotFound";
-import PhotoMarker from "../../shared/ui/PhotoMarker";
+import PhotoMarker, { photoMarkerSize } from "../../shared/ui/PhotoMarker";
+import PinLabel, { PIN_LABEL_EXTENT } from "../../shared/ui/PinLabel";
 import SheetHandle from "../../shared/ui/SheetHandle";
 import {
     colors,
@@ -54,6 +55,8 @@ const details: Readonly<
     Record<string, DetailSheetProps & { coordinate: LatLng }>
 > = placeDetailsMock;
 const { current, initialRegion: mapRegion } = mapViewMock;
+// 08 지도의 다른 저장 장소(미니 핀). 상세가 있는 곳이 곧 장소 확정 저장물이다.
+const savedPlaces = Object.entries(details);
 
 const EXPANDED = 1;
 const HANDLE_HEIGHT =
@@ -131,6 +134,7 @@ export default function ContentDetailScreen() {
         left: insets.left,
     };
     // 현재 위치와 장소가 함께 보이게 맞춘다. 핀은 좌표 위로 솟으므로 위 여백은 핀 높이다.
+    // 이름표는 좌표 아래로 붙으므로 아래 여백에 이름표 영역을 더해 시트에 가려지지 않게 한다.
     // Android 의 edgePadding 은 px 다(mapPadding 은 dp).
     const fitRoute = () => {
         if (!showWalk) return;
@@ -139,11 +143,11 @@ export default function ContentDetailScreen() {
         mapRef.current?.fitToCoordinates([current, coordinate], {
             edgePadding: {
                 top: px(
-                    metrics.photoMarker[detail.fade].width /
+                    photoMarkerSize(detail.fade, "detail").width /
                         metrics.thumb.aspectRatio,
                 ),
                 right: px(fit),
-                bottom: px(fit),
+                bottom: px(fit + PIN_LABEL_EXTENT),
                 left: px(fit),
             },
             animated: false,
@@ -213,13 +217,26 @@ export default function ContentDetailScreen() {
                         />
                     )}
                     {showWalk && <CurrentLocation coordinate={current} />}
+                    {/* 08 핀은 흰 테두리 그대로 두고 이름표만 붙인다. */}
+                    {/* 다른 저장 장소는 먼저 넣어 이 장소 핀 아래에 그려지게 한다(zIndex 는 쓰지 않는다). 누르는 동작은 없다. */}
+                    {savedPlaces
+                        .filter(([placeId]) => placeId !== route.params.placeId)
+                        .map(([placeId, place]) => (
+                            <PhotoMarker
+                                key={placeId}
+                                coordinate={place.coordinate}
+                                fade={place.fade}
+                                uri={place.thumbUri}
+                                variant="mini"
+                            />
+                        ))}
                     <PhotoMarker
                         coordinate={coordinate}
                         fade={detail.fade}
                         uri={detail.thumbUri}
-                        label={detail.place}
-                        selected
+                        variant="detail"
                     />
+                    <PinLabel coordinate={coordinate} label={detail.place} />
                 </MapView>
             )}
 

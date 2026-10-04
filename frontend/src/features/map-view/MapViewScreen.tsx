@@ -24,6 +24,7 @@ import Chip from "../../shared/ui/Chip";
 import CurrentLocation from "../../shared/ui/CurrentLocation";
 import Icon from "../../shared/ui/Icon";
 import PhotoMarker from "../../shared/ui/PhotoMarker";
+import PinLabel from "../../shared/ui/PinLabel";
 import SheetHandle from "../../shared/ui/SheetHandle";
 import {
     colors,
@@ -61,6 +62,8 @@ export default function MapViewScreen() {
     const sheetRef = useRef<BottomSheet>(null);
     const [filter, setFilter] = useState<(typeof FILTERS)[number]>("전체");
     const [selectedId, setSelectedId] = useState<string>();
+    // 이름표는 처음 선택할 때 하나 만들고 계속 둔다. 선택이 풀리면 마지막 핀 자리에서 숨긴다.
+    const [labelPinId, setLabelPinId] = useState<string>();
     // 처음 열릴 때(lazy 마운트) 06 에서 넘긴 동네가 있으면 그 자리에서 시작한다.
     const [initialRegion] = useState(() => regionFor(route.params?.area));
 
@@ -89,11 +92,31 @@ export default function MapViewScreen() {
         }, [selectedId]),
     );
 
+    // 다른 탭으로 옮기면 선택을 푼다. 요약에서 08 로 갔다가 돌아오면 보던 핀을 그대로 둔다.
+    // 화면이 떨어질 때 시트가 닫혔을 수 있어 돌아오면 기본 지점으로 다시 연다(선택이 없으면 시트가 없다).
+    const keepSelectionOnBlur = useRef(false);
+    useFocusEffect(
+        useCallback(() => {
+            keepSelectionOnBlur.current = false;
+            sheetRef.current?.snapToIndex(0);
+            return () => {
+                if (!keepSelectionOnBlur.current) setSelectedId(undefined);
+            };
+        }, []),
+    );
+
     const selected = pins.find((pin) => pin.placeId === selectedId);
+    const labelPin = pins.find((pin) => pin.placeId === labelPinId);
     const showLocation = MOCK_SCENARIO.locationPermission !== "denied";
 
-    const openDetail = (placeId: string) =>
+    const selectPin = (placeId: string) => {
+        setSelectedId(placeId);
+        setLabelPinId(placeId);
+    };
+    const openDetail = (placeId: string) => {
+        keepSelectionOnBlur.current = true;
         navigation.navigate("ContentDetail", { placeId });
+    };
     // Android 는 핀을 눌러도 지도 onPress 가 함께 온다. 핀 누름은 무시한다.
     const pressMap = (event: MapPressEvent) => {
         if (event.nativeEvent.action === "marker-press") return;
@@ -126,11 +149,18 @@ export default function MapViewScreen() {
                         coordinate={pin.coordinate}
                         fade={pin.fade}
                         uri={pin.thumbUri}
-                        label={pin.place}
                         selected={pin.placeId === selectedId}
-                        onPress={() => setSelectedId(pin.placeId)}
+                        onPress={() => selectPin(pin.placeId)}
                     />
                 ))}
+                {/* 10b: 선택한 핀 아래 이름표. 지도가 숨겨진 동안 마커가 빠지지 않게 opacity 로만 숨긴다. */}
+                {labelPin && (
+                    <PinLabel
+                        coordinate={labelPin.coordinate}
+                        label={labelPin.place}
+                        visible={labelPin.placeId === selectedId}
+                    />
+                )}
             </MapView>
 
             <View style={[styles.filters, { top: insets.top + spacing.sm }]}>
@@ -183,7 +213,10 @@ export default function MapViewScreen() {
                         sheetRef.current?.snapToIndex(0);
                         openDetail(selected.placeId);
                     }}
-                    onClose={() => setSelectedId(undefined)}
+                    // 화면이 떨어질 때(08 push) 오는 닫힘은 무시한다. 선택은 돌아와서도 유지한다.
+                    onClose={() => {
+                        if (navigation.isFocused()) setSelectedId(undefined);
+                    }}
                 >
                     <BottomSheetView style={styles.sheetContent}>
                         <PinSummary
