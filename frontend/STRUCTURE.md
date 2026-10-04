@@ -153,6 +153,7 @@ RootStack
 - 지도 핀 크기는 fade 로 정한다(recent 40 · weeks 26 · months 22). 위치 권한이 "denied" 면 현재 위치 · 내 위치 버튼 · 도보 시간을 숨긴다.
 - 지도 구조: 근처 감지는 OS 지오펜싱, 앱 안 표시는 Google Maps SDK, 장소 좌표는 LocationIQ 지오코딩. UI 단계는 표시와 핀만 한다.
 - 시트는 `@gorhom/bottom-sheet`, 지도는 `react-native-maps`(Google provider)로 구현한다.
+- 지명 라벨이 핀에 가려지는 것은 Google 지도 기본 동작이라 수정하지 않는다. 마커는 항상 지도 라벨 위에 그려지고, 겹치는 라벨을 숨기는 Advanced Marker 충돌 처리는 react-native-maps 가 지원하지 않는다. 가게 · 교통 · 도로 이름은 이미 끈다.
 - 지도(10·08)는 Expo Go SDK 57 안드로이드에서 검은 화면으로 나온다(expo/expo#49323). 우리 Google Maps API 키를 넣은 개발 빌드에서 확인한다.
 
 ## 개발 빌드
