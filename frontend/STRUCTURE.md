@@ -38,7 +38,8 @@ frontend/
 ├── .editorconfig             prettier 를 쓰지 않는 에디터용. .prettierrc 와 같은 값
 ├── .gitattributes            frontend 텍스트 파일을 LF 로 받는다
 ├── assets/
-│   └── fonts/                Noto Sans KR 서브셋 ttf + OFL.txt
+│   ├── fonts/                Noto Sans KR 서브셋 ttf + OFL.txt
+│   └── images/providers/     로그인 제공자 공식 심볼(직접 그리지 않는다)
 ├── scripts/
 │   └── subset-fonts.py       폰트 서브셋 생성 (원본 출처 · 범위 · 실행 방법은 파일 상단)
 ├── android/
@@ -69,7 +70,8 @@ frontend/
     │       └── supportedLinks/   [확장 포인트] 플랫폼별 파서 레지스트리
     │
     ├── features/             화면
-    │   ├── onboarding/
+    │   ├── onboarding/       첫 실행 흐름. 소개 · 로그인 · 권한(알림 · 위치 2단계) · 첫 저장 안내(00a~00f)
+    │   │   └── components/
     │   ├── archive/          기억 탭. 시간순 앨범
     │   │   └── components/
     │   ├── proposal/         근처 탭. 지금 위치 근처의 저장물
@@ -78,15 +80,20 @@ frontend/
     │   │   └── components/
     │   ├── content-detail/   장소 상세 · 지도. 끌 수 있는 시트(기본 · 펼침)
     │   │   └── components/
-    │   ├── settings/         설정(11). 알림 · 위치 · 앱 정보
+    │   ├── settings/         설정(11). 알림 · 위치 · 계정 · 앱 정보
     │   │   └── components/
     │   ├── execution-trace/  "왜 에이전트인가" 증명 화면
     │   └── map-view/         지도 탭(10). 사진 핀 · 요약 시트
     │       └── components/
     │
     └── shared/
+        ├── auth/             로그인 · 세션
+        │   ├── session.ts        세션 저장(안전한 저장소) · 메모리 캐시 · 구독(useSession)
+        │   ├── providers.ts      [확장 포인트] 로그인 제공자 목록
+        │   └── kakao.ts          카카오 로그인(SDK 호출 → 카카오 액세스 토큰)
+        ├── permissions/      알림 · 위치 권한 조회와 요청(온보딩 · 설정이 쓴다)
         ├── api/
-        │   ├── client.ts
+        │   ├── client.ts     기본 주소 · Bearer 헤더 · ApiError · 401 처리
         │   ├── mappers/      ★ 서버 응답 -> 앱 모델 변환. 백엔드 변경 흡수 지점
         │   └── mock/         UI 개발용 목 데이터. 화면 props 모양. 서버 계약 아님
         ├── storage/
@@ -127,7 +134,14 @@ frontend/
 ## 내비게이션
 
 ```
-RootStack
+RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 중 하나만 등록한다
+├── Onboarding      로그인 전 · 첫 실행 흐름. 하단 바 없음
+│   ├── Intro                   00a 소개
+│   ├── Login                   00b 로그인 (00b-err 은 화면 상태)
+│   ├── NotificationPermission  00c 알림 권한
+│   ├── LocationPermission      00d 위치 1단계(앱 사용 중)
+│   ├── BackgroundLocation      00e 위치 2단계(설정에서 항상 허용)
+│   └── FirstSave               00f 첫 저장 안내
 ├── Main            하단 탭 (근처 | 지도 | 기억). 초기 탭은 근처
 ├── Settings        push. 하단 바 없음. 근처 · 기억 헤더의 톱니로 진입
 ├── ContentDetail   push
@@ -136,6 +150,12 @@ RootStack
     └── PlaceSearch     push (02c · 02d)
 ```
 
+- 진입: 저장된 세션이 있으면 바로 근처 탭, 없으면 00a 부터. 로그인 없이 쓰는 모드는 없다.
+  세션을 읽는 동안은 스플래시를 유지한다(폰트와 같은 방식). 00a 가 잠깐 비치지 않게 한다.
+- 흐름: 00a → 00b → 00c → 00d → 00e → 00f → 근처 탭. 권한 화면의 "나중에 할게요"는 다음 단계로 넘어간다.
+- 로그인에 성공하면 세션은 바로 저장하고, 화면은 00f 를 마칠 때 로그인 상태(Main)로 바꾼다.
+  권한 화면 도중 앱이 꺼지면 다음 실행은 세션이 있으므로 근처 탭으로 간다. 권한은 설정(11)에서 다시 바꿀 수 있다.
+- 로그아웃 · 401 이면 세션을 지우고 Onboarding 의 00b 부터 보여준다. 로그아웃 상태에서는 Main 쪽 딥링크가 열리지 않는다.
 - linking prefix 는 `Linking.createURL('/')` 로 만든다. scheme 을 하드코딩하지 않는다.
 - SaveResult(02~05)는 알림 탭 또는 기억 항목 탭으로 진입한다. 실제 알림 연결은 runtime 작업 범위다.
 - 02c 에서 저장하면 SaveResult 모달 하나만 닫아 흐름을 끝낸다. 뒤로 가기는 02c → 02 로 간다.
@@ -156,6 +176,36 @@ RootStack
 - 지명 라벨이 핀에 가려지는 것은 Google 지도 기본 동작이라 수정하지 않는다. 마커는 항상 지도 라벨 위에 그려지고, 겹치는 라벨을 숨기는 Advanced Marker 충돌 처리는 react-native-maps 가 지원하지 않는다. 가게 · 교통 · 도로 이름은 이미 끈다.
 - 지도(10·08)는 Expo Go SDK 57 안드로이드에서 검은 화면으로 나온다(expo/expo#49323). 우리 Google Maps API 키를 넣은 개발 빌드에서 확인한다.
 
+## 인증 · 세션
+
+- 백엔드(구현 완료): `POST /api/auth/kakao {kakaoAccessToken}` → `{sessionToken, sessionExpiresAt}`, `POST /api/auth/logout` → 204.
+  이후 모든 요청은 `Authorization: Bearer <sessionToken>`. 리프레시 토큰은 없다. 만료되면 다시 로그인한다.
+- 세션은 `expo-secure-store`(Android Keystore)에만 둔다. AsyncStorage 에 평문으로 두지 않는다.
+- 시작할 때 `sessionExpiresAt` 이 지난 세션은 없는 것으로 본다. 기본 수명은 백엔드 설정(30일)이다.
+- 회원당 Device 는 1개다. 다른 폰으로 로그인하면 기존 폰의 세션이 바뀌어 다음 요청에서 401 이 난다.
+- 백엔드는 카카오 토큰의 `app_id` 를 자기 설정(`kakao.app-id`)과 대조한다. 앱은 백엔드와 같은 카카오 앱 키를 쓴다.
+- 아직 연결하지 않는 것: FCM 토큰 등록(`PUT /api/devices/fcm-token`)은 Firebase 프로젝트 설정(google-services.json)이 필요하다.
+  약관 동의 API 는 백엔드 문서에만 있어 연결 시점을 백엔드와 정한다. 00b 의 약관 문구는 링크(이용약관 · 개인정보 처리방침)만 둔다.
+- 의존 방향: `shared/api/client.ts` → `shared/auth/session.ts`, `shared/auth/providers.ts` → `shared/api/client.ts`. `session.ts` 는 클라이언트를 import 하지 않는다(순환 방지).
+
+## API 클라이언트
+
+- 기본 주소는 `EXPO_PUBLIC_API_BASE_URL` 이다. 배포 주소가 정해질 때까지 로컬 백엔드(`http://<PC LAN IP>:8080`)를 쓴다.
+  http(cleartext) 허용은 개발 빌드에서만 켜고 출시 빌드에는 넣지 않는다.
+- 세션이 있으면 Bearer 헤더를 붙인다. 응답은 래핑하지 않고, 에러 바디 `{code, message}` 는 `ApiError` 로 바꾼다.
+- 401 이면 세션을 지운다. 화면은 세션 구독으로 Onboarding(00b)으로 바뀐다.
+- UI 단계의 화면들은 지금처럼 mock 에서 받는다. 클라이언트를 거치는 것은 인증 API 부터다.
+
+## 로그인 제공자 확장
+
+- 제공자 목록은 `shared/auth/providers.ts` 한 곳에 둔다. 항목: id · 버튼 변형 · 로그인 함수(제공자 액세스 토큰을 돌려준다) · 백엔드 엔드포인트.
+- 00b 는 이 목록으로 버튼을 그린다(C/SocialLoginButton, 아래로 쌓기, 간격 8, 높이 size/button, radius/md).
+- 제공자 추가 = 목록에 한 항목 + 버튼 변형 + 백엔드 엔드포인트. 색은 `provider/{이름}-*` 토큰(`colors.provider.{이름}`), 심볼은 공식 에셋.
+  제공자 색은 플랫폼 규정이라 "강조 색은 자두색 하나" 원칙의 예외다.
+- 카카오: 배경 `provider/kakao-container`(#FEE500), 글자 · 심볼 `provider/kakao-label`(검정 85%), 라벨 "카카오 로그인".
+  SDK 는 `@react-native-kakao/core` · `user`(TurboModule, config plugin 내장, 카카오톡 앱 로그인 지원)를 쓴다.
+- 로그인 실패(00b-err): 사용자가 제공자 창을 닫으면 오류 없이 00b 에 머문다. 통신 · 서버 오류일 때만 버튼 위에 오류 문구를 보인다.
+
 ## 개발 빌드
 
 - `expo-dev-client` 로 만든 개발 빌드가 기본 실행 환경이다. Expo Go 는 지도가 없는 화면 확인용으로만 쓴다(터미널 `s` 로 전환).
@@ -166,6 +216,8 @@ RootStack
 - 키 제한: Maps SDK for Android 만, 패키지 `com.remembrall.app` + SHA-1 두 개(EAS 개발 빌드 keystore, 로컬 debug keystore).
   debug keystore SHA-1 은 모든 RN 프로젝트 공용이라 개발용 키에만 등록한다.
 - 개발 빌드 딥링크 scheme 은 `remembrall://` 이다(`app.json` 의 `scheme`). 실행 · 키 설정 절차는 README 에 둔다.
+- 환경 변수: `KAKAO_NATIVE_APP_KEY`(카카오 네이티브 앱 키. `app.config.ts` 가 config plugin 과 `extra` 에 넣는다. SDK 초기화가 런타임에도 키를 쓴다),
+  `EXPO_PUBLIC_API_BASE_URL`(API 기본 주소. 비밀이 아니라 번들에 들어간다). 저장소에 값을 넣지 않는다.
 
 ## 목 데이터
 
@@ -174,6 +226,7 @@ RootStack
 - mock 은 features 의 타입을 import 하지 않는다(shared → features 금지). 구조적 타입으로 맞춘다.
 - 목 이미지 URL(picsum 고정 id)은 이 폴더 안에만 둔다.
 - 위치 권한과 현재 위치는 runtime 작업 전까지 목 플래그(`MOCK_SCENARIO`)와 목 좌표로 둔다.
+  설정(11)의 권한 표시는 실제 권한 상태를 읽는다. 지도(10 · 08)의 현재 위치 · denied 분기는 runtime 작업 때 실제 권한으로 바꾼다.
 - 장소 확정 저장물은 모두 상세(`detailId` → 08)를 가진다. 실제 데이터에서도 모든 저장물에 상세가 있다. 미확정 저장물은 저장 결과(02~05)로 간다.
 - 거리 표시: 도보 30분 이내는 "도보 N분", 30분을 넘으면 직선거리 "N.Nkm". 목 데이터는 이 규칙대로 문자열을 넣는다.
 
@@ -220,6 +273,7 @@ type FailureStage =
   빈 `placeCandidates` + `SUCCESS` 와 `FAILED` 는 사용자가 할 행동이 다르다.
 - **`candidateId` 는 전역 장소 키가 아니다.** 한 추출 결과 안에서만 유효한 임시 ID다.
   라우팅 파라미터나 캐시 키로 쓰면 안 된다. 전역 장소 엔티티는 아직 존재하지 않는다.
+- **인증은 구현 완료다.** 카카오 로그인 · 로그아웃 · 세션(Bearer) · FCM 토큰 등록 API 가 코드에 있다("인증 · 세션" 절).
 - **목록 필드는 빈 배열 보장**이 문서 규칙이나, validation 애노테이션이 코드에 0개라
   강제되지 않는다. 방어 코드를 둔다.
 
@@ -238,7 +292,7 @@ type FailureStage =
 | 꺼내기 제안 유형                        | 문서상 가설이 5개 (장소 1곳 / 코스 / 장소 없는 콘텐츠 재노출 / 공용 풀 보충 / 침묵)   | **SINGLE·COURSE 2분기로 부족하다.** 열린 형태로 둔다                                                                                                                                                                  |
 | 알림 발생원 (FCM / 로컬)                | 백엔드에 FCM 의존성 없음                                                              | `runtime/notifications/notificationListener.ts` 안에서만 갈린다                                                                                                                                                       |
 | 완료 통지 방식 (폴링 / SSE / 푸시)      | 없음                                                                                  | **가장 시급.** 이것 없이는 저장 플로우가 완성되지 않는다                                                                                                                                                              |
-| 인증                                    | 없음 (의존성조차 없음)                                                                | API 클라이언트 인터셉터                                                                                                                                                                                               |
+| API 서버 주소                           | 배포 주소 미정(백엔드 확인 중). 개발은 로컬 백엔드 `http://<PC LAN IP>:8080`          | `EXPO_PUBLIC_API_BASE_URL` 만 바꾼다                                                                                                                                                                                  |
 | 지오펜스 보고 엔드포인트                | 문서에만 서술. 시그니처 없음                                                          | 서버가 조용히 무시할 수 있어 프론트가 결과를 알 방법이 필요                                                                                                                                                           |
 
 ## 화면으로 만들 것 vs 상태로 표현할 것
