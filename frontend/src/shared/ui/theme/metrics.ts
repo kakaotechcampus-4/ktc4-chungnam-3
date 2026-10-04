@@ -136,6 +136,10 @@ export const metrics = {
         recent: { width: 40, borderWidth: 3 },
         weeks: { width: 26, borderWidth: 2 },
         months: { width: 22, borderWidth: 2 },
+        // variant 는 fade 와 관계없이 크기 · 테두리 · 그림자를 정한다. detail: 08 장소 핀(2061:971 · 08b 2106:625), 그림자 있음.
+        variant: {
+            detail: { width: 40, borderWidth: 3 },
+        },
         labelGap: 7,
         labelPaddingHorizontal: 8,
         labelPaddingVertical: 3,

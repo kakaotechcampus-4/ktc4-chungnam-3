@@ -18,6 +18,12 @@ type Props = {
 // 이름표는 어느 핀에도 가려지지 않게 핀(0)보다 위에 둔다. 값은 바꾸지 않는다.
 const LABEL_Z_INDEX = 1;
 
+// 핀 아래로 이름표가 차지하는 높이(위 간격 + 이름표). 08 화면 맞추기가 쓴다.
+export const PIN_LABEL_EXTENT =
+    metrics.photoMarker.labelGap +
+    typography.captionMeta.lineHeight +
+    metrics.photoMarker.labelPaddingVertical * 2;
+
 export default function PinLabel({ coordinate, label, visible = true }: Props) {
     const markerRef = useRef<MapMarker>(null);
     useMarkerRedraw(markerRef, true, label);

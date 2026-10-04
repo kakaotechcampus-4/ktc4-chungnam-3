@@ -37,8 +37,8 @@ import {
 import CurrentLocation from "../../shared/ui/CurrentLocation";
 import Icon from "../../shared/ui/Icon";
 import NotFound from "../../shared/ui/NotFound";
-import PhotoMarker from "../../shared/ui/PhotoMarker";
-import PinLabel from "../../shared/ui/PinLabel";
+import PhotoMarker, { photoMarkerSize } from "../../shared/ui/PhotoMarker";
+import PinLabel, { PIN_LABEL_EXTENT } from "../../shared/ui/PinLabel";
 import SheetHandle from "../../shared/ui/SheetHandle";
 import {
     colors,
@@ -132,6 +132,7 @@ export default function ContentDetailScreen() {
         left: insets.left,
     };
     // 현재 위치와 장소가 함께 보이게 맞춘다. 핀은 좌표 위로 솟으므로 위 여백은 핀 높이다.
+    // 이름표는 좌표 아래로 붙으므로 아래 여백에 이름표 영역을 더해 시트에 가려지지 않게 한다.
     // Android 의 edgePadding 은 px 다(mapPadding 은 dp).
     const fitRoute = () => {
         if (!showWalk) return;
@@ -140,11 +141,11 @@ export default function ContentDetailScreen() {
         mapRef.current?.fitToCoordinates([current, coordinate], {
             edgePadding: {
                 top: px(
-                    metrics.photoMarker[detail.fade].width /
+                    photoMarkerSize(detail.fade, "detail").width /
                         metrics.thumb.aspectRatio,
                 ),
                 right: px(fit),
-                bottom: px(fit),
+                bottom: px(fit + PIN_LABEL_EXTENT),
                 left: px(fit),
             },
             animated: false,
@@ -219,6 +220,7 @@ export default function ContentDetailScreen() {
                         coordinate={coordinate}
                         fade={detail.fade}
                         uri={detail.thumbUri}
+                        variant="detail"
                     />
                     <PinLabel coordinate={coordinate} label={detail.place} />
                 </MapView>
