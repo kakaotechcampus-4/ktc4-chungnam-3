@@ -1,68 +1,79 @@
 // 지도 사진 핀. Figma 10 pin(2103:471) · C/Thumb. 9:16, 폭과 테두리는 fade 로 정한다.
-// 선택되면 테두리가 text/primary 로 바뀌고 아래에 장소 이름 라벨이 붙는다(10b 2103:545 · 2103:570).
-// Android 는 Marker 안의 뷰를 비트맵으로 찍는다. 이미지가 정해질 때와 선택이 바뀔 때만 다시 찍는다.
+// selected 는 테두리를 text/primary 로 바꾼다(10b 2103:545). 이름표는 PinLabel 이 따로 그린다.
+// Android 는 Marker 안의 뷰를 그 크기의 비트맵으로 찍는다. 핀 비트맵 크기는 상태와 무관하게 고정한다.
+// 다시 찍기는 redraw() 로 직접 요청한다. tracksViewChanges 는 자식 스타일 변화(테두리 색 등)를 다시 찍는다는 보장이 없다.
+// zIndex 는 바꾸지 않는다. Fabric 이 마커를 빼고 다시 넣어 지도의 마커 목록이 어긋난다.
+import { useIsFocused } from "@react-navigation/native";
 import { Image } from "expo-image";
-import { useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
-import { type LatLng, Marker } from "react-native-maps";
+import { type RefObject, useEffect, useRef, useState } from "react";
+import { StyleSheet, View } from "react-native";
+import { type LatLng, Marker, type MapMarker } from "react-native-maps";
 
 import type { ThumbFade } from "./Thumb";
-import { colors, effects, fade, metrics, radius, typography } from "./theme";
+import { colors, effects, fade, metrics, radius } from "./theme";
 
 type Props = {
     coordinate: LatLng;
     fade: ThumbFade;
     uri?: string;
-    label: string;
-    selected: boolean;
+    selected?: boolean;
     // 08 핀은 누를 곳이 없다.
     onPress?: () => void;
 };
 
-const LABEL_HEIGHT =
-    typography.captionMeta.lineHeight +
-    metrics.photoMarker.labelPaddingVertical * 2;
+// 준비되거나 key 가 바뀌면, 또 화면에 다시 포커스가 오면 마커를 다시 찍는다.
+// 다음 프레임과 redrawDelayMs 뒤 두 번 찍어 뷰가 덜 그려진 채 굳지 않게 한다. PinLabel 도 쓴다.
+export function useMarkerRedraw(
+    ref: RefObject<MapMarker | null>,
+    ready: boolean,
+    key: unknown,
+) {
+    const focused = useIsFocused();
+    useEffect(() => {
+        if (!ready || !focused) return;
+        const redraw = () => ref.current?.redraw();
+        const frame = requestAnimationFrame(redraw);
+        const timer = setTimeout(redraw, metrics.photoMarker.redrawDelayMs);
+        return () => {
+            cancelAnimationFrame(frame);
+            clearTimeout(timer);
+        };
+    }, [ref, ready, key, focused]);
+}
 
 export default function PhotoMarker({
     coordinate,
     fade: level,
     uri,
-    label,
-    selected,
+    selected = false,
     onPress,
 }: Props) {
     const [failed, setFailed] = useState(false);
     const [settled, setSettled] = useState(uri == null);
-    const [tracking, setTracking] = useState(true);
-
-    // 이미지가 뜨거나 실패하면, 또 선택이 바뀌면 한 프레임 다시 찍고 멈춘다.
-    useEffect(() => {
-        if (!settled) return;
-        setTracking(true);
-        const frame = requestAnimationFrame(() => setTracking(false));
-        return () => cancelAnimationFrame(frame);
-    }, [settled, selected]);
+    const markerRef = useRef<MapMarker>(null);
+    useMarkerRedraw(markerRef, settled, selected);
 
     const pin = metrics.photoMarker[level];
     const pinHeight = pin.width / metrics.thumb.aspectRatio;
-    // 좌표는 핀 아래 가운데에 둔다. 라벨이 붙어도 핀 자리가 움직이지 않게 한다.
-    const anchorY = selected
-        ? pinHeight / (pinHeight + metrics.photoMarker.labelGap + LABEL_HEIGHT)
-        : 1;
+    // 그림자가 있는 핀은 비트맵 가장자리에서 그림자가 잘리지 않게 사방에 투명 여백을 둔다.
+    const raised = level === "recent";
+    const margin = raised ? metrics.photoMarker.shadowMargin : 0;
+    // 좌표는 핀 아래 가운데(여백 제외)에 둔다.
+    const anchorY = (margin + pinHeight) / (pinHeight + margin * 2);
 
     return (
         <Marker
+            ref={markerRef}
             coordinate={coordinate}
             anchor={{ x: 0.5, y: anchorY }}
-            tracksViewChanges={tracking}
-            zIndex={selected ? 1 : 0}
+            tracksViewChanges={false}
             onPress={onPress}
         >
-            <View style={styles.column}>
+            <View style={{ padding: margin }}>
                 <View
                     style={[
                         styles.pin,
-                        level === "recent" && styles.raised,
+                        raised && styles.raised,
                         {
                             width: pin.width,
                             height: pinHeight,
@@ -93,23 +104,12 @@ export default function PhotoMarker({
                         ]}
                     />
                 </View>
-                {selected && (
-                    <View style={styles.label}>
-                        <Text numberOfLines={1} style={styles.labelText}>
-                            {label}
-                        </Text>
-                    </View>
-                )}
             </View>
         </Marker>
     );
 }
 
 const styles = StyleSheet.create({
-    column: {
-        alignItems: "center",
-        gap: metrics.photoMarker.labelGap,
-    },
     // 이미지가 없거나 로딩 중이면 bg/placeholder 가 보인다.
     pin: {
         borderRadius: radius.md,
@@ -122,15 +122,5 @@ const styles = StyleSheet.create({
     },
     fade: {
         backgroundColor: colors.bg.fade,
-    },
-    label: {
-        paddingHorizontal: metrics.photoMarker.labelPaddingHorizontal,
-        paddingVertical: metrics.photoMarker.labelPaddingVertical,
-        borderRadius: radius.full,
-        backgroundColor: colors.text.primary,
-    },
-    labelText: {
-        ...typography.captionMeta,
-        color: colors.text.onPrimary,
     },
 });

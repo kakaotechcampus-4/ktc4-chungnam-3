@@ -129,7 +129,9 @@ export const metrics = {
         height: 4,
     },
     // 지도 사진 핀 (10 2103:471 · 2103:439 · 2103:449). 9:16, 폭과 테두리는 fade 로 정한다.
-    // 선택 라벨(10b 2103:570)은 핀 아래 7 떨어진다. 라벨 높이 = captionMeta 16 + 위아래 3.
+    // 이름표(10b 2103:570)는 핀 아래 7 떨어진다. 이름표 높이 = captionMeta 16 + 위아래 3.
+    // shadowMargin: 그림자 있는 핀의 비트맵 여백 = elevationLow blur 12 + offsetY 2.
+    // redrawDelayMs: 다음 프레임에 한 번 찍은 뒤 다시 한 번 찍는 지연. 뷰가 덜 그려진 채 굳지 않게 한다. 구현값이다.
     photoMarker: {
         recent: { width: 40, borderWidth: 3 },
         weeks: { width: 26, borderWidth: 2 },
@@ -137,6 +139,8 @@ export const metrics = {
         labelGap: 7,
         labelPaddingHorizontal: 8,
         labelPaddingVertical: 3,
+        shadowMargin: 14,
+        redrawDelayMs: 100,
     },
     // 현재 위치 (10 2103:469 · 2103:470). 바깥 원은 status/info-fg 15%, 안쪽 점은 bg/surface 테두리 3.
     currentLocation: {

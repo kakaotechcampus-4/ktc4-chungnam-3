@@ -38,6 +38,7 @@ import CurrentLocation from "../../shared/ui/CurrentLocation";
 import Icon from "../../shared/ui/Icon";
 import NotFound from "../../shared/ui/NotFound";
 import PhotoMarker from "../../shared/ui/PhotoMarker";
+import PinLabel from "../../shared/ui/PinLabel";
 import SheetHandle from "../../shared/ui/SheetHandle";
 import {
     colors,
@@ -213,13 +214,13 @@ export default function ContentDetailScreen() {
                         />
                     )}
                     {showWalk && <CurrentLocation coordinate={current} />}
+                    {/* 08 핀은 흰 테두리 그대로 두고 이름표만 붙인다. */}
                     <PhotoMarker
                         coordinate={coordinate}
                         fade={detail.fade}
                         uri={detail.thumbUri}
-                        label={detail.place}
-                        selected
                     />
+                    <PinLabel coordinate={coordinate} label={detail.place} />
                 </MapView>
             )}
 
