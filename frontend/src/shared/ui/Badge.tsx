@@ -1,5 +1,6 @@
 // 저장물 상태 배지. Figma C/Badge. 상태 → 라벨·색 매핑은 이 파일에만 둔다.
 // UI 타입이다. 서버 이름과의 대응은 백엔드 계약이 생기면 mappers 에서 한다.
+// 부분 성공은 백엔드 저장 판정에 없어 배지를 두지 않는다(디자인 결정).
 import {
     type StyleProp,
     StyleSheet,
@@ -14,7 +15,6 @@ export type BadgeStatus =
     | "analyzing"
     | "needsConfirmation"
     | "noPlace"
-    | "partial"
     | "failed";
 
 const BADGE: Record<BadgeStatus, { label: string; fg: string; bg: string }> = {
@@ -30,11 +30,6 @@ const BADGE: Record<BadgeStatus, { label: string; fg: string; bg: string }> = {
     },
     noPlace: {
         label: "장소 없음",
-        fg: colors.status.neutralFg,
-        bg: colors.status.neutralBg,
-    },
-    partial: {
-        label: "부분 성공",
         fg: colors.status.neutralFg,
         bg: colors.status.neutralBg,
     },

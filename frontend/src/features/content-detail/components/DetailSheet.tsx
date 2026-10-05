@@ -1,8 +1,7 @@
-// 08 장소 상세 시트 내용. 핸들은 모양만 있고 끌 수 없다.
-// 원본 영상·길 안내·"이 장소가 아니에요" 는 아직 동작하지 않는다.
+// 08 장소 상세 시트 본문. head · 메모 묶음 · 원본 영상 줄. 핸들과 하단 버튼은 시트가 따로 그린다.
+// 빈 필드(08b): 메모가 없으면 묶음 전체, 태그가 없으면 태그 줄을 숨긴다. 도보 시간은 showWalk 일 때만 붙인다.
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import Button from "../../../shared/ui/Button";
 import Icon from "../../../shared/ui/Icon";
 import Thumb, { type ThumbFade } from "../../../shared/ui/Thumb";
 import {
@@ -18,30 +17,36 @@ import {
 export type DetailSheetProps = {
     time: string;
     place: string;
-    meta: string;
+    address: string;
+    walk?: string;
     thumbUri?: string;
     fade: ThumbFade;
-    note: string;
-    tags: readonly string[];
+    note?: string;
+    tags?: readonly string[];
     sourceMeta: string;
+};
+
+type Props = DetailSheetProps & {
+    showWalk: boolean;
+    noteExpanded: boolean;
 };
 
 export default function DetailSheet({
     time,
     place,
-    meta,
+    address,
+    walk,
     thumbUri,
     fade,
     note,
     tags,
     sourceMeta,
-}: DetailSheetProps) {
+    showWalk,
+    noteExpanded,
+}: Props) {
+    const meta = showWalk && walk ? `${address} · ${walk}` : address;
     return (
-        <>
-            <View style={styles.handleRow}>
-                <View style={styles.handle} />
-            </View>
-
+        <View style={styles.body}>
             <View style={styles.head}>
                 <Thumb fade={fade} uri={thumbUri} style={styles.thumb} />
                 <View style={styles.info}>
@@ -57,17 +62,30 @@ export default function DetailSheet({
                 </View>
             </View>
 
-            <View style={styles.note}>
-                <Text style={styles.caption}>영상에서 저장해둔 것</Text>
-                <Text style={styles.noteBody}>{note}</Text>
-                <View style={styles.tags}>
-                    {tags.map((tag) => (
-                        <View key={tag} style={styles.tag}>
-                            <Text style={styles.tagLabel}>#{tag}</Text>
+            {note != null && (
+                <View style={styles.note}>
+                    <Text style={styles.caption}>영상에서 저장해둔 것</Text>
+                    <Text
+                        numberOfLines={
+                            noteExpanded
+                                ? undefined
+                                : metrics.contentDetail.noteCollapsedLines
+                        }
+                        style={styles.noteBody}
+                    >
+                        {note}
+                    </Text>
+                    {tags != null && tags.length > 0 && (
+                        <View style={styles.tags}>
+                            {tags.map((tag) => (
+                                <View key={tag} style={styles.tag}>
+                                    <Text style={styles.tagLabel}>#{tag}</Text>
+                                </View>
+                            ))}
                         </View>
-                    ))}
+                    )}
                 </View>
-            </View>
+            )}
 
             {/* 동작이 연결되면 disabled 를 뺀다. */}
             <Pressable
@@ -85,26 +103,16 @@ export default function DetailSheet({
                 </View>
                 <Icon name="chevronRight" size={size.iconSm} />
             </Pressable>
-
-            <View style={styles.spacer} />
-
-            <View style={styles.actions}>
-                <Button kind="primary" label="길 안내 시작" />
-                <Button kind="text" label="이 장소가 아니에요" />
-            </View>
-        </>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
-    handleRow: {
-        alignItems: "center",
-    },
-    handle: {
-        width: metrics.contentDetail.handleWidth,
-        height: metrics.contentDetail.handleHeight,
-        borderRadius: metrics.contentDetail.handleHeight / 2,
-        backgroundColor: colors.bg.placeholder,
+    // 핸들 아래 16, 좌우 20, 묶음 사이 16 (Figma Sheet 2061:992).
+    body: {
+        gap: metrics.contentDetail.sheetGap,
+        paddingTop: metrics.contentDetail.sheetGap,
+        paddingHorizontal: spacing.lg,
     },
     head: {
         flexDirection: "row",
@@ -116,7 +124,7 @@ const styles = StyleSheet.create({
     },
     info: {
         flex: 1,
-        gap: metrics.contentDetail.infoGap,
+        gap: spacing.xs,
     },
     time: {
         ...typography.headingScreen,
@@ -156,25 +164,20 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         gap: spacing.md,
-        paddingLeft: metrics.contentDetail.sourcePaddingLeft,
-        paddingRight: spacing.md,
-        paddingVertical: spacing.md,
+        // 테두리는 크기에 포함하지 않는다(행 높이 64).
+        paddingLeft: metrics.contentDetail.sourcePaddingLeft - stroke.thin,
+        paddingRight: spacing.md - stroke.thin,
+        paddingVertical: spacing.md - stroke.thin,
         borderWidth: stroke.thin,
         borderColor: colors.border.default,
         borderRadius: radius.md,
     },
     sourceText: {
         flex: 1,
-        gap: metrics.contentDetail.sourceTextGap,
+        gap: spacing.xs,
     },
     sourceTitle: {
         ...typography.labelButton,
         color: colors.text.primary,
-    },
-    spacer: {
-        flex: 1,
-    },
-    actions: {
-        gap: spacing.xs,
     },
 });

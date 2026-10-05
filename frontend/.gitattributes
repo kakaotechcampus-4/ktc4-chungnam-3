@@ -1,0 +1,3 @@
+# frontend 텍스트 파일은 Windows 에서도 LF 로 받는다(prettier endOfLine: lf 와 맞춘다).
+# text=auto 라 이미지 · 폰트 같은 바이너리는 git 이 감지해 제외한다.
+* text=auto eol=lf

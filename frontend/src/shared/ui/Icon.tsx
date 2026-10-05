@@ -3,8 +3,15 @@ import type { LucideIcon } from "lucide-react-native";
 import ArrowLeft from "lucide-react-native/icons/arrow-left";
 import Check from "lucide-react-native/icons/check";
 import ChevronRight from "lucide-react-native/icons/chevron-right";
+import Footprints from "lucide-react-native/icons/footprints";
+import Images from "lucide-react-native/icons/images";
+import LocateFixed from "lucide-react-native/icons/locate-fixed";
+import MapIcon from "lucide-react-native/icons/map";
 import MapPin from "lucide-react-native/icons/map-pin";
 import Pencil from "lucide-react-native/icons/pencil";
+import RefreshCw from "lucide-react-native/icons/refresh-cw";
+import Search from "lucide-react-native/icons/search";
+import Settings from "lucide-react-native/icons/settings";
 import X from "lucide-react-native/icons/x";
 import Svg, { Path } from "react-native-svg";
 
@@ -17,6 +24,13 @@ export type IconName =
     | "check"
     | "chevronRight"
     | "pencil"
+    | "footprints"
+    | "map"
+    | "images"
+    | "settings"
+    | "refresh"
+    | "search"
+    | "locateFixed"
     | "play";
 
 const LUCIDE: Record<Exclude<IconName, "play">, LucideIcon> = {
@@ -26,6 +40,13 @@ const LUCIDE: Record<Exclude<IconName, "play">, LucideIcon> = {
     check: Check,
     chevronRight: ChevronRight,
     pencil: Pencil,
+    footprints: Footprints,
+    map: MapIcon,
+    images: Images,
+    settings: Settings,
+    refresh: RefreshCw,
+    search: Search,
+    locateFixed: LocateFixed,
 };
 
 const STROKE_WIDTH = 1.75;

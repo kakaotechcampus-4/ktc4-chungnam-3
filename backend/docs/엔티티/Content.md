@@ -21,7 +21,6 @@
 | `analyzedAt`            | TIMESTAMPTZ  | NULL                                | 분석이 정상적으로 완료된 시각입니다.                   |
 | `createdAt`             | TIMESTAMPTZ  | NOT NULL, DEFAULT CURRENT_TIMESTAMP | 콘텐츠가 생성된 시각입니다.                        |
 | `updatedAt`             | TIMESTAMPTZ  | NOT NULL, DEFAULT CURRENT_TIMESTAMP | 콘텐츠가 마지막으로 변경된 시각입니다.                  |
-|                         |              |                                     |                                        |
 
 ### 상태
 
@@ -67,6 +66,6 @@ YouTube URL에서 videoId 추출
 ### 데이터 구분
 
 콘텐츠 전체의 요약과 카테고리는 `Content`에 저장합니다.
-특정 장소를 영상에서 어떻게 소개했는지와 등장 순서 및 신뢰도는 `ContentPlace`에 저장합니다.
+특정 장소를 영상에서 어떻게 소개했는지와 신뢰도는 `ContentPlace`에 저장합니다.
 장소 추출 및 검증 실패 과정은 `PlaceCandidateLog`에 기록합니다.
 공용 후보 포함 여부는 `PersonalSave`와 `MemberConsent`로 판단하며 `Content`에는 별도의 공개 여부를 저장하지 않습니다.

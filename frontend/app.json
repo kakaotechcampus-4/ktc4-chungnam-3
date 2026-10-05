@@ -36,6 +36,12 @@
         ],
         "experiments": {
             "reactCompiler": true
-        }
+        },
+        "extra": {
+            "eas": {
+                "projectId": "45627d12-e294-40ea-90b6-3dd7c859d94d"
+            }
+        },
+        "owner": "ktc4-chungnam-3"
     }
 }

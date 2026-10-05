@@ -9,7 +9,8 @@ import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { colors, fontFamily } from "../shared/ui/theme";
@@ -47,14 +48,15 @@ export default function App() {
     if (!ready) return null;
 
     return (
-        <SafeAreaProvider>
-            <View style={styles.root}>
+        // 끌 수 있는 시트(@gorhom/bottom-sheet)가 제스처를 받으려면 최상위를 GestureHandlerRootView 로 감싼다.
+        <GestureHandlerRootView style={styles.root}>
+            <SafeAreaProvider>
                 <StatusBar style="dark" />
                 <NavigationContainer linking={linking} theme={navigationTheme}>
                     <RootNavigator />
                 </NavigationContainer>
-            </View>
-        </SafeAreaProvider>
+            </SafeAreaProvider>
+        </GestureHandlerRootView>
     );
 }
 
