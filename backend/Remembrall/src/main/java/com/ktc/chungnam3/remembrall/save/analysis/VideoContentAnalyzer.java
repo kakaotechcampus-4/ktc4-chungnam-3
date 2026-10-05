@@ -9,6 +9,8 @@ import com.ktc.chungnam3.remembrall.extraction.dto.TemporalInfoDto;
 import com.ktc.chungnam3.remembrall.extraction.dto.YouTubeContentExtractionResultDto;
 import com.ktc.chungnam3.remembrall.extraction.type.EvidenceSource;
 import com.ktc.chungnam3.remembrall.extraction.type.ExtractionStatus;
+import com.ktc.chungnam3.remembrall.save.youtube.YoutubeMetadataClient;
+import com.ktc.chungnam3.remembrall.save.youtube.YoutubeUrlParser;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -45,7 +47,7 @@ public class VideoContentAnalyzer {
     private static final GoogleGenAiChatModel.ChatModel MODEL = GoogleGenAiChatModel.ChatModel.GEMINI_3_6_FLASH;
 
     private static final String ANALYSIS_VERSION = "v1";
-    private static final String PROMPT_VERSION = "v2";
+    private static final String PROMPT_VERSION = "v4";
 
     private static final String PROMPT_TEMPLATE = """
             너는 여행·맛집 유튜브 영상에서 정보를 추출하는 분석가다.
@@ -53,16 +55,31 @@ public class VideoContentAnalyzer {
 
             영상 게시일: %s
 
+            [참고 정보 — 유튜브가 제공하는 부가 텍스트다. 영상 내용 판단이 우선이지만, 아래 텍스트에도
+            상호명이 자주 등장하니 함께 참고해라]
+            제목: %s
+            설명: %s
+            태그: %s
+            채널 운영자(영상 게시자 본인)가 남긴 댓글:
+            %s
+
+            - 설명이나 댓글에 있는 해시태그(#으로 시작하는 단어)도 상호명 후보로 간주해라. 단, 지역명·감정
+              표현처럼 상호명이 아닌 해시태그는 무시해라.
             - summary는 영상의 핵심 주제, 소개 대상, 주요 특징과 영상에서 명시된 추천 상황·제약을 간결하게 적어라.
               장소가 없어도 요약은 남겨라.
             - 장소 정보가 없으면 placeCandidates를 빈 배열로 두고 절대 추측하지 마라.
             - 장소 이름은 상호명(name)·지점명(branchName)·지역 단서(regionHint)로 나눠 적어라.
               예: "대전 성심당 본점"이면 name="성심당", branchName="본점", regionHint="대전".
               지점이나 지역이 확인되지 않으면 해당 필드는 빈 문자열로 둬라.
-            - regionHint가 불확실하면 상위 단위로만 적어라 (구를 모르면 "대전"까지만 적어라).
+            - regionHint에는 시·도(예: 서울특별시, 대전광역시)를 반드시 포함해라. 구·동까지 확인되면
+              "대전 중구"처럼 시·도 뒤에 이어서 적되, 시·도 자체를 빼지는 마라 - 장소 검색 단계가
+              시·도 단위로만 지역을 대조하기 때문이다. 구·동까지도 불확실하면 시·도까지만 적어라.
             - 좌표는 추출하지 않는다 (이 단계의 책임이 아니다).
             - 여러 장소가 있으면 각각 분리해서 반환해라.
-            - evidence의 detail에는 근거 위치나 내용을 간단히 적어라 (예: "화면 자막 0:12", "설명란 첫 줄").
+            - evidence의 detail에는 근거 위치나 내용을 간단히 적어라 (예: "화면 자막 0:12", "설명란 첫 줄",
+              "운영자 댓글"). evidence의 source는 아래 다섯 값 중 하나만 써라: VIDEO_AUDIO, VIDEO_TEXT,
+              VIDEO_VISUAL, TITLE, DESCRIPTION. 댓글에서 확인한 내용은 DESCRIPTION으로 표시하고
+              detail에 "운영자 댓글"이라고 적어라 (댓글 전용 출처 값은 아직 계약에 없음).
             - relatedPlaceNames에는 이 기간과 연결되는 placeCandidates의 name을 그대로 적어라. 관계가 없으면 빈 배열로 둬라.
             - startDate/endDate에 연도가 없는 날짜가 나오면(예: "10월 3일까지") 위 영상 게시일과 같은 연도로 채우고,
               uncertainties에 "연도 추정"이라고 적어라. 월·일 자체를 확인할 수 없으면 빈 문자열로 두고 절대 추정하지 마라.
@@ -157,17 +174,36 @@ public class VideoContentAnalyzer {
     }
 
     private final ChatModel chatModel;
+    private final YoutubeMetadataClient youtubeMetadataClient;
     // Spring Boot 4.1의 자동 구성 ObjectMapper 빈은 Jackson 3(tools.jackson.*) 타입이라
     // Jackson 2 API(com.fasterxml.jackson.*)로 직접 파싱하기 위해 별도 인스턴스를 쓴다.
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public VideoContentAnalyzer(ChatModel chatModel) {
+    public VideoContentAnalyzer(ChatModel chatModel, YoutubeMetadataClient youtubeMetadataClient) {
         this.chatModel = chatModel;
+        this.youtubeMetadataClient = youtubeMetadataClient;
     }
 
-    public YouTubeContentExtractionResultDto analyze(String youtubeUrl, LocalDate publishedAt) {
+    /**
+     * 유튜브 URL 하나로 메타데이터 조회(제목·설명·태그·운영자 댓글)와 영상 분석을 모두 수행한다.
+     * 게시일도 메타데이터 조회에서 얻으므로 별도 파라미터로 받지 않는다.
+     */
+    public YouTubeContentExtractionResultDto analyze(String youtubeUrl) {
+        String videoId = YoutubeUrlParser.extractVideoId(youtubeUrl)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "유튜브 URL에서 videoId를 찾을 수 없음: " + youtubeUrl));
+
+        YoutubeMetadataClient.VideoInfo videoInfo = youtubeMetadataClient.getVideoInfo(videoId);
+        List<String> authorComments = youtubeMetadataClient.getAuthorComments(videoId, videoInfo.channelId());
+
         UserMessage userMessage = UserMessage.builder()
-                .text(PROMPT_TEMPLATE.formatted(publishedAt))
+                .text(PROMPT_TEMPLATE.formatted(
+                        videoInfo.publishedAt(),
+                        videoInfo.title(),
+                        videoInfo.description(),
+                        joinOrNone(videoInfo.tags()),
+                        joinComments(authorComments)
+                ))
                 .media(Media.builder()
                         .mimeType(MimeType.valueOf("video/mp4"))
                         .data(URI.create(youtubeUrl))
@@ -259,6 +295,30 @@ public class VideoContentAnalyzer {
 
     private String blankToNull(String value) {
         return (value == null || value.isBlank()) ? null : value;
+    }
+
+    private String joinOrNone(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return "없음";
+        }
+        // 외부 API 응답 리스트라 null 원소가 섞여 있을 수 있어 미리 걸러낸다 (리뷰 반영).
+        List<String> filtered = values.stream().filter(java.util.Objects::nonNull).toList();
+        return filtered.isEmpty() ? "없음" : String.join(", ", filtered);
+    }
+
+    private String joinComments(List<String> comments) {
+        if (comments == null || comments.isEmpty()) {
+            return "없음";
+        }
+        List<String> filtered = comments.stream().filter(java.util.Objects::nonNull).toList();
+        if (filtered.isEmpty()) {
+            return "없음";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < filtered.size(); i++) {
+            sb.append(i + 1).append(". ").append(filtered.get(i)).append('\n');
+        }
+        return sb.toString();
     }
 
     private LocalDate parseDateOrNull(String value, List<String> uncertainties) {

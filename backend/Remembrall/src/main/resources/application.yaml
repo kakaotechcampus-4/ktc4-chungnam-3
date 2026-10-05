@@ -23,11 +23,34 @@ kakao:
   app-id: ${kakao.app-id:}
 
 auth:
-  jwt:
-    issuer: remembrall
-    secret: ${jwt.secret:}
-    access-token-ttl: ${jwt.access-token-ttl:30m}
-    refresh-token-ttl: ${jwt.refresh-token-ttl:30d}
+  session:
+    ttl: ${session.ttl:30d}
+
+recall:
+  max-event-age: 30m
+  member-cooldown: 10m
+  agent-version: stub-v1
+
+notification:
+  max-title-length: 120
+  max-body-length: 200
+  fcm-credentials-path: ${FCM_CREDENTIALS_PATH:}
 locationiq:
   api:
     key: ${locationiq.api.key:}
+  # 실측 기반 기본값(2026-10-01, PR #20 리뷰 - 호출별 타임아웃 산정용): 15개 쿼리 평균 589ms, 최댓값 1252ms
+  connect-timeout-ms: 2000
+  read-timeout-ms: 3000
+
+# 소상공인시장진흥공단 상가(상권)정보 - 개선②(공공 상가정보 연동)
+dataportal:
+  api:
+    key: ${dataportal.api.key:}
+  # 실측 기반 기본값(2026-10-01): 업종 코드 1개짜리 단일 호출 기준 6개 좌표 평균 578ms, 최댓값 1286ms
+  connect-timeout-ms: 2000
+  read-timeout-ms: 3000
+
+franchise:
+  # 프랜차이즈 기준점 반경(PlaceResolver.resolveViaAnchor) - 300 → 1000으로 조정(2026-10-02).
+  # "교보문고 광화문점"이 기준점에서 500m+ 떨어져 있어 300m로는 못 찾았던 실측 사례 기반.
+  anchor-radius-meters: 1000

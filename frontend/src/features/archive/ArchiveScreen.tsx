@@ -1,10 +1,11 @@
-// 전체 기억 탭. 저장물을 시간순 앨범으로 보여준다. 오래 잊은 것일수록 바래 있다.
+// 기억 탭. 저장물을 시간순 앨범으로 보여준다. 오래 잊은 것일수록 바래 있다.
+// 헤더는 스크롤 영역 밖에 고정한다. 하단 inset 은 하단 바가 맡는다.
 import { useNavigation } from "@react-navigation/native";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { archiveMock, MOCK_SCENARIO } from "../../shared/api/mock";
 import type { BadgeStatus } from "../../shared/ui/Badge";
+import ScreenHeader from "../../shared/ui/ScreenHeader";
 import type { ThumbFade } from "../../shared/ui/Thumb";
 import { colors, spacing, typography } from "../../shared/ui/theme";
 import AlbumCell from "./components/AlbumCell";
@@ -14,7 +15,7 @@ const COLUMNS = 3;
 
 type ArchiveItem = {
     id: string;
-    label?: string;
+    placeName?: string;
     videoTitle?: string;
     thumbUri?: string;
     fade: ThumbFade;
@@ -41,15 +42,21 @@ function toRows(items: readonly ArchiveItem[]): (ArchiveItem | null)[][] {
 
 export default function ArchiveScreen() {
     const navigation = useNavigation();
-    const insets = useSafeAreaInsets();
+    const header = (
+        <ScreenHeader
+            title="기억"
+            onSettingsPress={() => navigation.navigate("Settings")}
+        />
+    );
 
     if (MOCK_SCENARIO.archiveEmpty) {
         return (
-            <ScrollView
-                contentContainerStyle={{ paddingBottom: insets.bottom }}
-            >
-                <ArchiveEmpty />
-            </ScrollView>
+            <View style={styles.screen}>
+                {header}
+                <ScrollView contentContainerStyle={styles.content}>
+                    <ArchiveEmpty />
+                </ScrollView>
+            </View>
         );
     }
 
@@ -61,7 +68,11 @@ export default function ArchiveScreen() {
 
     const pressHandler = ({ resultId, detailId }: ArchiveItem) => {
         if (resultId)
-            return () => navigation.navigate("SaveResult", { resultId });
+            return () =>
+                navigation.navigate("SaveResult", {
+                    screen: "Result",
+                    params: { resultId },
+                });
         if (detailId)
             return () =>
                 navigation.navigate("ContentDetail", { placeId: detailId });
@@ -69,49 +80,61 @@ export default function ArchiveScreen() {
     };
 
     return (
-        <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom }}>
-            <View style={styles.intro}>
-                <Text style={styles.caption}>
-                    모두 {count}곳 · 오래 잊은 것일수록 바래 있어요
-                </Text>
-            </View>
+        <View style={styles.screen}>
+            {header}
+            <ScrollView contentContainerStyle={styles.content}>
+                <View style={styles.intro}>
+                    <Text style={styles.caption}>
+                        모두 {count}곳 · 오래 잊은 것일수록 바래 있어요
+                    </Text>
+                </View>
 
-            <View style={styles.album}>
-                {sections.map((section) => (
-                    <View key={section.title} style={styles.section}>
-                        <Text style={styles.sectionTitle}>{section.title}</Text>
-                        <View style={styles.grid}>
-                            {toRows(section.items).map((row) => (
-                                <View key={row[0]?.id} style={styles.row}>
-                                    {row.map((item, index) =>
-                                        item ? (
-                                            <AlbumCell
-                                                key={item.id}
-                                                label={item.label}
-                                                videoTitle={item.videoTitle}
-                                                thumbUri={item.thumbUri}
-                                                fade={item.fade}
-                                                status={item.status}
-                                                onPress={pressHandler(item)}
-                                            />
-                                        ) : (
-                                            <View
-                                                key={`empty-${index}`}
-                                                style={styles.emptyCell}
-                                            />
-                                        ),
-                                    )}
-                                </View>
-                            ))}
+                <View style={styles.album}>
+                    {sections.map((section) => (
+                        <View key={section.title} style={styles.section}>
+                            <Text style={styles.sectionTitle}>
+                                {section.title}
+                            </Text>
+                            <View style={styles.grid}>
+                                {toRows(section.items).map((row) => (
+                                    <View key={row[0]?.id} style={styles.row}>
+                                        {row.map((item, index) =>
+                                            item ? (
+                                                <AlbumCell
+                                                    key={item.id}
+                                                    placeName={item.placeName}
+                                                    videoTitle={item.videoTitle}
+                                                    thumbUri={item.thumbUri}
+                                                    fade={item.fade}
+                                                    status={item.status}
+                                                    onPress={pressHandler(item)}
+                                                />
+                                            ) : (
+                                                <View
+                                                    key={`empty-${index}`}
+                                                    style={styles.emptyCell}
+                                                />
+                                            ),
+                                        )}
+                                    </View>
+                                ))}
+                            </View>
                         </View>
-                    </View>
-                ))}
-            </View>
-        </ScrollView>
+                    ))}
+                </View>
+            </ScrollView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
+    screen: {
+        flex: 1,
+    },
+    // 목록 끝이 하단 바에 붙지 않게 한다. Figma 는 목록이 잘려 있어 값이 없다.
+    content: {
+        paddingBottom: spacing.lg,
+    },
     intro: {
         paddingTop: spacing.lg,
         paddingHorizontal: spacing.lg,
@@ -132,8 +155,9 @@ const styles = StyleSheet.create({
         ...typography.headingScreen,
         color: colors.text.primary,
     },
+    // 줄 사이 space/md, 칸 사이 space/sm (Figma 2061:910).
     grid: {
-        gap: spacing.sm,
+        gap: spacing.md,
     },
     row: {
         flexDirection: "row",

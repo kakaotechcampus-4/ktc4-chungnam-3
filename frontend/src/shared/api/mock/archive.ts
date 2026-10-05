@@ -1,7 +1,9 @@
 // 전체 기억 탭 목 데이터. 화면 props 모양 그대로이며 서버 계약이 아니다. 문구는 Figma 07 그대로.
-// 영상 제목은 videoTitle 에 따옴표 없이 둔다. 따옴표는 컴포넌트가 붙인다.
+// 셀 이름: 장소 확정이면 placeName, 미확정(status 가 있는 셀)이면 videoTitle. videoTitle 에는 따옴표를 넣지 않는다.
+// 확인 필요 셀은 02, 분석 중 셀은 03 과 같은 저장물이다.
+// 미확정 셀은 resultId 로 저장 결과(02~05), 확정 셀은 모두 detailId 로 장소 상세(08)를 연다.
 // 01 근처와 같은 장소는 같은 이미지를 쓴다.
-const img = (id: number) => `https://picsum.photos/id/${id}/360/640`;
+import { img } from "./img";
 
 // 07 전체 기억 · 시간순 앨범 (2061:901)
 export const archiveMock = {
@@ -11,7 +13,7 @@ export const archiveMock = {
             items: [
                 {
                     id: "daejeon-bread",
-                    videoTitle: "대전 빵집 3곳",
+                    videoTitle: "대전 가면 꼭 들르는 빵집 3곳",
                     thumbUri: img(431),
                     fade: "recent",
                     status: "needsConfirmation",
@@ -19,7 +21,7 @@ export const archiveMock = {
                 },
                 {
                     id: "just-saved",
-                    label: "방금 저장한 영상",
+                    videoTitle: "대흥동 골목 산책 코스",
                     thumbUri: img(225),
                     fade: "recent",
                     status: "analyzing",
@@ -27,9 +29,17 @@ export const archiveMock = {
                 },
                 {
                     id: "sojedong",
-                    label: "소제동 카페거리",
+                    detailId: "sojedong",
+                    placeName: "소제동 카페거리",
                     thumbUri: img(312),
                     fade: "recent",
+                },
+                // 05 와 같은 저장물. 영상을 불러오지 못해 이미지와 제목이 없다.
+                {
+                    id: "failed-video",
+                    fade: "recent",
+                    status: "failed",
+                    resultId: "failed",
                 },
             ],
         },
@@ -38,20 +48,22 @@ export const archiveMock = {
             items: [
                 {
                     id: "sungsimdang",
-                    label: "성심당 본점",
+                    placeName: "성심당 본점",
                     thumbUri: img(1080),
                     fade: "weeks",
                     detailId: "sungsimdang",
                 },
                 {
                     id: "afternoon-four",
-                    label: "오후 네시",
+                    detailId: "afternoon-four",
+                    placeName: "오후 네시",
                     thumbUri: img(1060),
                     fade: "weeks",
                 },
                 {
                     id: "daeheung-cathedral",
-                    label: "대흥동 성당",
+                    detailId: "daeheung-cathedral",
+                    placeName: "대흥동 성당",
                     thumbUri: img(488),
                     fade: "weeks",
                 },
@@ -62,19 +74,22 @@ export const archiveMock = {
             items: [
                 {
                     id: "hanbat-kalguksu",
-                    label: "한밭 손칼국수",
+                    detailId: "hanbat-kalguksu",
+                    placeName: "한밭 손칼국수",
                     thumbUri: img(292),
                     fade: "months",
                 },
                 {
                     id: "skyroad",
-                    label: "으능정이 스카이로드",
+                    detailId: "skyroad",
+                    placeName: "으능정이 스카이로드",
                     thumbUri: img(674),
                     fade: "months",
                 },
                 {
                     id: "gyejoksan",
-                    label: "계족산 황톳길",
+                    detailId: "gyejoksan",
+                    placeName: "계족산 황톳길",
                     thumbUri: img(1015),
                     fade: "months",
                 },

@@ -1,0 +1,12 @@
+package com.ktc.chungnam3.remembrall.auth.token;
+
+import jakarta.validation.constraints.NotNull;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
+
+import java.time.Duration;
+
+@Validated
+@ConfigurationProperties(prefix = "auth.session")
+public record SessionProperties(@NotNull Duration ttl) {
+}

@@ -1,6 +1,8 @@
 // 저장물 썸네일. Figma C/Thumb. 오래 잊은 것일수록 bg/fade 를 덮어 바래게 한다.
 // 폭은 style 로 받고(고정 폭 또는 flex) 높이는 9:16 비율로 정해진다.
+// 이미지를 불러오지 못하면 이미지를 빼고 bg/placeholder 를 보여준다 (흐름 메모 08b).
 import { Image } from "expo-image";
+import { useEffect, useState } from "react";
 import { type StyleProp, StyleSheet, View, type ViewStyle } from "react-native";
 
 import Icon from "./Icon";
@@ -21,13 +23,17 @@ export default function Thumb({
     showSource = true,
     style,
 }: Props) {
+    const [failed, setFailed] = useState(false);
+    useEffect(() => setFailed(false), [uri]);
+
     return (
         <View style={[styles.frame, style]}>
-            {uri != null && (
+            {uri != null && !failed && (
                 <Image
                     source={{ uri }}
                     style={StyleSheet.absoluteFill}
                     contentFit="cover"
+                    onError={() => setFailed(true)}
                 />
             )}
             <View

@@ -1,12 +1,19 @@
 // 저장 결과 목 데이터. resultId 로 찾는다. 화면 props 모양 그대로이며 서버 계약이 아니다.
 // 문구는 Figma 02~05 그대로. 제목의 따옴표는 컴포넌트가 붙인다.
-const img = (id: number) => `https://picsum.photos/id/${id}/360/640`;
+import { img } from "./img";
 
+// 07 "확인 필요" 셀과 같은 저장물.
 const breadSource = {
     thumbUri: img(431),
     meta: "방금 저장 · YouTube Shorts",
     title: "대전 가면 꼭 들르는 빵집 3곳",
     handle: "@daejeon.bread",
+};
+
+const sungsimdangMain = {
+    id: "sungsimdang-main",
+    name: "성심당 본점",
+    address: "대전 중구 은행동",
 };
 
 export const saveResultsMock = {
@@ -15,11 +22,7 @@ export const saveResultsMock = {
         state: "needsConfirmation",
         source: breadSource,
         candidates: [
-            {
-                id: "sungsimdang-main",
-                name: "성심당 본점",
-                address: "대전 중구 은행동",
-            },
+            sungsimdangMain,
             {
                 id: "sungsimdang-dcc",
                 name: "성심당 DCC점",
@@ -27,10 +30,21 @@ export const saveResultsMock = {
             },
         ],
     },
-    // 03 저장 · 분석 중 (2061:816)
+    // 02b 저장 · 확인 필요, 후보 1곳 (2094:303)
+    "needs-confirmation-one": {
+        state: "needsConfirmation",
+        source: breadSource,
+        candidates: [sungsimdangMain],
+    },
+    // 03 저장 · 분석 중 (2061:816). 07 "분석 중" 셀과 같은 저장물.
     analyzing: {
         state: "analyzing",
-        source: breadSource,
+        source: {
+            thumbUri: img(225),
+            meta: "방금 저장 · YouTube Shorts",
+            title: "대흥동 골목 산책 코스",
+            handle: "@walk.daejeon",
+        },
     },
     // 04 저장 · 장소 없음 (2061:842)
     "no-place": {
