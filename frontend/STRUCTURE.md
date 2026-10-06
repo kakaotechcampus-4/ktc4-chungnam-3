@@ -89,10 +89,12 @@ frontend/
     └── shared/
         ├── auth/             로그인 · 세션
         │   ├── session.ts        세션 저장(안전한 저장소) · 메모리 캐시 · 구독(useSession)
-        │   ├── providers.ts      [확장 포인트] 로그인 제공자 목록
+        │   ├── providers.ts      [확장 포인트] 로그인 제공자 목록(엔드포인트 · 요청 바디 포함)
+        │   ├── login.ts          로그인 흐름. 제공자 토큰 → 백엔드 → 세션 저장 → 00c
         │   └── kakao.ts          카카오 로그인(SDK 호출 → 카카오 액세스 토큰)
         ├── permissions/      알림 · 위치 권한 조회와 요청(온보딩 · 설정이 쓴다)
         ├── api/
+        │   ├── config.ts     API 기본 주소(EXPO_PUBLIC_API_BASE_URL). 비면 목 모드
         │   ├── client.ts     기본 주소 · Bearer 헤더 · ApiError · 401 처리
         │   ├── mappers/      ★ 서버 응답 -> 앱 모델 변환. 백엔드 변경 흡수 지점
         │   └── mock/         UI 개발용 목 데이터. 화면 props 모양. 서버 계약 아님
@@ -183,17 +185,22 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 
 - 백엔드(구현 완료): `POST /api/auth/kakao {kakaoAccessToken}` → `{sessionToken, sessionExpiresAt}`, `POST /api/auth/logout` → 204.
   이후 모든 요청은 `Authorization: Bearer <sessionToken>`. 리프레시 토큰은 없다. 만료되면 다시 로그인한다.
-- 세션은 `expo-secure-store`(Android Keystore)에만 둔다. AsyncStorage 에 평문으로 두지 않는다.
+- 세션은 `expo-secure-store`(Android Keystore)의 키 `remembrall.session` 하나에 `{sessionToken, sessionExpiresAt}` 로 둔다. AsyncStorage 에 평문으로 두지 않는다.
+  저장소를 읽지 못하면 세션이 없는 것으로 본다.
 - 시작할 때 `sessionExpiresAt` 이 지난 세션은 없는 것으로 본다. 기본 수명은 백엔드 설정(30일)이다.
 - 회원당 Device 는 1개다. 다른 폰으로 로그인하면 기존 폰의 세션이 바뀌어 다음 요청에서 401 이 난다.
 - 백엔드는 카카오 토큰의 `app_id` 를 자기 설정(`kakao.app-id`)과 대조한다. 앱은 백엔드와 같은 카카오 앱 키를 쓴다.
 - 아직 연결하지 않는 것: FCM 토큰 등록(`PUT /api/devices/fcm-token`)은 Firebase 프로젝트 설정(google-services.json)이 필요하다.
   약관 동의 API 는 백엔드 문서에만 있어 연결 시점을 백엔드와 정한다. 00b 의 약관 문구는 링크(이용약관 · 개인정보 처리방침)만 둔다.
-- 의존 방향: `shared/api/client.ts` → `shared/auth/session.ts`, `shared/auth/providers.ts` → `shared/api/client.ts`. `session.ts` 는 클라이언트를 import 하지 않는다(순환 방지).
+- 의존 방향: `shared/api/client.ts` → `shared/auth/session.ts`, `shared/auth/login.ts` → `client.ts` · `session.ts` · `providers.ts`.
+  `session.ts` 는 클라이언트를 import 하지 않는다(순환 방지). 둘이 같이 읽는 API 주소는 `shared/api/config.ts` 에 둔다.
 
 ## API 클라이언트
 
 - 기본 주소는 `EXPO_PUBLIC_API_BASE_URL` 이다. 배포 주소가 정해질 때까지 로컬 백엔드(`http://<PC LAN IP>:8080`)를 쓴다.
+- **목 모드**: 주소가 비어 있으면 서버를 부르지 않는다. 시작은 `MOCK_SCENARIO.signedIn`, 로그인은 제공자 로그인(목)만 하고 세션을 저장하지 않는다(가짜 토큰을 저장소에 남기지 않는다).
+- 요청 시간 제한은 15초다. 저장 API 처럼 긴 요청은 붙일 때 요청별로 정한다.
+- 로그인 요청의 401(제공자 토큰 거절)은 세션 만료가 아니라 로그인 실패다(00b-err). 세션을 실어 보낸 요청의 401 만 세션을 지운다.
   http(cleartext) 허용은 개발 빌드에서만 켜고 출시 빌드에는 넣지 않는다.
 - 세션이 있으면 Bearer 헤더를 붙인다. 응답은 래핑하지 않고, 에러 바디 `{code, message}` 는 `ApiError` 로 바꾼다.
 - 401 이면 세션을 지운다. 화면은 세션 구독으로 Onboarding(00b)으로 바뀐다.
@@ -215,6 +222,8 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 
 - `expo-dev-client` 로 만든 개발 빌드가 기본 실행 환경이다. Expo Go 는 지도가 없는 화면 확인용으로만 쓴다(터미널 `s` 로 전환).
 - EAS 프로젝트 `remembrall` 은 Expo 조직 `ktc4-chungnam-3` 소유다. 팀원은 조직 초대로 권한을 받는다.
+- 기존 개발 빌드에 없는 네이티브 모듈은 import 만 해도 앱이 멈춘다. 새 네이티브 모듈은 재빌드 전까지 쓰는 경로에서만 지연 로드하거나, 재빌드 후에 연결한다.
+  (예: `shared/auth/session.ts` 는 expo-secure-store 를 실제 모드에서 처음 쓸 때 불러오고, 모듈이 없으면 세션을 메모리에만 두고 경고한다.)
 - `android/` 는 gitignore 대상이며 빌드 때마다 prebuild(CNG)로 새로 생성된다. 네이티브 설정은 `app.json` · `app.config.ts` 플러그인으로만 바꾼다.
 - Google Maps 키는 `GOOGLE_MAPS_ANDROID_API_KEY` 환경 변수로만 받는다. `EXPO_PUBLIC_` 접두어를 쓰지 않아 JS 번들에 들어가지 않는다.
   로컬은 `.env.local`, EAS 는 `development` 환경의 secret 변수다. 키가 없으면 경고만 하고 빌드는 막지 않는다.

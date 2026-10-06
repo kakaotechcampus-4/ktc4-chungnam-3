@@ -95,6 +95,32 @@ Expo Go 에서는:
 
 빈 상태(06 · 07b), 위치 권한, 깨진 썸네일은 `src/shared/api/mock/scenario.ts` 의 `MOCK_SCENARIO` 플래그를 바꾸고 reload 해서 본다.
 
+## 로컬 백엔드 연결
+
+`EXPO_PUBLIC_API_BASE_URL` 이 없으면 목 모드다(서버를 부르지 않고 목 로그인 · 목 세션). 배포 주소가 정해질 때까지는 PC 에서 띄운 백엔드에 붙인다.
+
+1. 백엔드를 PC 에서 실행한다(기본 포트 8080).
+2. `ipconfig` 로 PC 의 LAN IP(와이파이 어댑터의 IPv4)를 확인하고 `frontend/.env.local` 에 적는다.
+    ```
+    EXPO_PUBLIC_API_BASE_URL=http://192.168.x.x:8080
+    ```
+3. 값은 JS 번들에 들어가므로 바꾸면 Metro 를 다시 시작한다: `npx expo start --clear`
+4. 폰과 PC 가 같은 와이파이에 있어야 한다.
+5. PC 방화벽에서 8080 인바운드를 개인 네트워크에서만 연다(관리자 PowerShell).
+    ```powershell
+    New-NetFirewallRule -DisplayName "Remembrall API 8080" -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow -Profile Private
+    ```
+    와이파이가 Windows 에서 "공용 네트워크"로 잡혀 있으면 이 규칙이 적용되지 않는다. 설정 → 네트워크 및 인터넷 → Wi-Fi → 연결된 네트워크 속성에서 "개인 네트워크"로 바꾼다.
+    작업이 끝나면 규칙을 지운다.
+    ```powershell
+    Remove-NetFirewallRule -DisplayName "Remembrall API 8080"
+    ```
+
+- 주소를 지우고 Metro 를 다시 시작하면 목 모드로 돌아간다.
+- 개발 빌드는 JS 를 Metro 에서 받으므로 EAS 환경 변수는 필요 없다. 출시 빌드를 만들 때 등록한다.
+- 세션 저장(expo-secure-store)은 네이티브 모듈이다. 이 모듈이 들어가기 전에 만든 개발 빌드에서는 실제 모드에서 세션이 이번 실행 동안만 메모리에 남고, 경고("개발 빌드를 다시 만드세요")가 뜬다. 앱을 다시 켜면 다시 로그인해야 한다. 저장까지 확인하려면 Expo Go 를 쓰거나 개발 빌드를 다시 만든다. 목 모드는 이 모듈을 불러오지 않는다.
+- 카카오 로그인이 아직 목이라, 실제 모드에서 로그인하면 백엔드가 토큰을 거절해 00b-err 가 뜬다(카카오 SDK 연동 전까지 정상).
+
 ## 온보딩 다시 보기
 
 지금은 세션과 로그인이 목이다(`MOCK_SCENARIO`). Expo Go 에서도 확인할 수 있다.

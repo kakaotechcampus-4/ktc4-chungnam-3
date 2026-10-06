@@ -1,15 +1,15 @@
 // 00b 로그인 2175:722 · 00b-err 2175:742. 제공자 목록(shared/auth/providers)을 순회해 버튼을 그린다.
 // 사용자가 제공자 창을 닫으면 오류 없이 머물고, 통신 · 서버 오류일 때만 버튼 위에 문구를 보인다.
-// 로그인에 성공하면 인증 상태가 onboarding 으로 바뀌어 RootNavigator 가 00c 를 보인다.
+// 로그인에 성공하면 인증 상태가 onboarding 으로 바뀌어 RootNavigator 가 00c 를 보인다(shared/auth/login).
 import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { onboardingMock } from "../../shared/api/mock";
+import { signIn } from "../../shared/auth/login";
 import {
     type LoginProvider,
     LOGIN_PROVIDERS,
 } from "../../shared/auth/providers";
-import { completeLogin } from "../../shared/auth/session";
 import { colors, metrics, spacing, typography } from "../../shared/ui/theme";
 import LoginError from "./components/LoginError";
 import OnboardingLayout from "./components/OnboardingLayout";
@@ -21,14 +21,13 @@ export default function LoginScreen() {
     const [pending, setPending] = useState(false);
     const [failed, setFailed] = useState<LoginProvider>();
 
-    const signIn = async (provider: LoginProvider) => {
+    const start = async (provider: LoginProvider) => {
         if (pending) return;
         setPending(true);
         setFailed(undefined);
         try {
-            const result = await provider.signIn();
-            // 2번 커밋: 제공자 토큰을 백엔드에 보내 세션을 받고 저장한 뒤 넘어간다.
-            if (result.type === "success") completeLogin();
+            // 성공하면 화면이 00c 로 바뀐다. 창을 닫았으면(cancelled) 그대로 머문다.
+            await signIn(provider);
         } catch {
             setFailed(provider);
         } finally {
@@ -55,7 +54,7 @@ export default function LoginScreen() {
                                 variant={provider.variant}
                                 label={provider.label}
                                 disabled={pending}
-                                onPress={() => signIn(provider)}
+                                onPress={() => start(provider)}
                             />
                         ))}
                     </View>
