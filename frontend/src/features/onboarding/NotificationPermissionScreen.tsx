@@ -1,9 +1,12 @@
 // 00c 알림 권한 2175:764. 알림 미리보기 · "알림 허용하기" / "나중에 할게요" → 00d.
+// 허용하기는 알림 권한을 요청하고(안드로이드 13+ 시스템 창) 결과와 관계없이 00d 로 간다.
 // 권한 단계는 화면을 교체한다. 시스템 뒤로 가기는 앱을 닫는다.
 import { StackActions, useNavigation } from "@react-navigation/native";
+import { useRef } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { onboardingMock } from "../../shared/api/mock";
+import { requestNotificationPermission } from "../../shared/permissions/notifications";
 import Button from "../../shared/ui/Button";
 import { metrics, spacing } from "../../shared/ui/theme";
 import NotificationPreview from "./components/NotificationPreview";
@@ -13,10 +16,19 @@ import OnboardingLayout, {
 
 export default function NotificationPermissionScreen() {
     const navigation = useNavigation();
+    // 요청 중에는 다시 누르지 못하게 한다.
+    const pending = useRef(false);
     const next = () =>
         navigation.dispatch(StackActions.replace("LocationPermission"));
-    // 4번 커밋: 알림 권한(안드로이드 13+)을 요청한 뒤 넘어간다.
-    const allow = next;
+    const allow = async () => {
+        if (pending.current) return;
+        pending.current = true;
+        try {
+            await requestNotificationPermission();
+        } finally {
+            next();
+        }
+    };
 
     return (
         <OnboardingLayout

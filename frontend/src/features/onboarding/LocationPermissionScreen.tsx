@@ -1,7 +1,10 @@
 // 00d 위치 1단계 2175:808. "위치 허용하기" → 00e, "나중에 할게요" → 00f.
-// '앱 사용 중' 권한 없이는 '항상 허용'을 받을 수 없어 미루면 00e 를 건너뛴다.
+// '앱 사용 중' 권한 없이는 '항상 허용'을 받을 수 없어 미루거나 거절하면 00e 를 건너뛴다.
+// 허용하기는 앱 사용 중 위치를 요청한다. 허용(이번만 포함) → 00e, 거절 → 00f.
 import { StackActions, useNavigation } from "@react-navigation/native";
+import { useRef } from "react";
 
+import { requestForegroundLocation } from "../../shared/permissions/location";
 import Button from "../../shared/ui/Button";
 import { metrics } from "../../shared/ui/theme";
 import OnboardingLayout, {
@@ -12,9 +15,21 @@ import PermissionStep from "./components/PermissionStep";
 
 export default function LocationPermissionScreen() {
     const navigation = useNavigation();
-    // 4번 커밋: 앱 사용 중 위치 권한을 요청하고, 허용하면 00e · 거절하면 00f 로 간다.
-    const allow = () =>
-        navigation.dispatch(StackActions.replace("BackgroundLocation"));
+    // 요청 중에는 다시 누르지 못하게 한다.
+    const pending = useRef(false);
+    const allow = async () => {
+        if (pending.current) return;
+        pending.current = true;
+        // 요청이 실패하면 거절로 보고 00f 로 간다.
+        const result = await requestForegroundLocation().catch(
+            () => "denied" as const,
+        );
+        navigation.dispatch(
+            StackActions.replace(
+                result === "denied" ? "FirstSave" : "BackgroundLocation",
+            ),
+        );
+    };
     const later = () => navigation.dispatch(StackActions.replace("FirstSave"));
 
     return (

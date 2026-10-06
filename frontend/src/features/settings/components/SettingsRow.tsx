@@ -1,5 +1,6 @@
 // 설정 줄 하나. 제목(+ 설명) · 값 · > 또는 Switch.
 // Switch 줄은 줄 전체를 누르면 켜짐·꺼짐이 바뀌고, 접근성 역할 switch 도 줄에 붙는다.
+// 설명은 알림이 필요한 상태(11b 기기 알림 꺼짐)면 status/danger-fg 로 칠한다.
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import Icon from "../../../shared/ui/Icon";
@@ -15,6 +16,7 @@ import Switch from "./Switch";
 type Props = {
     title: string;
     description?: string;
+    descriptionTone?: "default" | "danger";
     value?: string;
     chevron?: boolean;
     switchValue?: boolean;
@@ -25,6 +27,7 @@ type Props = {
 export default function SettingsRow({
     title,
     description,
+    descriptionTone = "default",
     value,
     chevron = false,
     switchValue,
@@ -53,7 +56,13 @@ export default function SettingsRow({
                     {title}
                 </Text>
                 {description != null && (
-                    <Text numberOfLines={1} style={styles.caption}>
+                    <Text
+                        numberOfLines={1}
+                        style={[
+                            styles.caption,
+                            descriptionTone === "danger" && styles.danger,
+                        ]}
+                    >
                         {description}
                     </Text>
                 )}
@@ -63,7 +72,13 @@ export default function SettingsRow({
                     {value}
                 </Text>
             )}
-            {chevron && <Icon name="chevronRight" size={size.iconSm} />}
+            {chevron && (
+                <Icon
+                    name="chevronRight"
+                    size={size.iconSm}
+                    color={colors.icon.secondary}
+                />
+            )}
             {isSwitch && <Switch value={switchValue} />}
         </Pressable>
     );
@@ -88,5 +103,8 @@ const styles = StyleSheet.create({
     caption: {
         ...typography.captionMeta,
         color: colors.text.secondary,
+    },
+    danger: {
+        color: colors.status.dangerFg,
     },
 });

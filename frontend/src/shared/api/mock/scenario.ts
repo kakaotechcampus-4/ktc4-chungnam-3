@@ -16,7 +16,7 @@ export const MOCK_SCENARIO: {
     // true 면 목 썸네일 URL 을 깨뜨려 로드 실패(bg/placeholder) 를 본다.
     brokenThumbnails: boolean;
 } = {
-    signedIn: true,
+    signedIn: false,
     loginResult: "success",
     nearbyEmpty: false,
     archiveEmpty: false,

@@ -93,6 +93,9 @@ frontend/
         │   ├── login.ts          로그인 흐름. 제공자 토큰 → 백엔드 → 세션 저장 → 00c
         │   └── kakao.ts          카카오 로그인(SDK 호출 → 카카오 액세스 토큰)
         ├── permissions/      알림 · 위치 권한 조회와 요청(온보딩 · 설정이 쓴다)
+        │   ├── notifications.ts  알림 권한 조회 · 요청 · 시스템 알림 설정 열기
+        │   ├── location.ts       위치 권한 조회(always · whileInUse · denied) · 앱 사용 중 · 백그라운드 요청
+        │   └── usePermissionStatus.ts  진입 · 앞으로 돌아올 때 다시 읽는 hook
         ├── api/
         │   ├── config.ts     API 기본 주소(EXPO_PUBLIC_API_BASE_URL). 비면 목 모드
         │   ├── client.ts     기본 주소 · Bearer 헤더 · ApiError · 401 처리
@@ -218,12 +221,32 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   SDK 는 `@react-native-kakao/core` · `user`(TurboModule, config plugin 내장, 카카오톡 앱 로그인 지원)를 쓴다.
 - 로그인 실패(00b-err): 사용자가 제공자 창을 닫으면 오류 없이 00b 에 머문다. 통신 · 서버 오류일 때만 버튼 위에 오류 문구를 보인다.
 
+## 기기 권한
+
+- 00c 알림: 허용하기 → 알림 권한 요청(안드로이드 13+ 시스템 창, 12 이하는 자동 허용) → 결과와 관계없이 00d. 나중에 → 00d.
+- 00d 위치 1단계: 허용하기 → 앱 사용 중 위치 요청. 허용(이번만 포함) → 00e, 거절 → 00f. 나중에 → 00f.
+- 00e 위치 2단계: 설정 열기 → 백그라운드 위치 요청. 안드로이드 11+ 는 시스템이 이 앱의 위치 권한 화면을 연다. 돌아오면 결과와 관계없이 00f.
+- 설정(11): 위치 권한 행은 실제 상태(항상 허용 · 앱 사용 중에만 허용 · 허용 안 함). 기기 알림이 꺼져 있으면(허용 전 포함)
+  "근처에 오면 알려주기" 행이 11b 가 된다(설명 "기기 알림이 꺼져 있어요. 눌러서 켜주세요" status/danger-fg, 스위치 대신 >, 역할 button, 누르면 시스템 알림 설정).
+  둘 다 화면에 들어올 때와 앱이 앞으로 돌아올 때 다시 읽는다.
+- 매니페스트 권한과 이유:
+    - `ACCESS_FINE_LOCATION` · `ACCESS_COARSE_LOCATION`(expo-location): 지오펜스 진입 판정. 안드로이드 12+ 는 둘을 함께 선언한다.
+    - `ACCESS_BACKGROUND_LOCATION`(expo-location plugin `isAndroidBackgroundLocationEnabled`): 앱이 닫혀 있어도 OS 지오펜스가 진입 이벤트를 받는다.
+    - `POST_NOTIFICATIONS`(expo-notifications): 안드로이드 13+ 알림 허용.
+    - `RECEIVE_BOOT_COMPLETED`(expo-notifications 기본): 재부팅 후 예약 알림 복원 · 지오펜스 재등록.
+    - 포그라운드 서비스 권한은 넣지 않는다(`isAndroidForegroundServiceEnabled: false`). 지오펜싱에는 필요 없다.
+- Play 정책상 백그라운드 위치는 사용 전 고지가 필요하다. 00d · 00e 가 그 역할이다.
+
 ## 개발 빌드
 
 - `expo-dev-client` 로 만든 개발 빌드가 기본 실행 환경이다. Expo Go 는 지도가 없는 화면 확인용으로만 쓴다(터미널 `s` 로 전환).
 - EAS 프로젝트 `remembrall` 은 Expo 조직 `ktc4-chungnam-3` 소유다. 팀원은 조직 초대로 권한을 받는다.
 - 기존 개발 빌드에 없는 네이티브 모듈은 import 만 해도 앱이 멈춘다. 새 네이티브 모듈은 재빌드 전까지 쓰는 경로에서만 지연 로드하거나, 재빌드 후에 연결한다.
-  (예: `shared/auth/session.ts` 는 expo-secure-store 를 실제 모드에서 처음 쓸 때 불러오고, 모듈이 없으면 세션을 메모리에만 두고 경고한다.)
+  (예: `shared/auth/session.ts` 는 expo-secure-store 를 실제 모드에서 처음 쓸 때 불러오고, 모듈이 없으면 세션을 메모리에만 두고 경고한다.
+  `shared/permissions/` 는 expo-location · expo-notifications 를 처음 쓸 때 불러오고, 모듈이 없으면 "unavailable" 을 돌려준다. 이 두 패키지는 `shared/permissions/` 밖에서 import 하지 않는다.)
+- 안드로이드 Expo Go(SDK 53+)에는 expo-notifications 기능이 없다. 불러오기만 해도 예외가 나므로 `isRunningInExpoGo()`(expo-notifications 가 쓰는 판별과 같다)이면 불러오지 않고 "unavailable" 로 처리한다.
+  알림 권한(00c 창 · 11b)은 다시 만든 개발 빌드에서만 확인한다.
+- 플랫폼 · Expo Go 지원 여부를 전제로 할 때는 계획 단계에서 문서 · 패키지 코드로 근거를 확인하고 적는다.
 - `android/` 는 gitignore 대상이며 빌드 때마다 prebuild(CNG)로 새로 생성된다. 네이티브 설정은 `app.json` · `app.config.ts` 플러그인으로만 바꾼다.
 - Google Maps 키는 `GOOGLE_MAPS_ANDROID_API_KEY` 환경 변수로만 받는다. `EXPO_PUBLIC_` 접두어를 쓰지 않아 JS 번들에 들어가지 않는다.
   로컬은 `.env.local`, EAS 는 `development` 환경의 secret 변수다. 키가 없으면 경고만 하고 빌드는 막지 않는다.
