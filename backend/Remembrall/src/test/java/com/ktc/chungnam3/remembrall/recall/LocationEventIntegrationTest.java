@@ -3,6 +3,10 @@ package com.ktc.chungnam3.remembrall.recall;
 import com.ktc.chungnam3.remembrall.auth.token.SessionTokenHasher;
 import com.ktc.chungnam3.remembrall.common.exception.ApiErrorResponse;
 import com.ktc.chungnam3.remembrall.common.exception.ErrorCode;
+import com.ktc.chungnam3.remembrall.consent.config.ConsentProperties;
+import com.ktc.chungnam3.remembrall.consent.dto.ConsentRequest;
+import com.ktc.chungnam3.remembrall.consent.service.MemberConsentService;
+import com.ktc.chungnam3.remembrall.domain.memberconsent.ConsentType;
 import com.ktc.chungnam3.remembrall.domain.device.Device;
 import com.ktc.chungnam3.remembrall.domain.member.AuthProvider;
 import com.ktc.chungnam3.remembrall.domain.member.Member;
@@ -84,7 +88,9 @@ import static org.mockito.Mockito.verifyNoInteractions;
         "spring.ai.google.genai.api-key=test-api-key",
         "spring.ai.google.genai.embedding.api-key=test-api-key",
         "youtube.api.key=test-api-key",
-        "kakao.app-id=1"
+        "kakao.app-id=1",
+        "dataportal.api.key=test-api-key",
+        "locationiq.api.key=test-api-key"
 })
 @Import(LocationEventIntegrationTest.ClockConfiguration.class)
 class LocationEventIntegrationTest {
@@ -102,6 +108,12 @@ class LocationEventIntegrationTest {
 
     @Autowired
     private MemberRepository memberRepository;
+
+    @Autowired
+    private MemberConsentService consents;
+
+    @Autowired
+    private ConsentProperties consentProperties;
 
     @Autowired
     private DeviceRepository deviceRepository;
@@ -281,6 +293,31 @@ class LocationEventIntegrationTest {
     void exactly30MinutesOldIsAccepted() throws Exception {
         assertAccepted(post(fixture, body(fixture.placeId(), UUID.randomUUID(), NOW.minusSeconds(1800), "ENTER", null)));
         assertThat(executionRepository.count()).isOne();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"missing", "withdrawn", "publicOnly"})
+    void locationConsentIsRequiredBeforeEventCanCreateExecution(String state) throws Exception {
+        consents.change(fixture.memberId(), ConsentType.LOCATION_BASED_SERVICE, new ConsentRequest(false, null));
+        if (!"withdrawn".equals(state)) {
+            jdbcTemplate.update("DELETE FROM member_consent WHERE member_id = ?", fixture.memberId());
+        }
+        if ("publicOnly".equals(state)) {
+            consents.change(fixture.memberId(), ConsentType.PUBLIC_CANDIDATE_CONTRIBUTION,
+                    new ConsentRequest(true, consentProperties.currentVersion(ConsentType.PUBLIC_CANDIDATE_CONTRIBUTION)));
+        }
+        UUID eventId = UUID.randomUUID();
+        String event = body(fixture.placeId(), eventId, NOW, "ENTER", null);
+
+        assertAccepted(post(fixture, event));
+        assertThat(executionRepository.count()).isZero();
+        verifyNoInteractions(agent);
+
+        consents.change(fixture.memberId(), ConsentType.LOCATION_BASED_SERVICE,
+                new ConsentRequest(true, consentProperties.currentVersion(ConsentType.LOCATION_BASED_SERVICE)));
+        assertAccepted(post(fixture, event));
+        assertThat(executionRepository.count()).isOne();
+        verify(agent, times(1)).execute(any(), any());
     }
 
     @ParameterizedTest
@@ -494,6 +531,8 @@ class LocationEventIntegrationTest {
                 VerificationProvider.KAKAO, UUID.randomUUID().toString(), NOW, NOW)).getId();
         UUID triggerId = UUID.randomUUID();
         transactions.executeWithoutResult(status -> triggerRepository.insertIfAbsent(triggerId, memberId, placeId, NOW));
+        consents.change(memberId, ConsentType.LOCATION_BASED_SERVICE,
+                new ConsentRequest(true, consentProperties.currentVersion(ConsentType.LOCATION_BASED_SERVICE)));
         return new Fixture(memberId, placeId, triggerId, token);
     }
 

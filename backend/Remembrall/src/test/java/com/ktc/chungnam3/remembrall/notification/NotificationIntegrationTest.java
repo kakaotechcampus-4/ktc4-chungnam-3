@@ -3,6 +3,10 @@ package com.ktc.chungnam3.remembrall.notification;
 import com.ktc.chungnam3.remembrall.auth.token.SessionTokenHasher;
 import com.ktc.chungnam3.remembrall.common.exception.ApiErrorResponse;
 import com.ktc.chungnam3.remembrall.common.exception.ErrorCode;
+import com.ktc.chungnam3.remembrall.consent.config.ConsentProperties;
+import com.ktc.chungnam3.remembrall.consent.dto.ConsentRequest;
+import com.ktc.chungnam3.remembrall.consent.service.MemberConsentService;
+import com.ktc.chungnam3.remembrall.domain.memberconsent.ConsentType;
 import com.ktc.chungnam3.remembrall.domain.device.Device;
 import com.ktc.chungnam3.remembrall.domain.member.AuthProvider;
 import com.ktc.chungnam3.remembrall.domain.member.Member;
@@ -91,7 +95,8 @@ import static org.mockito.Mockito.when;
 @Testcontainers
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "spring.ai.google.genai.api-key=test-api-key", "spring.ai.google.genai.embedding.api-key=test-api-key",
-        "youtube.api.key=test-api-key", "kakao.app-id=1"
+        "youtube.api.key=test-api-key", "kakao.app-id=1",
+        "dataportal.api.key=test-api-key", "locationiq.api.key=test-api-key"
 })
 @Import(NotificationIntegrationTest.ClockConfiguration.class)
 class NotificationIntegrationTest {
@@ -103,6 +108,8 @@ class NotificationIntegrationTest {
             DockerImageName.parse("pgvector/pgvector:pg16").asCompatibleSubstituteFor("postgres"));
 
     @Autowired private MemberRepository members;
+    @Autowired private MemberConsentService consents;
+    @Autowired private ConsentProperties consentProperties;
     @Autowired private DeviceRepository devices;
     @Autowired private PlaceRepository places;
     @Autowired private TriggerRepository triggers;
@@ -573,6 +580,8 @@ class NotificationIntegrationTest {
             links.insertIfAbsent(UUID.randomUUID(), contentId, placeId, "Link", NOW);
         });
         jdbc.update("UPDATE content SET title = 'Content title', summary = 'Summary' WHERE id = ?", contentId);
+        consents.change(memberId, ConsentType.LOCATION_BASED_SERVICE,
+                new ConsentRequest(true, consentProperties.currentVersion(ConsentType.LOCATION_BASED_SERVICE)));
         return new Fixture(memberId, deviceId, token, fcm, placeId, triggerId, contentId, saveId);
     }
 

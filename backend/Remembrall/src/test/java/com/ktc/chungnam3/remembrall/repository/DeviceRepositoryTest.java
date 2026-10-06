@@ -29,7 +29,7 @@ class DeviceRepositoryTest {
     @Container
     @ServiceConnection
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(
-            DockerImageName.parse("postgres:16")
+            DockerImageName.parse("pgvector/pgvector:pg16").asCompatibleSubstituteFor("postgres")
     );
 
     @Autowired

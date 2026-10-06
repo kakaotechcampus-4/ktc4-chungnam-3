@@ -2,6 +2,7 @@ package com.ktc.chungnam3.remembrall.content;
 
 import com.ktc.chungnam3.remembrall.content.dto.AnalysisOutcome;
 import com.ktc.chungnam3.remembrall.content.dto.ContentSaveClaim;
+import com.ktc.chungnam3.remembrall.content.embedding.EmbeddingClient;
 import com.ktc.chungnam3.remembrall.content.service.ContentAnalysisResultService;
 import com.ktc.chungnam3.remembrall.content.service.ContentPersistenceService;
 import com.ktc.chungnam3.remembrall.domain.content.Content;
@@ -36,6 +37,7 @@ import org.testcontainers.utility.DockerImageName;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -82,6 +84,7 @@ class ContentAnalysisResultIntegrationTest {
 
     private ContentPersistenceService persistenceService;
     private ContentAnalysisResultService resultService;
+    private RecordingEmbeddingClient embeddingClient;
     private UUID memberId;
 
     @BeforeEach
@@ -101,7 +104,8 @@ class ContentAnalysisResultIntegrationTest {
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 transactionManager
         );
-        resultService = new ContentAnalysisResultService(persistenceService);
+        embeddingClient = new RecordingEmbeddingClient();
+        resultService = new ContentAnalysisResultService(persistenceService, embeddingClient);
         memberId = memberRepository.save(Member.create(
                 AuthProvider.KAKAO,
                 UUID.randomUUID().toString(),
@@ -131,6 +135,7 @@ class ContentAnalysisResultIntegrationTest {
         assertThat(content.getAnalyzedAt()).isEqualTo(NOW);
         assertThat(placeRepository.count()).isZero();
         assertThat(contentPlaceRepository.count()).isZero();
+        assertEmbedding(claim.contentId());
     }
 
     @Test
@@ -186,6 +191,8 @@ class ContentAnalysisResultIntegrationTest {
                 secondClaim.contentId(), storedPlace.getId())).get()
                 .extracting(ContentPlace::getDescription)
                 .isEqualTo("Second description");
+        assertEmbedding(firstClaim.contentId());
+        assertEmbedding(secondClaim.contentId());
     }
 
     @Test
@@ -211,9 +218,12 @@ class ContentAnalysisResultIntegrationTest {
         assertThat(partial.getAnalysisStatus()).isEqualTo(ContentAnalysisStatus.PARTIAL);
         assertThat(partial.getLastAnalysisErrorCode()).isEqualTo("PLACE_SEARCH_API_ERROR");
         assertThat(partial.getAnalyzedAt()).isEqualTo(NOW);
+        assertEmbedding(partialClaim.contentId());
         assertThat(failed.getAnalysisStatus()).isEqualTo(ContentAnalysisStatus.FAILED);
         assertThat(failed.getLastAnalysisErrorCode()).isEqualTo("VIDEO_UNAVAILABLE");
         assertThat(failed.getAnalyzedAt()).isEqualTo(NOW);
+        assertThat(embeddingClient.tasks).containsExactly(EmbeddingClient.TaskType.RETRIEVAL_DOCUMENT);
+        assertNoEmbedding(failedClaim.contentId());
     }
 
     @Test
@@ -242,6 +252,99 @@ class ContentAnalysisResultIntegrationTest {
         assertThat(placeRepository.count()).isZero();
         assertThat(contentPlaceRepository.count()).isZero();
         assertThat(findContent(claim).getAnalysisStatus()).isEqualTo(ContentAnalysisStatus.SUCCESS);
+        assertEmbedding(claim.contentId());
+    }
+
+    @Test
+    void embedsOnlyAnalysisTitleSummaryAndCategoryAsDocument() {
+        ContentSaveClaim claim = persistenceService.saveAndClaim(memberId, "embedding-text");
+        AnalysisOutcome outcome = new AnalysisOutcome(
+                ContentAnalysisStatus.SUCCESS, null, ContentSourceStatus.AVAILABLE,
+                "Mountain title", "Mountain summary", "Travel", "v1",
+                Instant.parse("2026-09-27T00:00:00Z"), List.of()
+        );
+
+        assertThat(resultService.applyOutcome(claim.contentId(), outcome)).isTrue();
+
+        assertThat(embeddingClient.texts).containsExactly(
+                "제목: Mountain title\n요약: Mountain summary\n카테고리: Travel");
+        assertThat(embeddingClient.tasks).containsExactly(EmbeddingClient.TaskType.RETRIEVAL_DOCUMENT);
+        assertThat(embeddingClient.texts.getFirst()).doesNotContain("2026", "uncertainty");
+        assertEmbedding(claim.contentId());
+    }
+
+    @Test
+    void keepsAnalysisWhenEmbeddingFailsOrHasWrongDimensions() {
+        ContentSaveClaim exceptionClaim = persistenceService.saveAndClaim(memberId, "embedding-error");
+        embeddingClient.failure = new IllegalStateException("timed out");
+        assertThat(resultService.applyOutcome(exceptionClaim.contentId(), outcome(
+                ContentAnalysisStatus.SUCCESS, null, null, List.of()))).isTrue();
+        assertThat(findContent(exceptionClaim).getAnalysisStatus()).isEqualTo(ContentAnalysisStatus.SUCCESS);
+        assertNoEmbedding(exceptionClaim.contentId());
+
+        ContentSaveClaim invalidClaim = persistenceService.saveAndClaim(memberId, "embedding-wrong-size");
+        embeddingClient.failure = null;
+        embeddingClient.dimensions = 767;
+        assertThat(resultService.applyOutcome(invalidClaim.contentId(), outcome(
+                ContentAnalysisStatus.PARTIAL, ContentAnalysisFailureCode.PLACE_SEARCH_API_ERROR,
+                null, List.of()))).isTrue();
+        assertThat(findContent(invalidClaim).getAnalysisStatus()).isEqualTo(ContentAnalysisStatus.PARTIAL);
+        assertNoEmbedding(invalidClaim.contentId());
+    }
+
+    @Test
+    void doesNotStoreEmbeddingWhenContentIsNoLongerAnalyzing() {
+        ContentSaveClaim claim = persistenceService.saveAndClaim(memberId, "late-embedding");
+        jdbcTemplate.update("UPDATE content SET analysis_status = 'SUCCESS' WHERE id = ?", claim.contentId());
+
+        assertThat(resultService.applyOutcome(claim.contentId(), outcome(
+                ContentAnalysisStatus.SUCCESS, null, null, List.of()))).isFalse();
+
+        assertThat(embeddingClient.tasks).containsExactly(EmbeddingClient.TaskType.RETRIEVAL_DOCUMENT);
+        assertNoEmbedding(claim.contentId());
+    }
+
+    private void assertEmbedding(UUID contentId) {
+        String literal = jdbcTemplate.queryForObject(
+                "SELECT embedding::text FROM content WHERE id = ?", String.class, contentId);
+        assertThat(literal).isNotNull();
+        String[] coordinates = literal.substring(1, literal.length() - 1).split(",");
+        assertThat(coordinates).hasSize(768);
+        double squaredLength = 0;
+        for (String coordinate : coordinates) {
+            double value = Double.parseDouble(coordinate);
+            squaredLength += value * value;
+        }
+        assertThat(Math.sqrt(squaredLength)).isCloseTo(1.0, org.assertj.core.data.Offset.offset(0.0001));
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT embedding_model FROM content WHERE id = ?", String.class, contentId))
+                .isEqualTo("gemini-embedding-001");
+    }
+
+    private void assertNoEmbedding(UUID contentId) {
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT embedding::text FROM content WHERE id = ?", String.class, contentId)).isNull();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT embedding_model FROM content WHERE id = ?", String.class, contentId)).isNull();
+    }
+
+    private static class RecordingEmbeddingClient implements EmbeddingClient {
+        private final List<String> texts = new ArrayList<>();
+        private final List<TaskType> tasks = new ArrayList<>();
+        private RuntimeException failure;
+        private int dimensions = 768;
+
+        @Override
+        public Result embed(String text, TaskType taskType) {
+            texts.add(text);
+            tasks.add(taskType);
+            if (failure != null) {
+                throw failure;
+            }
+            float[] vector = new float[dimensions];
+            vector[0] = 1;
+            return new Result(vector, "gemini-embedding-001");
+        }
     }
 
     private AnalysisOutcome outcome(

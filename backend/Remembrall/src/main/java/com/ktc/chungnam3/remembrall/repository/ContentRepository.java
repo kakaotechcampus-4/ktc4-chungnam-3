@@ -48,6 +48,8 @@ public interface ContentRepository extends JpaRepository<Content, UUID> {
                    analysis_version = COALESCE(:analysisVersion, analysis_version),
                    last_analysis_error_code = :errorCode,
                    metadata_fetched_at = COALESCE(:metadataFetchedAt, metadata_fetched_at),
+                   embedding = CAST(:embedding AS vector),
+                   embedding_model = :embeddingModel,
                    analyzed_at = :analyzedAt,
                    updated_at = :updatedAt
              WHERE id = :contentId
@@ -63,6 +65,8 @@ public interface ContentRepository extends JpaRepository<Content, UUID> {
             @Param("analysisVersion") String analysisVersion,
             @Param("errorCode") String errorCode,
             @Param("metadataFetchedAt") Instant metadataFetchedAt,
+            @Param("embedding") String embedding,
+            @Param("embeddingModel") String embeddingModel,
             @Param("analyzedAt") Instant analyzedAt,
             @Param("updatedAt") Instant updatedAt
     );
