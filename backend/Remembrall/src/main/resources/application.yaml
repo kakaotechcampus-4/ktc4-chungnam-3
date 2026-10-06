@@ -54,3 +54,12 @@ franchise:
   # 프랜차이즈 기준점 반경(PlaceResolver.resolveViaAnchor) - 300 → 1000으로 조정(2026-10-02).
   # "교보문고 광화문점"이 기준점에서 500m+ 떨어져 있어 300m로는 못 찾았던 실측 사례 기반.
   anchor-radius-meters: 1000
+
+# 브이월드(국토교통부) 검색 API - 프랜차이즈 기준점 보정 전용(VWorldSearchClient). 응답은 저장하지
+# 않는다(이용약관 제19조 6항 "사전 승낙 없이 저장 금지" 때문) - 공공 상가정보 반경검색의 중심점으로만
+# 쓰고 버린다.
+vworld:
+  api:
+    key: ${vworld.api.key:}
+  connect-timeout-ms: 2000
+  read-timeout-ms: 3000

@@ -3,20 +3,24 @@ package com.ktc.chungnam3.remembrall.save.place;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class PlaceResolverTest {
 
     // 기본값: 반경 내 상가업소 데이터가 전혀 없는 경우(교통시설·공공기관 등)를 흉내낸다 -
-    // hasNearbyStoreMismatch가 false를 반환해야 하는 케이스. PlaceLookup은 기존 테스트 전부
-    // branchName이 없거나 regionHint가 시·도뿐이라 기준점 경로 자체가 안 타므로 빈 값으로 충분하다.
+    // hasNearbyStoreMismatch가 false를 반환해야 하는 케이스. PlaceLookup/FranchiseAnchorLookup은
+    // 기존 테스트 전부 branchName이 없거나 regionHint가 시·도뿐이라 기준점 경로 자체가 안 타므로
+    // 빈 값으로 충분하다.
     private final PlaceResolver resolver =
-            new PlaceResolver((lon, lat, radiusMeters) -> List.of(), (name, branch, region) -> List.of(), 1000);
+            new PlaceResolver((lon, lat, radiusMeters) -> List.of(), (name, branch, region) -> List.of(),
+                    query -> Optional.empty(), 1000);
 
     private static PlaceResolver resolverWithNearbyStores(
             List<DataportalStoreClient.StoreResult> nearbyStores) {
-        return new PlaceResolver((lon, lat, radiusMeters) -> nearbyStores, (name, branch, region) -> List.of(), 1000);
+        return new PlaceResolver((lon, lat, radiusMeters) -> nearbyStores, (name, branch, region) -> List.of(),
+                query -> Optional.empty(), 1000);
     }
 
     private static PlaceResolver resolverForAnchor(
@@ -25,6 +29,17 @@ class PlaceResolverTest {
         return new PlaceResolver(
                 (lon, lat, radiusMeters) -> nearbyStores,
                 (name, branch, region) -> anchorCandidates,
+                query -> Optional.empty(),
+                1000);
+    }
+
+    private static PlaceResolver resolverForVWorldAnchor(
+            PlaceSearchClient.PlaceSearchResult vworldAnchor,
+            List<DataportalStoreClient.StoreResult> nearbyStores) {
+        return new PlaceResolver(
+                (lon, lat, radiusMeters) -> nearbyStores,
+                (name, branch, region) -> List.of(),
+                query -> Optional.of(vworldAnchor),
                 1000);
     }
 
@@ -365,5 +380,82 @@ class PlaceResolverTest {
 
         assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.NEEDS_CONFIRMATION);
         assertThat(resolved.resolvedPlace()).isNull();
+    }
+
+    @Test
+    void VWorld_기준점으로_LocationIQ가_못찾던_매장도_확정한다() {
+        // 실측 사례("이디야커피 홍대청기와점"): LocationIQ는 지오코딩 자체를 못 하고, 공공 상가정보
+        // 등록명("이디야홍대청기와점")엔 "커피"가 없어 브랜드명 문자열 비교도 실패하던 매장.
+        // VWorld 기준점은 브랜드+지점명으로 이미 특정된 좌표라, 상호명 재확인 없이 반경 내 최근접
+        // 업소를 그대로 확정해야 한다.
+        var vworldAnchor = new PlaceSearchClient.PlaceSearchResult(null, 37.5556, 126.9207, null, null);
+        var store = store("이디야홍대청기와점", "", "서울 마포구 월드컵북로 7", 37.5556, 126.9207);
+        var resolver = resolverForVWorldAnchor(vworldAnchor, List.of(store));
+
+        PlaceResolver.Result resolved = resolver.resolve(
+                "p1", "이디야커피", "홍대청기와점", "서울 홍대", List.of());
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+        assertThat(resolved.resolvedPlace().address()).isEqualTo("서울 마포구 월드컵북로 7");
+    }
+
+    @Test
+    void VWorld_기준점_주변에도_공공데이터가_없으면_기존_흐름으로_폴백한다() {
+        var vworldAnchor = new PlaceSearchClient.PlaceSearchResult(null, 37.5556, 126.9207, null, null);
+        var resolver = new PlaceResolver(
+                (lon, lat, radiusMeters) -> List.of(),
+                (name, branch, region) -> List.of(),
+                query -> Optional.of(vworldAnchor),
+                1000);
+
+        var fallbackSearchResults = List.of(result("이디야커피, 서울특별시", 37.56, 126.92));
+
+        PlaceResolver.Result resolved = resolver.resolve(
+                "p1", "이디야커피", "홍대청기와점", "서울 홍대", fallbackSearchResults);
+
+        // VWorld 기준점은 찾았지만 그 주변 공공데이터가 비어있으니(폴백) 기존 ①~④ 흐름대로
+        // 판정된다 - 1건, 지점명 불일치라 되묻기.
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.NEEDS_CONFIRMATION);
+    }
+
+    @Test
+    void 지점명있는_다건후보도_공공데이터_교차검증으로_하나로_좁혀지면_확정한다() {
+        // 실측 사례("성심당 대전 본점"): LocationIQ가 대전 내 성심당 지점 3곳(본점·유성구점·대전역점)을
+        // 전부 돌려준다 - 기존엔 후보가 1건일 때만 지점명을 확인해서 이런 경우 그대로 되묻기였다.
+        var honjeom = result("성심당, 대종로480번길, 중구, 대전광역시", 36.3277, 127.4273);
+        var yuseong = result("성심당, 엑스포로123번길, 유성구, 대전광역시", 36.3753, 127.3922);
+        var daejeonStation = result("성심당, 대전역지하차도, 동구, 대전광역시", 36.3324, 127.4338);
+
+        var honjeomStore = store("성심당", "본점", "대전 중구 대종로480번길 15", 36.3277, 127.4273);
+        var resolver = new PlaceResolver(
+                (lon, lat, radiusMeters) -> lat == 36.3277 ? List.of(honjeomStore) : List.of(),
+                (name, branch, region) -> List.of(),
+                query -> Optional.empty(),
+                1000);
+
+        PlaceResolver.Result resolved = resolver.resolve(
+                "p1", "성심당", "본점", "대전", List.of(honjeom, yuseong, daejeonStation));
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+        assertThat(resolved.resolvedPlace().address()).isEqualTo("성심당, 대종로480번길, 중구, 대전광역시");
+    }
+
+    @Test
+    void 다건후보중_둘이상에서_지점명이_일치하면_확신할수없어_그대로_되묻는다() {
+        var branchA = result("성심당, A, 대전광역시", 36.32, 127.42);
+        var branchB = result("성심당, B, 대전광역시", 36.35, 127.39);
+        var storeA = store("성심당", "본점", "대전 어딘가 A", 36.32, 127.42);
+        var storeB = store("성심당", "본점", "대전 어딘가 B", 36.35, 127.39);
+        var resolver = new PlaceResolver(
+                (lon, lat, radiusMeters) -> lat == 36.32 ? List.of(storeA) : List.of(storeB),
+                (name, branch, region) -> List.of(),
+                query -> Optional.empty(),
+                1000);
+
+        PlaceResolver.Result resolved = resolver.resolve(
+                "p1", "성심당", "본점", "대전", List.of(branchA, branchB));
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.NEEDS_CONFIRMATION);
+        assertThat(resolved.confirmRequest().candidates()).hasSize(2);
     }
 }
