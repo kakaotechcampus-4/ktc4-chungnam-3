@@ -67,6 +67,8 @@ class VideoContentAnalyzerLiveTest {
 
         System.out.println("=== 소요시간: " + elapsedMs + "ms ===");
         System.out.println("status: " + result.status());
+        System.out.println("title: " + result.title());
+        System.out.println("sourceStatus: " + result.sourceStatus());
         System.out.println("analysisMetadata: " + result.analysisMetadata());
         System.out.println("summary: " + result.summary());
         System.out.println("summaryUncertainties: " + result.summaryUncertainties());

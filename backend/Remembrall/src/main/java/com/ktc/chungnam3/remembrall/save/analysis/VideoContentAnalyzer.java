@@ -11,6 +11,7 @@ import com.ktc.chungnam3.remembrall.extraction.dto.YouTubeContentExtractionResul
 import com.ktc.chungnam3.remembrall.extraction.type.EvidenceSource;
 import com.ktc.chungnam3.remembrall.extraction.type.ExtractionStatus;
 import com.ktc.chungnam3.remembrall.extraction.type.FailureStage;
+import com.ktc.chungnam3.remembrall.extraction.type.SourceStatus;
 import com.ktc.chungnam3.remembrall.save.youtube.YoutubeMetadataClient;
 import com.ktc.chungnam3.remembrall.save.youtube.YoutubeUrlParser;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -206,8 +207,12 @@ public class VideoContentAnalyzer {
         try {
             videoInfo = youtubeMetadataClient.getVideoInfo(videoId);
             authorComments = youtubeMetadataClient.getAuthorComments(videoId, videoInfo.channelId());
+        } catch (YoutubeMetadataClient.VideoUnavailableException e) {
+            // 유튜브가 "영상 없음"을 명확히 확인해준 경우에만 UNAVAILABLE로 확정한다.
+            return failedResult(metadata, FailureStage.METADATA_FETCH, e, null, null, SourceStatus.UNAVAILABLE);
         } catch (Exception e) {
-            return failedResult(metadata, FailureStage.METADATA_FETCH, e, null);
+            // 그 외 이유(네트워크 오류 등)로는 접근 불가가 "확인된" 게 아니므로 UNKNOWN으로 둔다.
+            return failedResult(metadata, FailureStage.METADATA_FETCH, e, null, null, SourceStatus.UNKNOWN);
         }
 
         UserMessage userMessage = UserMessage.builder()
@@ -243,21 +248,23 @@ public class VideoContentAnalyzer {
             // 지금 받는 에러 메시지("Failed to generate content" 등)만으로는 일반적인 호출 실패와
             // 구분할 방법이 없어 GEMINI_CALL로 통일한다 (실측 2026-10-06: 같은 영상도 재시도마다
             // 성공/실패가 갈려, 영상 문제가 아니라 호출 자체의 확률적 불안정성으로 보임).
-            return failedResult(metadata, FailureStage.GEMINI_CALL, e, null);
+            // 여기까지 왔다는 건 메타데이터 조회는 성공했다는 뜻이므로 title·AVAILABLE은 넘겨준다.
+            return failedResult(metadata, FailureStage.GEMINI_CALL, e, null, videoInfo.title(), SourceStatus.AVAILABLE);
         }
 
         String json = response.getResult().getOutput().getText();
 
         try {
             LlmResult result = objectMapper.readValue(json, LlmResult.class);
-            return toExtractionResult(metadata, result);
+            return toExtractionResult(metadata, videoInfo, result);
         } catch (Exception e) {
-            return failedResult(metadata, FailureStage.RESPONSE_MAPPING, e, json);
+            return failedResult(metadata, FailureStage.RESPONSE_MAPPING, e, json, videoInfo.title(), SourceStatus.AVAILABLE);
         }
     }
 
     private YouTubeContentExtractionResultDto failedResult(
-            AnalysisMetadataDto metadata, FailureStage stage, Exception cause, String extractedScope) {
+            AnalysisMetadataDto metadata, FailureStage stage, Exception cause, String extractedScope,
+            String title, SourceStatus sourceStatus) {
         FailureInfoDto failure = new FailureInfoDto(
                 stage,
                 null,
@@ -268,6 +275,8 @@ public class VideoContentAnalyzer {
         return new YouTubeContentExtractionResultDto(
                 ExtractionStatus.FAILED,
                 metadata,
+                title,
+                sourceStatus,
                 null,
                 List.of(),
                 List.of(),
@@ -276,7 +285,8 @@ public class VideoContentAnalyzer {
         );
     }
 
-    private YouTubeContentExtractionResultDto toExtractionResult(AnalysisMetadataDto metadata, LlmResult result) {
+    private YouTubeContentExtractionResultDto toExtractionResult(
+            AnalysisMetadataDto metadata, YoutubeMetadataClient.VideoInfo videoInfo, LlmResult result) {
         List<PlaceCandidateDto> places = new ArrayList<>();
         // LLM은 우리가 나중에 붙일 candidateId를 알 수 없으므로, 장소 이름으로 식별하게 하고
         // 여기서 candidateId를 직접 채번한 뒤 temporalInfos의 relatedPlaceNames를 이름으로 매칭한다.
@@ -321,6 +331,8 @@ public class VideoContentAnalyzer {
         return new YouTubeContentExtractionResultDto(
                 ExtractionStatus.SUCCESS,
                 metadata,
+                videoInfo.title(),
+                SourceStatus.AVAILABLE,
                 result.summary(),
                 result.summaryUncertainties(),
                 places,
