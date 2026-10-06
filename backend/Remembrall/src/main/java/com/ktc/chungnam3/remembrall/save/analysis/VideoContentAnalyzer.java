@@ -42,9 +42,10 @@ import java.util.Map;
 @Component
 public class VideoContentAnalyzer {
 
-    // TODO: 협의 필요 - 실제 사용할 모델. 이 SDK 버전(google-genai 1.65.0)에는 3.7/3.8 계열이 아직 없어
-    //  현재 시점에 쓸 수 있는 것 중 가장 최신인 3.6 Flash로 우선 잡아둔다.
-    private static final GoogleGenAiChatModel.ChatModel MODEL = GoogleGenAiChatModel.ChatModel.GEMINI_3_6_FLASH;
+    // TODO: 협의 필요 - 실제 사용할 모델. GEMINI_3_6_FLASH는 Vertex AI(us-central1)에서 404로 확인돼
+    //  아직 Vertex엔 안 풀린 것으로 보임(2026-10-06 실측). 3.x 계열이 전반적으로 preview라 안 될 가능성이
+    //  있어, 안정적으로 되는 2.5 Flash로 우선 내림.
+    private static final GoogleGenAiChatModel.ChatModel MODEL = GoogleGenAiChatModel.ChatModel.GEMINI_2_5_FLASH;
 
     private static final String ANALYSIS_VERSION = "v1";
     private static final String PROMPT_VERSION = "v4";
