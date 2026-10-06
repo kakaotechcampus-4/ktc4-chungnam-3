@@ -4,11 +4,13 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ktc.chungnam3.remembrall.extraction.dto.AnalysisMetadataDto;
 import com.ktc.chungnam3.remembrall.extraction.dto.EvidenceDto;
+import com.ktc.chungnam3.remembrall.extraction.dto.FailureInfoDto;
 import com.ktc.chungnam3.remembrall.extraction.dto.PlaceCandidateDto;
 import com.ktc.chungnam3.remembrall.extraction.dto.TemporalInfoDto;
 import com.ktc.chungnam3.remembrall.extraction.dto.YouTubeContentExtractionResultDto;
 import com.ktc.chungnam3.remembrall.extraction.type.EvidenceSource;
 import com.ktc.chungnam3.remembrall.extraction.type.ExtractionStatus;
+import com.ktc.chungnam3.remembrall.extraction.type.FailureStage;
 import com.ktc.chungnam3.remembrall.save.youtube.YoutubeMetadataClient;
 import com.ktc.chungnam3.remembrall.save.youtube.YoutubeUrlParser;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -85,7 +87,6 @@ public class VideoContentAnalyzer {
             - startDate/endDate에 연도가 없는 날짜가 나오면(예: "10월 3일까지") 위 영상 게시일과 같은 연도로 채우고,
               uncertainties에 "연도 추정"이라고 적어라. 월·일 자체를 확인할 수 없으면 빈 문자열로 두고 절대 추정하지 마라.
             - startTime/endTime을 확인할 수 없으면 빈 문자열로 둬라. 절대 추정하지 마라.
-            - suggestedOrder는 영상에서 방문 순서가 명시된 경우에만 1부터 채우고, 없으면 0으로 둬라.
             - 확실하게 판단하지 못한 내용은 각 항목의 uncertainties에 짧게 적어라.
             """;
 
@@ -104,7 +105,6 @@ public class VideoContentAnalyzer {
                       "branchName": { "type": "string" },
                       "regionHint": { "type": "string" },
                       "description": { "type": "string" },
-                      "suggestedOrder": { "type": "integer", "description": "0이면 순서 명시 없음" },
                       "evidence": {
                         "type": "array",
                         "items": {
@@ -118,7 +118,7 @@ public class VideoContentAnalyzer {
                       },
                       "uncertainties": { "type": "array", "items": { "type": "string" } }
                     },
-                    "required": ["name", "branchName", "regionHint", "description", "suggestedOrder", "evidence", "uncertainties"]
+                    "required": ["name", "branchName", "regionHint", "description", "evidence", "uncertainties"]
                   }
                 },
                 "temporalInfos": {
@@ -161,7 +161,7 @@ public class VideoContentAnalyzer {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record LlmPlace(String name, String branchName, String regionHint, String description,
-                             Integer suggestedOrder, List<LlmEvidence> evidence, List<String> uncertainties) {
+                             List<LlmEvidence> evidence, List<String> uncertainties) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -188,14 +188,27 @@ public class VideoContentAnalyzer {
     /**
      * 유튜브 URL 하나로 메타데이터 조회(제목·설명·태그·운영자 댓글)와 영상 분석을 모두 수행한다.
      * 게시일도 메타데이터 조회에서 얻으므로 별도 파라미터로 받지 않는다.
+     * <p>
+     * URL 형식 자체가 잘못된 경우(videoId를 못 찾음)는 호출 전에 걸러졌어야 할 사전 조건 위반으로 보고
+     * 예외를 던진다. 그 외의 실패(메타데이터 조회/Gemini 호출/응답 파싱)는 단계별로 잡아서
+     * {@code status: FAILED}와 {@link FailureInfoDto}가 채워진 정상적인 결과로 반환한다 — 이 메서드를
+     * 부르는 쪽이 예외 처리 없이도 실패를 다룰 수 있게 하기 위해서다.
      */
     public YouTubeContentExtractionResultDto analyze(String youtubeUrl) {
         String videoId = YoutubeUrlParser.extractVideoId(youtubeUrl)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "유튜브 URL에서 videoId를 찾을 수 없음: " + youtubeUrl));
 
-        YoutubeMetadataClient.VideoInfo videoInfo = youtubeMetadataClient.getVideoInfo(videoId);
-        List<String> authorComments = youtubeMetadataClient.getAuthorComments(videoId, videoInfo.channelId());
+        AnalysisMetadataDto metadata = new AnalysisMetadataDto(ANALYSIS_VERSION, MODEL.getValue(), PROMPT_VERSION);
+
+        YoutubeMetadataClient.VideoInfo videoInfo;
+        List<String> authorComments;
+        try {
+            videoInfo = youtubeMetadataClient.getVideoInfo(videoId);
+            authorComments = youtubeMetadataClient.getAuthorComments(videoId, videoInfo.channelId());
+        } catch (Exception e) {
+            return failedResult(metadata, FailureStage.METADATA_FETCH, e, null);
+        }
 
         UserMessage userMessage = UserMessage.builder()
                 .text(PROMPT_TEMPLATE.formatted(
@@ -222,17 +235,45 @@ public class VideoContentAnalyzer {
                 .chatOptions(options)
                 .build();
 
-        ChatResponse response = chatModel.call(prompt);
-        String json = response.getResult().getOutput().getText();
+        ChatResponse response;
+        try {
+            response = chatModel.call(prompt);
+        } catch (Exception e) {
+            // 유튜브는 멀쩡한데 Gemini만 영상을 못 읽는 경우(VIDEO_ACCESS)를 여기서 구분하고 싶지만,
+            // 지금 받는 에러 메시지("Failed to generate content" 등)만으로는 일반적인 호출 실패와
+            // 구분할 방법이 없어 GEMINI_CALL로 통일한다 (실측 2026-10-06: 같은 영상도 재시도마다
+            // 성공/실패가 갈려, 영상 문제가 아니라 호출 자체의 확률적 불안정성으로 보임).
+            return failedResult(metadata, FailureStage.GEMINI_CALL, e, null);
+        }
 
-        AnalysisMetadataDto metadata = new AnalysisMetadataDto(ANALYSIS_VERSION, MODEL.getValue(), PROMPT_VERSION);
+        String json = response.getResult().getOutput().getText();
 
         try {
             LlmResult result = objectMapper.readValue(json, LlmResult.class);
             return toExtractionResult(metadata, result);
         } catch (Exception e) {
-            throw new IllegalStateException("Gemini 응답 파싱 실패, raw json: " + json, e);
+            return failedResult(metadata, FailureStage.RESPONSE_MAPPING, e, json);
         }
+    }
+
+    private YouTubeContentExtractionResultDto failedResult(
+            AnalysisMetadataDto metadata, FailureStage stage, Exception cause, String extractedScope) {
+        FailureInfoDto failure = new FailureInfoDto(
+                stage,
+                null,
+                cause.getClass().getSimpleName(),
+                cause.getMessage(),
+                extractedScope
+        );
+        return new YouTubeContentExtractionResultDto(
+                ExtractionStatus.FAILED,
+                metadata,
+                null,
+                List.of(),
+                List.of(),
+                List.of(),
+                failure
+        );
     }
 
     private YouTubeContentExtractionResultDto toExtractionResult(AnalysisMetadataDto metadata, LlmResult result) {
