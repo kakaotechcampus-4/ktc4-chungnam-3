@@ -40,4 +40,11 @@ export const colors = {
         dangerFg: "#8c3f3a",
         dangerBg: "#f5e4e1",
     },
+    // 로그인 제공자 색. 제공자 디자인 가이드를 따른다(강조 색 하나 원칙의 예외).
+    // 카카오 가이드 규정: 컨테이너 #FEE500, 심볼 #000000, 레이블 #000000 85%.
+    provider: {
+        kakaoContainer: "#fee500",
+        kakaoSymbol: "#000000",
+        kakaoLabel: "#000000d9",
+    },
 } as const;

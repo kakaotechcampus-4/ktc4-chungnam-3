@@ -1,4 +1,6 @@
 // 최상위 네비게이터. 화면 등록만 담당.
+// 인증 상태에 따라 등록하는 화면이 다르다. 상태가 바뀌면 그 묶음의 첫 화면으로 간다.
+// signedOut: 00a(처음) · 00b, 로그아웃 · 401 이면 00b 만. onboarding: 권한 단계 00c~00f. signedIn: Main 쪽.
 import {
     type BottomTabBarProps,
     createBottomTabNavigator,
@@ -8,10 +10,17 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import ArchiveScreen from "../../features/archive/ArchiveScreen";
 import ContentDetailScreen from "../../features/content-detail/ContentDetailScreen";
 import MapViewScreen from "../../features/map-view/MapViewScreen";
+import BackgroundLocationScreen from "../../features/onboarding/BackgroundLocationScreen";
+import FirstSaveScreen from "../../features/onboarding/FirstSaveScreen";
+import IntroScreen from "../../features/onboarding/IntroScreen";
+import LocationPermissionScreen from "../../features/onboarding/LocationPermissionScreen";
+import LoginScreen from "../../features/onboarding/LoginScreen";
+import NotificationPermissionScreen from "../../features/onboarding/NotificationPermissionScreen";
 import ProposalScreen from "../../features/proposal/ProposalScreen";
 import PlaceSearchScreen from "../../features/save-result/PlaceSearchScreen";
 import SaveResultScreen from "../../features/save-result/SaveResultScreen";
 import SettingsScreen from "../../features/settings/SettingsScreen";
+import { useAuthState } from "../../shared/auth/session";
 import BottomNav, { type BottomNavKey } from "../../shared/ui/BottomNav";
 import {
     type MainTabParamList,
@@ -95,6 +104,44 @@ function MainTabs() {
 }
 
 export default function RootNavigator() {
+    const auth = useAuthState();
+
+    if (auth.status === "signedOut" || auth.status === "loading") {
+        const fromIntro = auth.status === "loading" || auth.startAt === "intro";
+        return (
+            <Stack.Navigator screenOptions={{ headerShown: false }}>
+                {fromIntro && (
+                    <Stack.Screen name={ROUTES.Intro} component={IntroScreen} />
+                )}
+                <Stack.Screen name={ROUTES.Login} component={LoginScreen} />
+            </Stack.Navigator>
+        );
+    }
+
+    // 권한 단계는 화면을 교체하며 넘어간다. 시스템 뒤로 가기는 앱을 닫는다.
+    if (auth.status === "onboarding") {
+        return (
+            <Stack.Navigator screenOptions={{ headerShown: false }}>
+                <Stack.Screen
+                    name={ROUTES.NotificationPermission}
+                    component={NotificationPermissionScreen}
+                />
+                <Stack.Screen
+                    name={ROUTES.LocationPermission}
+                    component={LocationPermissionScreen}
+                />
+                <Stack.Screen
+                    name={ROUTES.BackgroundLocation}
+                    component={BackgroundLocationScreen}
+                />
+                <Stack.Screen
+                    name={ROUTES.FirstSave}
+                    component={FirstSaveScreen}
+                />
+            </Stack.Navigator>
+        );
+    }
+
     return (
         <Stack.Navigator screenOptions={{ headerShown: false }}>
             <Stack.Screen name={ROUTES.Main} component={MainTabs} />

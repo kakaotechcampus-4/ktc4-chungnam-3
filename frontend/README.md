@@ -95,6 +95,15 @@ Expo Go 에서는:
 
 빈 상태(06 · 07b), 위치 권한, 깨진 썸네일은 `src/shared/api/mock/scenario.ts` 의 `MOCK_SCENARIO` 플래그를 바꾸고 reload 해서 본다.
 
+## 온보딩 다시 보기
+
+지금은 세션과 로그인이 목이다(`MOCK_SCENARIO`). Expo Go 에서도 확인할 수 있다.
+
+- 처음부터(00a): `signedIn: false` 로 바꾸고 Metro 터미널에서 `r` 로 reload 한다. 기본값 `true` 는 근처 탭부터 뜬다.
+- 로그인 결과: `loginResult` 를 바꾼다. `"success"` → 00c 로, `"cancelled"` → 00b 에 그대로(창을 닫은 경우), `"failed"` → 00b-err.
+- 흐름: 00a → 00b → 00c → 00d → 00e → 00f → 근처 탭. 00d 에서 "나중에 할게요"를 누르면 00e 를 건너뛴다.
+  권한 단계(00c~00f)에서 시스템 뒤로 가기를 누르면 앱이 닫힌다. 권한 요청은 아직 하지 않고 다음 화면으로만 넘어간다.
+
 ## 포맷
 
 prettier 설정은 `.prettierrc` 에 있고, 버전은 `package.json` 에 고정돼 있다(3.7.4).

@@ -39,7 +39,7 @@ frontend/
 ├── .gitattributes            frontend 텍스트 파일을 LF 로 받는다
 ├── assets/
 │   ├── fonts/                Noto Sans KR 서브셋 ttf + OFL.txt
-│   └── images/providers/     로그인 제공자 공식 심볼(직접 그리지 않는다)
+│   └── images/providers/     로그인 제공자 공식 심볼. 공식 에셋에서 심볼 경로만 남긴 파일(직접 그리지 않는다)
 ├── scripts/
 │   └── subset-fonts.py       폰트 서브셋 생성 (원본 출처 · 범위 · 실행 방법은 파일 상단)
 ├── android/
@@ -112,6 +112,7 @@ frontend/
 
 - 두 개 이상의 feature 에서 쓰면 `shared/ui/`, 한 feature 에서만 쓰면 `features/*/components/`.
 - `app/navigation` 이 하단 바로 쓰는 BottomNav 는 `shared/ui/` 에 둔다.
+- 온보딩 전용: OnboardingLayout(제목 · 본문 · 버튼 영역 틀), PhotoStack(00a · 00b 일러스트), SocialLoginButton(00b, Provider 변형), LoginError(00b-err), NotificationPreview(00c), PermissionStep(00d · 00e), GuideRow(00f). 모두 `features/onboarding/components/`.
 - 두 feature 이상이 쓰는 것: ScreenHeader(근처 · 기억 헤더), Chip(근처 · 지도 필터), PhotoMarker · PinLabel · CurrentLocation(지도 탭 · 08 지도), SheetHandle(08 · 10b 시트), NotFound(저장 결과 · 장소 상세).
 - PhotoMarker(핀)와 PinLabel(이름표)은 별도 마커다. Android 는 마커 뷰를 그 크기의 비트맵으로 찍으므로 핀 비트맵 크기는 선택과 무관하게 고정한다(그림자 있는 핀은 그림자 여백 포함). 다시 찍기는 `redraw()` 로 요청하고 화면에 다시 포커스가 오면 다시 찍는다. `tracksViewChanges` 는 자식 스타일 변화를 다시 찍는다는 보장이 없다.
 - 지도 자식(마커)은 화면이 숨겨진 동안 추가 · 제거 · 재배치되지 않게 한다. react-native-maps(Android)는 지도가 화면에서 떨어지면 마커 목록을 비웠다가 다시 붙을 때 복원하므로, 그 사이의 구조 변경이 어긋난다. 그래서 마커 zIndex 는 바꾸지 않고(Fabric 이 재배치한다), 이름표는 지도마다 하나를 계속 두고 opacity 로 숨긴다.
@@ -153,6 +154,8 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 - 진입: 저장된 세션이 있으면 바로 근처 탭, 없으면 00a 부터. 로그인 없이 쓰는 모드는 없다.
   세션을 읽는 동안은 스플래시를 유지한다(폰트와 같은 방식). 00a 가 잠깐 비치지 않게 한다.
 - 흐름: 00a → 00b → 00c → 00d → 00e → 00f → 근처 탭. 권한 화면의 "나중에 할게요"는 다음 단계로 넘어간다.
+- 00d 에서 "나중에 할게요"를 누르면 00e 를 건너뛴다. '앱 사용 중' 권한 없이는 '항상 허용'을 받을 수 없다.
+- 로그인 전(00a · 00b)은 일반 스택이고, 로그인 뒤 권한 단계(00c~00f)는 화면을 교체한다. 권한 단계에서 시스템 뒤로 가기는 앱을 닫는다.
 - 로그인에 성공하면 세션은 바로 저장하고, 화면은 00f 를 마칠 때 로그인 상태(Main)로 바꾼다.
   권한 화면 도중 앱이 꺼지면 다음 실행은 세션이 있으므로 근처 탭으로 간다. 권한은 설정(11)에서 다시 바꿀 수 있다.
 - 로그아웃 · 401 이면 세션을 지우고 Onboarding 의 00b 부터 보여준다. 로그아웃 상태에서는 Main 쪽 딥링크가 열리지 않는다.
@@ -202,7 +205,9 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 - 00b 는 이 목록으로 버튼을 그린다(C/SocialLoginButton, 아래로 쌓기, 간격 8, 높이 size/button, radius/md).
 - 제공자 추가 = 목록에 한 항목 + 버튼 변형 + 백엔드 엔드포인트. 색은 `provider/{이름}-*` 토큰(`colors.provider.{이름}`), 심볼은 공식 에셋.
   제공자 색은 플랫폼 규정이라 "강조 색은 자두색 하나" 원칙의 예외다.
-- 카카오: 배경 `provider/kakao-container`(#FEE500), 글자 · 심볼 `provider/kakao-label`(검정 85%), 라벨 "카카오 로그인".
+- 카카오(카카오 로그인 디자인 가이드 규정): 컨테이너 `provider/kakao-container`(#FEE500), 심볼 `provider/kakao-symbol`(#000000),
+  레이블 `provider/kakao-label`(#000000 85%), radius 12, 레이블은 OS 기본 시스템 서체(fontFamily 지정 안 함), 레이블 높이는 버튼의 1/3 이하(48 → 16). 라벨 "카카오 로그인".
+  심볼은 `assets/images/providers/kakao-symbol.svg`(공식 kakao_login_light.svg 의 말풍선 경로. 경로 수정 금지, 색은 규정 #000000).
   SDK 는 `@react-native-kakao/core` · `user`(TurboModule, config plugin 내장, 카카오톡 앱 로그인 지원)를 쓴다.
 - 로그인 실패(00b-err): 사용자가 제공자 창을 닫으면 오류 없이 00b 에 머문다. 통신 · 서버 오류일 때만 버튼 위에 오류 문구를 보인다.
 
@@ -225,6 +230,8 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 - UI 단계 동안 features 는 mock 에서 직접 받는다. `client.ts` 와 `mappers/` 를 거치지 않는다.
 - mock 은 features 의 타입을 import 하지 않는다(shared → features 금지). 구조적 타입으로 맞춘다.
 - 목 이미지 URL(picsum 고정 id)은 이 폴더 안에만 둔다.
+- 세션과 로그인은 2 · 3번 커밋 전까지 목 플래그다. `MOCK_SCENARIO.signedIn`(시작 시 세션 여부, 기본 true) · `loginResult`(success · cancelled · failed).
+  온보딩 일러스트 사진은 목 이미지다(`mock/onboarding.ts`). 첫 실행은 오프라인일 수 있어 나중에 번들 이미지로 바꾼다.
 - 위치 권한과 현재 위치는 runtime 작업 전까지 목 플래그(`MOCK_SCENARIO`)와 목 좌표로 둔다.
   설정(11)의 권한 표시는 실제 권한 상태를 읽는다. 지도(10 · 08)의 현재 위치 · denied 분기는 runtime 작업 때 실제 권한으로 바꾼다.
 - 장소 확정 저장물은 모두 상세(`detailId` → 08)를 가진다. 실제 데이터에서도 모든 저장물에 상세가 있다. 미확정 저장물은 저장 결과(02~05)로 간다.

@@ -13,6 +13,7 @@ import { StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { restoreSession, useAuthState } from "../shared/auth/session";
 import { colors, fontFamily } from "../shared/ui/theme";
 import { buildLinkingConfig } from "./navigation/linking";
 import RootNavigator from "./navigation/RootNavigator";
@@ -38,7 +39,14 @@ export default function App() {
         [fontFamily.notoSansKrRegular]: require("../../assets/fonts/NotoSansKR-Regular-subset.ttf"),
         [fontFamily.notoSansKrMedium]: require("../../assets/fonts/NotoSansKR-Medium-subset.ttf"),
     });
-    const ready = fontsLoaded || fontError != null;
+    const auth = useAuthState();
+    // 폰트와 저장된 세션을 모두 읽을 때까지 스플래시를 유지한다. 00a 가 잠깐 비치지 않게 한다.
+    const ready =
+        (fontsLoaded || fontError != null) && auth.status !== "loading";
+
+    useEffect(() => {
+        restoreSession();
+    }, []);
 
     // 폰트 로드에 실패해도 시스템 폰트로 계속 띄운다.
     useEffect(() => {
