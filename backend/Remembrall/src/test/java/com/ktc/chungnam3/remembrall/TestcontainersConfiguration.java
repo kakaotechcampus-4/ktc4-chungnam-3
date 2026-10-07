@@ -12,7 +12,8 @@ class TestcontainersConfiguration {
 	@Bean
 	@ServiceConnection
 	PostgreSQLContainer pgvectorContainer() {
-		return new PostgreSQLContainer(DockerImageName.parse("pgvector/pgvector:pg16"));
+		return new PostgreSQLContainer(
+				DockerImageName.parse("pgvector/pgvector:pg16").asCompatibleSubstituteFor("postgres"));
 	}
 
 }

@@ -4,6 +4,7 @@ import com.ktc.chungnam3.remembrall.common.exception.ApiException;
 import com.ktc.chungnam3.remembrall.common.exception.ErrorCode;
 import com.ktc.chungnam3.remembrall.content.dto.AnalysisOutcome;
 import com.ktc.chungnam3.remembrall.content.dto.ContentSaveClaim;
+import com.ktc.chungnam3.remembrall.content.embedding.EmbeddingClient;
 import com.ktc.chungnam3.remembrall.domain.content.Content;
 import com.ktc.chungnam3.remembrall.domain.place.Place;
 import com.ktc.chungnam3.remembrall.domain.place.VerificationProvider;
@@ -94,6 +95,10 @@ public class ContentPersistenceService {
     }
 
     public boolean applyOutcome(UUID contentId, AnalysisOutcome outcome) {
+        return applyOutcome(contentId, outcome, null);
+    }
+
+    public boolean applyOutcome(UUID contentId, AnalysisOutcome outcome, EmbeddingClient.Result embedding) {
         Objects.requireNonNull(contentId, "contentId");
         Objects.requireNonNull(outcome, "outcome");
 
@@ -112,6 +117,8 @@ public class ContentPersistenceService {
                     outcome.analysisVersion(),
                     outcome.failureCode() == null ? null : outcome.failureCode().name(),
                     outcome.metadataFetchedAt(),
+                    embedding == null ? null : vectorLiteral(embedding.vector()),
+                    embedding == null ? null : embedding.model(),
                     now,
                     now
             );
@@ -132,6 +139,17 @@ public class ContentPersistenceService {
             memberIds.forEach(memberId -> createTriggers(memberId, placeIds, now));
             return true;
         }));
+    }
+
+    private static String vectorLiteral(float[] vector) {
+        StringBuilder literal = new StringBuilder("[");
+        for (int i = 0; i < vector.length; i++) {
+            if (i > 0) {
+                literal.append(',');
+            }
+            literal.append(vector[i]);
+        }
+        return literal.append(']').toString();
     }
 
     public boolean deletePersonalSave(UUID memberId, UUID personalSaveId) {

@@ -15,6 +15,12 @@ spring:
 
 # TODO: 협의 필요 - 실제 운영에서는 환경변수/시크릿 매니저로 관리할 것. 지금은 로컬 테스트용.
 # 실제 키 값은 secrets.properties(git-ignored)에 적는다. 이 파일에는 절대 실제 키를 적지 말 것.
+content:
+  embedding:
+    model: ${CONTENT_EMBEDDING_MODEL:gemini-embedding-001}
+    dimensions: ${CONTENT_EMBEDDING_DIMENSIONS:768}
+    timeout: ${CONTENT_EMBEDDING_TIMEOUT:10s}
+
 youtube:
   api:
     key: ${youtube.api.key:}
@@ -25,6 +31,10 @@ kakao:
 auth:
   session:
     ttl: ${session.ttl:30d}
+
+consent:
+  public-candidate-contribution-terms-version: ${CONSENT_PUBLIC_CANDIDATE_CONTRIBUTION_TERMS_VERSION:v1}
+  location-based-service-terms-version: ${CONSENT_LOCATION_BASED_SERVICE_TERMS_VERSION:v1}
 
 recall:
   max-event-age: 30m
