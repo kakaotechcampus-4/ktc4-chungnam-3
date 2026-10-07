@@ -17,7 +17,7 @@ export const MOCK_SCENARIO: {
     // true 면 목 썸네일 URL 을 깨뜨려 로드 실패(bg/placeholder) 를 본다.
     brokenThumbnails: boolean;
 } = {
-    signedIn: false,
+    signedIn: false, // 현재는 개발 과정이므로 false로 두었음. 설계 문서에는 true가 기본 값이라고 명시해두었음.
     loginResult: "success",
     nearbyEmpty: false,
     archiveEmpty: false,
