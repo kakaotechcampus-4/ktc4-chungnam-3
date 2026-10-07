@@ -1,7 +1,7 @@
 package com.ktc.chungnam3.remembrall.extraction.dto;
 
+import com.ktc.chungnam3.remembrall.extraction.type.ExtractionFailureCode;
 import com.ktc.chungnam3.remembrall.extraction.type.ExtractionStatus;
-import com.ktc.chungnam3.remembrall.extraction.type.SourceStatus;
 
 import java.util.List;
 
@@ -9,11 +9,9 @@ public record YouTubeContentExtractionResultDto(
         ExtractionStatus status,
         AnalysisMetadataDto analysisMetadata,
         String title,
-        SourceStatus sourceStatus,
         String summary,
-        List<String> summaryUncertainties,
         List<PlaceCandidateDto> placeCandidates,
         List<TemporalInfoDto> temporalInfos,
-        FailureInfoDto failure
+        ExtractionFailureCode failureCode
 ) {
 }

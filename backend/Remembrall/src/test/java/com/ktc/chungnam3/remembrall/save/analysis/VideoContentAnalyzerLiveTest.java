@@ -1,7 +1,7 @@
 package com.ktc.chungnam3.remembrall.save.analysis;
 
-import com.ktc.chungnam3.remembrall.extraction.dto.PlaceCandidateDto;
 import com.ktc.chungnam3.remembrall.extraction.dto.YouTubeContentExtractionResultDto;
+import com.ktc.chungnam3.remembrall.extraction.type.ExtractionStatus;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -23,6 +23,9 @@ import org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreAu
  * application.yaml/secrets.properties 설정 그대로 만들어진다).
  * <p>
  * 실제로 Gemini를 호출해서 비용이 발생하니 평소엔 안 돌리고, 필요할 때 수동으로만 실행한다.
+ * <p>
+ * analyze()는 실패해도 예외를 던지지 않고 status: FAILED인 결과를 정상 반환하므로, 아래 테스트들은
+ * try-catch가 아니라 result.status()를 보고 성공/실패를 가른다.
  */
 @SpringBootTest(
         classes = VideoContentAnalyzerLiveTest.TestApp.class,
@@ -68,18 +71,16 @@ class VideoContentAnalyzerLiveTest {
         System.out.println("=== 소요시간: " + elapsedMs + "ms ===");
         System.out.println("status: " + result.status());
         System.out.println("title: " + result.title());
-        System.out.println("sourceStatus: " + result.sourceStatus());
         System.out.println("analysisMetadata: " + result.analysisMetadata());
         System.out.println("summary: " + result.summary());
-        System.out.println("summaryUncertainties: " + result.summaryUncertainties());
         System.out.println("placeCandidates: " + result.placeCandidates());
         System.out.println("temporalInfos: " + result.temporalInfos());
-        System.out.println("failure: " + result.failure());
+        System.out.println("failureCode: " + result.failureCode());
     }
 
     /**
      * urls.txt에 있던 나머지 9건을 한 번에 돌려서 품질·소요시간을 측정한다.
-     * 영상 하나가 실패해도 나머지는 계속 진행하도록 건별로 예외를 잡는다.
+     * 영상 하나가 실패해도 나머지는 계속 진행한다 (analyze()가 예외를 안 던지므로 별도 try-catch 불필요).
      */
     @Test
     void 나머지_9건_품질_측정() {
@@ -99,29 +100,30 @@ class VideoContentAnalyzerLiveTest {
             System.out.println("\n================================================");
             System.out.println("URL: " + url);
             long start = System.currentTimeMillis();
-            try {
-                YouTubeContentExtractionResultDto result = videoContentAnalyzer.analyze(url);
-                long elapsedMs = System.currentTimeMillis() - start;
+            YouTubeContentExtractionResultDto result = videoContentAnalyzer.analyze(url);
+            long elapsedMs = System.currentTimeMillis() - start;
 
-                List<String> placeNames = result.placeCandidates().stream()
-                        .map(p -> p.name() + (p.branchName() == null ? "" : " " + p.branchName()))
-                        .toList();
-
-                System.out.println("소요시간: " + elapsedMs + "ms");
-                System.out.println("status: " + result.status());
-                System.out.println("summary: " + result.summary());
-                System.out.println("장소 " + placeNames.size() + "건: " + placeNames);
-                System.out.println("temporalInfos: " + result.temporalInfos().size() + "건");
-            } catch (Exception e) {
-                long elapsedMs = System.currentTimeMillis() - start;
-                System.out.println("실패 (소요시간 " + elapsedMs + "ms): " + e.getMessage());
+            if (result.status() != ExtractionStatus.SUCCESS) {
+                System.out.println("실패 (소요시간 " + elapsedMs + "ms): status=" + result.status()
+                        + ", failureCode=" + result.failureCode());
+                continue;
             }
+
+            List<String> placeNames = result.placeCandidates().stream()
+                    .map(p -> p.name() + (p.branchName() == null ? "" : " " + p.branchName()))
+                    .toList();
+
+            System.out.println("소요시간: " + elapsedMs + "ms");
+            System.out.println("status: " + result.status());
+            System.out.println("summary: " + result.summary());
+            System.out.println("장소 " + placeNames.size() + "건: " + placeNames);
+            System.out.println("temporalInfos: " + result.temporalInfos().size() + "건");
         }
     }
 
     /**
-     * 지난 실행에서 "Failed to generate content"로 실패했던 2건을 다시 돌려서,
-     * 그 영상 자체가 항상 안 되는 건지(VIDEO_ACCESS) 아니면 일시적 문제였는지 구분한다.
+     * 지난 실행에서 실패했던 영상들을 다시 돌려서, 그 영상 자체가 항상 안 되는 건지
+     * 아니면 일시적 문제였는지 구분한다. 최대 3번까지 자동으로 재시도한다.
      */
     @Test
     void 실패했던_2건_재시도() {
@@ -137,9 +139,10 @@ class VideoContentAnalyzerLiveTest {
             int maxAttempts = 3;
             for (int attempt = 1; attempt <= maxAttempts; attempt++) {
                 long start = System.currentTimeMillis();
-                try {
-                    YouTubeContentExtractionResultDto result = videoContentAnalyzer.analyze(url);
-                    long elapsedMs = System.currentTimeMillis() - start;
+                YouTubeContentExtractionResultDto result = videoContentAnalyzer.analyze(url);
+                long elapsedMs = System.currentTimeMillis() - start;
+
+                if (result.status() == ExtractionStatus.SUCCESS) {
                     List<String> placeNames = result.placeCandidates().stream()
                             .map(p -> p.name() + (p.branchName() == null ? "" : " (" + p.branchName() + ")"))
                             .toList();
@@ -147,12 +150,11 @@ class VideoContentAnalyzerLiveTest {
                     System.out.println("summary: " + result.summary());
                     System.out.println("장소(이름+지점명): " + placeNames);
                     break;
-                } catch (Exception e) {
-                    long elapsedMs = System.currentTimeMillis() - start;
-                    System.out.println(attempt + "번째 시도 실패 (소요시간 " + elapsedMs + "ms): " + e.getMessage());
-                    if (attempt == maxAttempts) {
-                        System.out.println("=> " + maxAttempts + "번 다 실패");
-                    }
+                }
+
+                System.out.println(attempt + "번째 시도 실패 (소요시간 " + elapsedMs + "ms): failureCode=" + result.failureCode());
+                if (attempt == maxAttempts) {
+                    System.out.println("=> " + maxAttempts + "번 다 실패");
                 }
             }
         }
