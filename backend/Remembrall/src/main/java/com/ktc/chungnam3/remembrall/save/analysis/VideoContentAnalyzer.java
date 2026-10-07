@@ -3,14 +3,14 @@ package com.ktc.chungnam3.remembrall.save.analysis;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ktc.chungnam3.remembrall.extraction.dto.AnalysisMetadataDto;
-import com.ktc.chungnam3.remembrall.extraction.dto.EvidenceDto;
 import com.ktc.chungnam3.remembrall.extraction.dto.PlaceCandidateDto;
 import com.ktc.chungnam3.remembrall.extraction.dto.TemporalInfoDto;
 import com.ktc.chungnam3.remembrall.extraction.dto.YouTubeContentExtractionResultDto;
-import com.ktc.chungnam3.remembrall.extraction.type.EvidenceSource;
+import com.ktc.chungnam3.remembrall.extraction.type.ExtractionFailureCode;
 import com.ktc.chungnam3.remembrall.extraction.type.ExtractionStatus;
 import com.ktc.chungnam3.remembrall.save.youtube.YoutubeMetadataClient;
 import com.ktc.chungnam3.remembrall.save.youtube.YoutubeUrlParser;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -39,15 +39,17 @@ import java.util.Map;
  * SDK를 그대로 감싸고 있고, URI 기반 {@link Media}는 SDK의 {@code Part.fromUri(...)}로 변환된다
  * (jar 디컴파일로 확인함). 유튜브 URL을 영상으로 직접 넘기는 것도 이 경로로 동작한다.
  */
+@Slf4j
 @Component
 public class VideoContentAnalyzer {
 
-    // TODO: 협의 필요 - 실제 사용할 모델. 이 SDK 버전(google-genai 1.65.0)에는 3.7/3.8 계열이 아직 없어
-    //  현재 시점에 쓸 수 있는 것 중 가장 최신인 3.6 Flash로 우선 잡아둔다.
-    private static final GoogleGenAiChatModel.ChatModel MODEL = GoogleGenAiChatModel.ChatModel.GEMINI_3_6_FLASH;
+    // TODO: 협의 필요 - 실제 사용할 모델. GEMINI_3_6_FLASH는 Vertex AI(us-central1)에서 404로 확인돼
+    //  아직 Vertex엔 안 풀린 것으로 보임(2026-10-06 실측). 3.x 계열이 전반적으로 preview라 안 될 가능성이
+    //  있어, 안정적으로 되는 2.5 Flash로 우선 내림.
+    private static final GoogleGenAiChatModel.ChatModel MODEL = GoogleGenAiChatModel.ChatModel.GEMINI_2_5_FLASH;
 
     private static final String ANALYSIS_VERSION = "v1";
-    private static final String PROMPT_VERSION = "v4";
+    private static final String PROMPT_VERSION = "v5";
 
     private static final String PROMPT_TEMPLATE = """
             너는 여행·맛집 유튜브 영상에서 정보를 추출하는 분석가다.
@@ -76,16 +78,10 @@ public class VideoContentAnalyzer {
               시·도 단위로만 지역을 대조하기 때문이다. 구·동까지도 불확실하면 시·도까지만 적어라.
             - 좌표는 추출하지 않는다 (이 단계의 책임이 아니다).
             - 여러 장소가 있으면 각각 분리해서 반환해라.
-            - evidence의 detail에는 근거 위치나 내용을 간단히 적어라 (예: "화면 자막 0:12", "설명란 첫 줄",
-              "운영자 댓글"). evidence의 source는 아래 다섯 값 중 하나만 써라: VIDEO_AUDIO, VIDEO_TEXT,
-              VIDEO_VISUAL, TITLE, DESCRIPTION. 댓글에서 확인한 내용은 DESCRIPTION으로 표시하고
-              detail에 "운영자 댓글"이라고 적어라 (댓글 전용 출처 값은 아직 계약에 없음).
             - relatedPlaceNames에는 이 기간과 연결되는 placeCandidates의 name을 그대로 적어라. 관계가 없으면 빈 배열로 둬라.
-            - startDate/endDate에 연도가 없는 날짜가 나오면(예: "10월 3일까지") 위 영상 게시일과 같은 연도로 채우고,
-              uncertainties에 "연도 추정"이라고 적어라. 월·일 자체를 확인할 수 없으면 빈 문자열로 두고 절대 추정하지 마라.
+            - startDate/endDate에 연도가 없는 날짜가 나오면(예: "10월 3일까지") 위 영상 게시일과 같은 연도로 채워라.
+              월·일 자체를 확인할 수 없으면 빈 문자열로 두고 절대 추정하지 마라.
             - startTime/endTime을 확인할 수 없으면 빈 문자열로 둬라. 절대 추정하지 마라.
-            - suggestedOrder는 영상에서 방문 순서가 명시된 경우에만 1부터 채우고, 없으면 0으로 둬라.
-            - 확실하게 판단하지 못한 내용은 각 항목의 uncertainties에 짧게 적어라.
             """;
 
     private static final String RESPONSE_SCHEMA_JSON = """
@@ -93,7 +89,6 @@ public class VideoContentAnalyzer {
               "type": "object",
               "properties": {
                 "summary": { "type": "string" },
-                "summaryUncertainties": { "type": "array", "items": { "type": "string" } },
                 "placeCandidates": {
                   "type": "array",
                   "items": {
@@ -102,22 +97,9 @@ public class VideoContentAnalyzer {
                       "name": { "type": "string" },
                       "branchName": { "type": "string" },
                       "regionHint": { "type": "string" },
-                      "description": { "type": "string" },
-                      "suggestedOrder": { "type": "integer", "description": "0이면 순서 명시 없음" },
-                      "evidence": {
-                        "type": "array",
-                        "items": {
-                          "type": "object",
-                          "properties": {
-                            "source": { "type": "string", "enum": ["VIDEO_AUDIO", "VIDEO_TEXT", "VIDEO_VISUAL", "TITLE", "DESCRIPTION"] },
-                            "detail": { "type": "string" }
-                          },
-                          "required": ["source", "detail"]
-                        }
-                      },
-                      "uncertainties": { "type": "array", "items": { "type": "string" } }
+                      "description": { "type": "string" }
                     },
-                    "required": ["name", "branchName", "regionHint", "description", "suggestedOrder", "evidence", "uncertainties"]
+                    "required": ["name", "branchName", "regionHint", "description"]
                   }
                 },
                 "temporalInfos": {
@@ -131,46 +113,27 @@ public class VideoContentAnalyzer {
                       "startDate": { "type": "string", "description": "YYYY-MM-DD, 모르면 빈 문자열" },
                       "endDate": { "type": "string", "description": "YYYY-MM-DD, 모르면 빈 문자열" },
                       "startTime": { "type": "string", "description": "HH:MM, 모르면 빈 문자열" },
-                      "endTime": { "type": "string", "description": "HH:MM, 모르면 빈 문자열" },
-                      "evidence": {
-                        "type": "array",
-                        "items": {
-                          "type": "object",
-                          "properties": {
-                            "source": { "type": "string", "enum": ["VIDEO_AUDIO", "VIDEO_TEXT", "VIDEO_VISUAL", "TITLE", "DESCRIPTION"] },
-                            "detail": { "type": "string" }
-                          },
-                          "required": ["source", "detail"]
-                        }
-                      },
-                      "uncertainties": { "type": "array", "items": { "type": "string" } }
+                      "endTime": { "type": "string", "description": "HH:MM, 모르면 빈 문자열" }
                     },
-                    "required": ["subject", "originalText", "relatedPlaceNames", "startDate", "endDate", "startTime", "endTime", "evidence", "uncertainties"]
+                    "required": ["subject", "originalText", "relatedPlaceNames", "startDate", "endDate", "startTime", "endTime"]
                   }
                 }
               },
-              "required": ["summary", "summaryUncertainties", "placeCandidates", "temporalInfos"]
+              "required": ["summary", "placeCandidates", "temporalInfos"]
             }
             """;
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record LlmResult(String summary, List<String> summaryUncertainties,
-                              List<LlmPlace> placeCandidates, List<LlmTemporal> temporalInfos) {
+    private record LlmResult(String summary, List<LlmPlace> placeCandidates, List<LlmTemporal> temporalInfos) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record LlmPlace(String name, String branchName, String regionHint, String description,
-                             Integer suggestedOrder, List<LlmEvidence> evidence, List<String> uncertainties) {
+    private record LlmPlace(String name, String branchName, String regionHint, String description) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record LlmTemporal(String subject, String originalText, List<String> relatedPlaceNames,
-                                String startDate, String endDate, String startTime, String endTime,
-                                List<LlmEvidence> evidence, List<String> uncertainties) {
-    }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    private record LlmEvidence(EvidenceSource source, String detail) {
+                                String startDate, String endDate, String startTime, String endTime) {
     }
 
     private final ChatModel chatModel;
@@ -187,14 +150,32 @@ public class VideoContentAnalyzer {
     /**
      * 유튜브 URL 하나로 메타데이터 조회(제목·설명·태그·운영자 댓글)와 영상 분석을 모두 수행한다.
      * 게시일도 메타데이터 조회에서 얻으므로 별도 파라미터로 받지 않는다.
+     * <p>
+     * URL 형식 자체가 잘못된 경우(videoId를 못 찾음)는 호출 전에 걸러졌어야 할 사전 조건 위반으로 보고
+     * 예외를 던진다. 그 외의 실패(메타데이터 조회/Gemini 호출/응답 파싱)는 단계별로 잡아서
+     * {@code status: FAILED}와 {@link ExtractionFailureCode}가 채워진 정상적인 결과로 반환한다 — 이
+     * 메서드를 부르는 쪽이 예외 처리 없이도 실패를 다룰 수 있게 하기 위해서다. 실패 원인 상세(메시지 등)는
+     * 계약(저장담당 요구 사항.md)에 더는 포함되지 않으므로 로그로만 남긴다.
      */
     public YouTubeContentExtractionResultDto analyze(String youtubeUrl) {
         String videoId = YoutubeUrlParser.extractVideoId(youtubeUrl)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "유튜브 URL에서 videoId를 찾을 수 없음: " + youtubeUrl));
 
-        YoutubeMetadataClient.VideoInfo videoInfo = youtubeMetadataClient.getVideoInfo(videoId);
-        List<String> authorComments = youtubeMetadataClient.getAuthorComments(videoId, videoInfo.channelId());
+        AnalysisMetadataDto metadata = new AnalysisMetadataDto(ANALYSIS_VERSION, MODEL.getValue(), PROMPT_VERSION);
+
+        YoutubeMetadataClient.VideoInfo videoInfo;
+        List<String> authorComments;
+        try {
+            videoInfo = youtubeMetadataClient.getVideoInfo(videoId);
+            authorComments = youtubeMetadataClient.getAuthorComments(videoId, videoInfo.channelId());
+        } catch (YoutubeMetadataClient.VideoUnavailableException e) {
+            log.info("원본 영상 접근 불가 확인됨: {}", videoId, e);
+            return failedResult(metadata, null, ExtractionFailureCode.VIDEO_UNAVAILABLE);
+        } catch (Exception e) {
+            log.warn("메타데이터 조회 실패: {}", videoId, e);
+            return failedResult(metadata, null, ExtractionFailureCode.EXTRACTION_API_ERROR);
+        }
 
         UserMessage userMessage = UserMessage.builder()
                 .text(PROMPT_TEMPLATE.formatted(
@@ -221,20 +202,44 @@ public class VideoContentAnalyzer {
                 .chatOptions(options)
                 .build();
 
-        ChatResponse response = chatModel.call(prompt);
-        String json = response.getResult().getOutput().getText();
+        ChatResponse response;
+        try {
+            response = chatModel.call(prompt);
+        } catch (Exception e) {
+            // 유튜브는 멀쩡한데 Gemini만 영상을 못 읽는 경우(이전엔 VIDEO_ACCESS)를 구분하고 싶지만,
+            // 지금 받는 에러 메시지("Failed to generate content" 등)만으로는 일반적인 호출 실패와
+            // 구분할 방법이 없어 EXTRACTION_API_ERROR로 통일한다 (실측 2026-10-06: 같은 영상도
+            // 재시도마다 성공/실패가 갈려, 영상 문제가 아니라 호출 자체의 확률적 불안정성으로 보임).
+            log.warn("Gemini 호출 실패: {}", videoId, e);
+            return failedResult(metadata, videoInfo.title(), ExtractionFailureCode.EXTRACTION_API_ERROR);
+        }
 
-        AnalysisMetadataDto metadata = new AnalysisMetadataDto(ANALYSIS_VERSION, MODEL.getValue(), PROMPT_VERSION);
+        String json = response.getResult().getOutput().getText();
 
         try {
             LlmResult result = objectMapper.readValue(json, LlmResult.class);
-            return toExtractionResult(metadata, result);
+            return toExtractionResult(metadata, videoInfo, result);
         } catch (Exception e) {
-            throw new IllegalStateException("Gemini 응답 파싱 실패, raw json: " + json, e);
+            log.warn("Gemini 응답 파싱 실패, raw json: {}", json, e);
+            return failedResult(metadata, videoInfo.title(), ExtractionFailureCode.EXTRACTION_RESULT_ERROR);
         }
     }
 
-    private YouTubeContentExtractionResultDto toExtractionResult(AnalysisMetadataDto metadata, LlmResult result) {
+    private YouTubeContentExtractionResultDto failedResult(
+            AnalysisMetadataDto metadata, String title, ExtractionFailureCode failureCode) {
+        return new YouTubeContentExtractionResultDto(
+                ExtractionStatus.FAILED,
+                metadata,
+                title,
+                null,
+                List.of(),
+                List.of(),
+                failureCode
+        );
+    }
+
+    private YouTubeContentExtractionResultDto toExtractionResult(
+            AnalysisMetadataDto metadata, YoutubeMetadataClient.VideoInfo videoInfo, LlmResult result) {
         List<PlaceCandidateDto> places = new ArrayList<>();
         // LLM은 우리가 나중에 붙일 candidateId를 알 수 없으므로, 장소 이름으로 식별하게 하고
         // 여기서 candidateId를 직접 채번한 뒤 temporalInfos의 relatedPlaceNames를 이름으로 매칭한다.
@@ -250,47 +255,34 @@ public class VideoContentAnalyzer {
                     p.name(),
                     blankToNull(p.branchName()),
                     blankToNull(p.regionHint()),
-                    p.description(),
-                    toEvidenceDtos(p.evidence()),
-                    p.uncertainties()
+                    p.description()
             ));
         }
 
         List<TemporalInfoDto> temporalInfos = result.temporalInfos().stream()
-                .map(t -> {
-                    List<String> uncertainties = new ArrayList<>(t.uncertainties());
-                    return new TemporalInfoDto(
-                            t.subject(),
-                            t.originalText(),
-                            t.relatedPlaceNames().stream()
-                                    .map(nameToCandidateId::get)
-                                    .filter(java.util.Objects::nonNull)
-                                    .toList(),
-                            parseDateOrNull(t.startDate(), uncertainties),
-                            parseDateOrNull(t.endDate(), uncertainties),
-                            parseTimeOrNull(t.startTime(), uncertainties),
-                            parseTimeOrNull(t.endTime(), uncertainties),
-                            toEvidenceDtos(t.evidence()),
-                            uncertainties
-                    );
-                })
+                .map(t -> new TemporalInfoDto(
+                        t.subject(),
+                        t.originalText(),
+                        t.relatedPlaceNames().stream()
+                                .map(nameToCandidateId::get)
+                                .filter(java.util.Objects::nonNull)
+                                .toList(),
+                        parseDateOrNull(t.startDate()),
+                        parseDateOrNull(t.endDate()),
+                        parseTimeOrNull(t.startTime()),
+                        parseTimeOrNull(t.endTime())
+                ))
                 .toList();
 
         return new YouTubeContentExtractionResultDto(
                 ExtractionStatus.SUCCESS,
                 metadata,
+                videoInfo.title(),
                 result.summary(),
-                result.summaryUncertainties(),
                 places,
                 temporalInfos,
                 null
         );
-    }
-
-    private List<EvidenceDto> toEvidenceDtos(List<LlmEvidence> evidence) {
-        return evidence.stream()
-                .map(e -> new EvidenceDto(e.source(), e.detail()))
-                .toList();
     }
 
     private String blankToNull(String value) {
@@ -321,26 +313,26 @@ public class VideoContentAnalyzer {
         return sb.toString();
     }
 
-    private LocalDate parseDateOrNull(String value, List<String> uncertainties) {
+    private LocalDate parseDateOrNull(String value) {
         if (blankToNull(value) == null) {
             return null;
         }
         try {
             return LocalDate.parse(value);
         } catch (DateTimeParseException e) {
-            uncertainties.add("날짜 형식 확인 필요: " + value);
+            log.info("날짜 형식 확인 필요: {}", value);
             return null;
         }
     }
 
-    private LocalTime parseTimeOrNull(String value, List<String> uncertainties) {
+    private LocalTime parseTimeOrNull(String value) {
         if (blankToNull(value) == null) {
             return null;
         }
         try {
             return LocalTime.parse(value);
         } catch (DateTimeParseException e) {
-            uncertainties.add("시간 형식 확인 필요: " + value);
+            log.info("시간 형식 확인 필요: {}", value);
             return null;
         }
     }

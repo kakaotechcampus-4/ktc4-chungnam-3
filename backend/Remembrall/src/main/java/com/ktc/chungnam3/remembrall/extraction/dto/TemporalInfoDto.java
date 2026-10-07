@@ -12,8 +12,6 @@ public record TemporalInfoDto(
         LocalDate startDate,
         LocalDate endDate,
         LocalTime startTime,
-        LocalTime endTime,
-        List<EvidenceDto> evidence,
-        List<String> uncertainties
+        LocalTime endTime
 ) {
 }
