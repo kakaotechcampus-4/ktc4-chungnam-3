@@ -15,7 +15,7 @@ import {
 } from "../../../shared/ui/theme";
 
 const VARIANT: Record<
-    LoginProvider["variant"],
+    NonNullable<LoginProvider["button"]>["variant"],
     {
         container: string;
         symbol: string;
@@ -33,7 +33,7 @@ const VARIANT: Record<
 };
 
 type Props = {
-    variant: LoginProvider["variant"];
+    variant: NonNullable<LoginProvider["button"]>["variant"];
     label: string;
     disabled?: boolean;
     onPress: () => void;

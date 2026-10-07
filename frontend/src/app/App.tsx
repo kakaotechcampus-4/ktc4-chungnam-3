@@ -13,6 +13,7 @@ import { StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { registerSessionRefresher } from "../shared/auth/login";
 import { restoreSession, useAuthState } from "../shared/auth/session";
 import { colors, fontFamily } from "../shared/ui/theme";
 import { buildLinkingConfig } from "./navigation/linking";
@@ -45,6 +46,8 @@ export default function App() {
         (fontsLoaded || fontError != null) && auth.status !== "loading";
 
     useEffect(() => {
+        // 게스트 세션이 만료 · 401 이면 API 클라이언트가 조용히 다시 받는다.
+        registerSessionRefresher();
         restoreSession();
     }, []);
 

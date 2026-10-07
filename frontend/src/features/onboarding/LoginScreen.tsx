@@ -1,4 +1,5 @@
-// 00b 로그인 2175:722 · 00b-err 2175:742. 제공자 목록(shared/auth/providers)을 순회해 버튼을 그린다.
+// 00b 로그인 2175:722 · 00b-err 2175:742. 켜진 버튼 제공자(shared/auth/providers BUTTON_PROVIDERS)를 순회해 버튼을 그린다.
+// MVP(게스트 세션)에서는 버튼 제공자가 없어 이 화면을 등록하지 않는다.
 // 사용자가 제공자 창을 닫으면 오류 없이 머물고, 통신 · 서버 오류일 때만 버튼 위에 문구를 보인다.
 // 로그인에 성공하면 인증 상태가 onboarding 으로 바뀌어 RootNavigator 가 00c 를 보인다(shared/auth/login).
 import { useState } from "react";
@@ -7,8 +8,8 @@ import { StyleSheet, Text, View } from "react-native";
 import { onboardingMock } from "../../shared/api/mock";
 import { signIn } from "../../shared/auth/login";
 import {
+    BUTTON_PROVIDERS,
     type LoginProvider,
-    LOGIN_PROVIDERS,
 } from "../../shared/auth/providers";
 import { colors, metrics, spacing, typography } from "../../shared/ui/theme";
 import LoginError from "./components/LoginError";
@@ -48,11 +49,11 @@ export default function LoginScreen() {
                                 message={`${failed.name} 로그인을 마치지 못했어요. 연결을 확인하고 다시 눌러주세요.`}
                             />
                         )}
-                        {LOGIN_PROVIDERS.map((provider) => (
+                        {BUTTON_PROVIDERS.map((provider) => (
                             <SocialLoginButton
                                 key={provider.id}
-                                variant={provider.variant}
-                                label={provider.label}
+                                variant={provider.button.variant}
+                                label={provider.button.label}
                                 disabled={pending}
                                 onPress={() => start(provider)}
                             />

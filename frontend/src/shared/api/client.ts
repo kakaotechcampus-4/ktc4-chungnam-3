@@ -1,7 +1,13 @@
 // HTTP 클라이언트. 기본 주소 · Bearer 헤더 · ApiError · 401 처리.
 // 응답은 래핑하지 않는다. 실패 바디 {code, message} 와 네트워크 오류 · 시간 초과는 ApiError 로 바꾼다.
-// 세션을 실어 보낸 요청이 401 이면 세션을 지운다(만료 · 다른 폰 로그인). 화면은 세션 구독으로 00b 가 된다.
-import { clearSession, getSessionToken } from "../auth/session";
+// 게스트 세션은 만료됐으면 요청 전에, 401 이면 그때 같은 설치 id 로 조용히 다시 받고 원래 요청을 딱 한 번 다시 보낸다.
+// 다시 보낸 요청이 또 401 이면 반복하지 않는다. 게스트가 아닌 세션(카카오)의 401 은 세션을 지우고 00b 로 간다.
+// 다시 받는 함수는 login.ts 가 등록한다(setSessionRefresher). 이 파일은 login.ts 를 import 하지 않는다(순환 방지).
+import {
+    clearSession,
+    getSessionToken,
+    isSessionExpired,
+} from "../auth/session";
 import { API_BASE_URL } from "./config";
 
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -18,6 +24,22 @@ export class ApiError extends Error {
     }
 }
 
+// refreshed: 새 세션을 받았다. failed: 통신 오류 등(로그아웃하지 않는다).
+// rejected: 거절돼 세션을 지웠다(00a). notApplicable: 다시 받을 수 없는 세션이다(게스트 아님).
+export type SessionRefreshResult =
+    | "refreshed"
+    | "failed"
+    | "rejected"
+    | "notApplicable";
+
+let refreshSession: (() => Promise<SessionRefreshResult>) | undefined;
+
+export function setSessionRefresher(
+    refresher: () => Promise<SessionRefreshResult>,
+): void {
+    refreshSession = refresher;
+}
+
 type RequestOptions = {
     method?: "GET" | "POST" | "PUT" | "DELETE";
     body?: unknown;
@@ -25,10 +47,19 @@ type RequestOptions = {
     auth?: boolean;
 };
 
-export async function request<T>(
+export function request<T>(
     path: string,
-    { method = "GET", body, auth = true }: RequestOptions = {},
+    options: RequestOptions = {},
 ): Promise<T> {
+    return send<T>(path, options, false);
+}
+
+async function send<T>(
+    path: string,
+    options: RequestOptions,
+    retried: boolean,
+): Promise<T> {
+    const { method = "GET", body, auth = true } = options;
     if (API_BASE_URL == null) {
         throw new ApiError(
             null,
@@ -36,6 +67,9 @@ export async function request<T>(
             "EXPO_PUBLIC_API_BASE_URL 이 없습니다.",
         );
     }
+
+    // 만료된 게스트 세션은 보내기 전에 다시 받는다. 실패해도 그대로 보내고 401 처리에 맡긴다.
+    if (auth && !retried && isSessionExpired()) await refreshSession?.();
 
     const headers: Record<string, string> = { Accept: "application/json" };
     if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -65,7 +99,12 @@ export async function request<T>(
         clearTimeout(timer);
     }
 
-    if (response.status === 401 && token != null) await clearSession();
+    if (response.status === 401 && token != null && !retried) {
+        const result = (await refreshSession?.()) ?? "notApplicable";
+        if (result === "refreshed") return send<T>(path, options, true);
+        if (result === "notApplicable") await clearSession("login");
+        // rejected 는 이미 세션을 지웠다. failed 는 로그아웃하지 않고 오류를 넘긴다.
+    }
     if (!response.ok) {
         const { code, message } = await readError(response);
         throw new ApiError(response.status, code, message);

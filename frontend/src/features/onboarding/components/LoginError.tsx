@@ -1,4 +1,4 @@
-// 로그인 실패 문구(00b-err 2175:754). 통신 · 서버 오류일 때만 버튼 위에 보인다.
+// 시작 · 로그인 실패 문구(00a-err 2196:785 · 00b-err 2175:754). 통신 · 서버 오류일 때만 버튼 위에 보인다.
 import { StyleSheet, Text, View } from "react-native";
 
 import { colors, metrics, radius, typography } from "../../../shared/ui/theme";

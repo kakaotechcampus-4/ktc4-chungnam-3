@@ -1,6 +1,7 @@
 // 최상위 네비게이터. 화면 등록만 담당.
 // 인증 상태에 따라 등록하는 화면이 다르다. 상태가 바뀌면 그 묶음의 첫 화면으로 간다.
 // signedOut: 00a(처음) · 00b, 로그아웃 · 401 이면 00b 만. onboarding: 권한 단계 00c~00f. signedIn: Main 쪽.
+// MVP(게스트 세션)는 버튼 제공자가 없어 00b 를 등록하지 않는다. 00a 가 게스트로 시작한다.
 import {
     type BottomTabBarProps,
     createBottomTabNavigator,
@@ -20,6 +21,7 @@ import ProposalScreen from "../../features/proposal/ProposalScreen";
 import PlaceSearchScreen from "../../features/save-result/PlaceSearchScreen";
 import SaveResultScreen from "../../features/save-result/SaveResultScreen";
 import SettingsScreen from "../../features/settings/SettingsScreen";
+import { BUTTON_PROVIDERS } from "../../shared/auth/providers";
 import { useAuthState } from "../../shared/auth/session";
 import BottomNav, { type BottomNavKey } from "../../shared/ui/BottomNav";
 import {
@@ -107,13 +109,19 @@ export default function RootNavigator() {
     const auth = useAuthState();
 
     if (auth.status === "signedOut" || auth.status === "loading") {
-        const fromIntro = auth.status === "loading" || auth.startAt === "intro";
+        const hasLoginScreen = BUTTON_PROVIDERS.length > 0;
+        const showIntro =
+            auth.status === "loading" ||
+            auth.startAt === "intro" ||
+            !hasLoginScreen;
         return (
             <Stack.Navigator screenOptions={{ headerShown: false }}>
-                {fromIntro && (
+                {showIntro && (
                     <Stack.Screen name={ROUTES.Intro} component={IntroScreen} />
                 )}
-                <Stack.Screen name={ROUTES.Login} component={LoginScreen} />
+                {hasLoginScreen && (
+                    <Stack.Screen name={ROUTES.Login} component={LoginScreen} />
+                )}
             </Stack.Navigator>
         );
     }

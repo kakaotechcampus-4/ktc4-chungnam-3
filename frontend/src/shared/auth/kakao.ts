@@ -1,5 +1,5 @@
 // 카카오 로그인. 카카오 액세스 토큰을 돌려준다(백엔드 POST /api/auth/kakao 가 받는다).
-// 지금은 목이다(MOCK_SCENARIO.loginResult). 3번 커밋에서 @react-native-kakao/user 의 login() 으로 바꾼다.
+// 지금은 목이다(MOCK_SCENARIO.loginResult). MVP 이후 카카오를 다시 켤 때 @react-native-kakao/user 의 login() 으로 바꾼다.
 import { MOCK_SCENARIO } from "../api/mock";
 import type { ProviderSignInResult } from "./providers";
 
@@ -9,7 +9,7 @@ export async function signInWithKakao(): Promise<ProviderSignInResult> {
     await new Promise((resolve) => setTimeout(resolve, MOCK_DELAY_MS));
     switch (MOCK_SCENARIO.loginResult) {
         case "success":
-            return { type: "success", accessToken: "mock-kakao-access-token" };
+            return { type: "success", credential: "mock-kakao-access-token" };
         case "cancelled":
             return { type: "cancelled" };
         case "failed":
