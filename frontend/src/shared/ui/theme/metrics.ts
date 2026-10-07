@@ -207,6 +207,57 @@ export const metrics = {
     notFound: {
         thumbWidth: 96,
     },
+    // 온보딩 00a~00f(2175:676 ~ 2175:891). 위 여백은 상태바 아래부터 잰다.
+    // 일러스트 사진은 회전 전 크기와 중심점(cx, cy)으로 둔다. Figma 는 회전 뒤 외곽 상자 좌표라 중심을 계산해 옮겼다.
+    // 행(00d · 00e 단계, 00f 안내)은 위아래 14 · 좌우 16. 테두리 있는 단계 행은 테두리 두께를 뺀다.
+    onboarding: {
+        messageTop: 72,
+        introMessageTop: 8,
+        previewMessageTop: 40,
+        listTop: 24,
+        legalPaddingTop: 16,
+        legalPaddingBottom: 40,
+        rowPaddingHorizontal: 16,
+        rowPaddingVertical: 14,
+        stepBadgeSize: 28,
+        stepCheckSize: 16,
+        guideIconSize: 36,
+        guideGlyphSize: 20,
+        previewPaddingHorizontal: 16,
+        previewPaddingVertical: 14,
+        previewAppGap: 6,
+        previewAppIconPadding: 3,
+        previewAppGlyphSize: 12,
+        previewImageSize: 48,
+        errorPaddingHorizontal: 12,
+        errorPaddingVertical: 10,
+        // 제공자 심볼 높이 18. 카카오 심볼 파일(kakao-symbol.svg)은 22 × 21 이라 폭은 비율로 정한다.
+        providerSymbolSize: 18,
+        providerSymbolAspectRatio: 22 / 21,
+        // 카카오 레이블은 OS 기본 시스템 서체(가이드 규정)라 Figma 텍스트 스타일 대신 굵기만 둔다.
+        providerLabelWeight: "500",
+        // 00a 2175:683. 뒤에서 앞 순서. 마지막 장만 그림자 · Shorts 표식이 있다.
+        intro: {
+            width: 360,
+            height: 360,
+            photos: [
+                { cx: 105.2, cy: 170.1, width: 104, rotate: "10deg" },
+                { cx: 255.8, cy: 145.2, width: 104, rotate: "-9deg" },
+                { cx: 143.1, cy: 147.1, width: 104, rotate: "3deg" },
+                { cx: 201.3, cy: 212.1, width: 120, rotate: "-4deg" },
+            ],
+        },
+        // 00b 2175:1034. 뒤에서 앞 순서.
+        login: {
+            width: 360,
+            height: 240,
+            photos: [
+                { cx: 139.2, cy: 123.6, width: 84, rotate: "8deg" },
+                { cx: 222.8, cy: 108.8, width: 84, rotate: "-7deg" },
+                { cx: 178.7, cy: 105.2, width: 84, rotate: "1deg" },
+            ],
+        },
+    },
     // 03 분석 중 스켈레톤 2061:831.
     skeleton: {
         padding: 16,

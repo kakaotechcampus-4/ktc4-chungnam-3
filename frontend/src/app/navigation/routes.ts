@@ -2,6 +2,13 @@
 import type { NavigatorScreenParams } from "@react-navigation/native";
 
 export const ROUTES = {
+    // 온보딩(로그인 전 · 권한 단계). 인증 상태에 따라 Main 쪽과 둘 중 하나만 등록된다.
+    Intro: "Intro",
+    Login: "Login",
+    NotificationPermission: "NotificationPermission",
+    LocationPermission: "LocationPermission",
+    BackgroundLocation: "BackgroundLocation",
+    FirstSave: "FirstSave",
     Main: "Main",
     Nearby: "Nearby",
     Map: "Map",
@@ -28,6 +35,12 @@ export type SaveResultStackParamList = {
 };
 
 export type RootStackParamList = {
+    [ROUTES.Intro]: undefined;
+    [ROUTES.Login]: undefined;
+    [ROUTES.NotificationPermission]: undefined;
+    [ROUTES.LocationPermission]: undefined;
+    [ROUTES.BackgroundLocation]: undefined;
+    [ROUTES.FirstSave]: undefined;
     [ROUTES.Main]: NavigatorScreenParams<MainTabParamList>;
     [ROUTES.Settings]: undefined;
     [ROUTES.ContentDetail]: { placeId: string };
