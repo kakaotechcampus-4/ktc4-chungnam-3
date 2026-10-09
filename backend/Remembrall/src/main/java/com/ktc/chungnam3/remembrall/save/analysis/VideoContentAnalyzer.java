@@ -12,6 +12,7 @@ import com.ktc.chungnam3.remembrall.save.youtube.YoutubeMetadataClient;
 import com.ktc.chungnam3.remembrall.save.youtube.YoutubeUrlParser;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -216,6 +217,7 @@ public class VideoContentAnalyzer {
                 .chatOptions(options)
                 .build();
 
+        long startedAt = System.currentTimeMillis();
         ChatResponse response;
         try {
             response = chatModel.call(prompt);
@@ -228,13 +230,18 @@ public class VideoContentAnalyzer {
             return failedResult(metadata, videoInfo.title(), ExtractionFailureCode.EXTRACTION_API_ERROR);
         }
 
+        Usage usage = response.getMetadata().getUsage();
+        log.info("Gemini 호출 완료: videoId={} durationSec={} elapsedMs={} promptTokens={} completionTokens={} totalTokens={}",
+                videoId, videoInfo.durationSec(), System.currentTimeMillis() - startedAt,
+                usage.getPromptTokens(), usage.getCompletionTokens(), usage.getTotalTokens());
+
         String json = response.getResult().getOutput().getText();
 
         try {
             LlmResult result = objectMapper.readValue(json, LlmResult.class);
             return toExtractionResult(metadata, videoInfo, result);
         } catch (Exception e) {
-            log.warn("Gemini 응답 파싱 실패, raw json: {}", json, e);
+            log.warn("Gemini 응답 파싱 실패: videoId={} raw json: {}", videoId, json, e);
             return failedResult(metadata, videoInfo.title(), ExtractionFailureCode.EXTRACTION_RESULT_ERROR);
         }
     }
