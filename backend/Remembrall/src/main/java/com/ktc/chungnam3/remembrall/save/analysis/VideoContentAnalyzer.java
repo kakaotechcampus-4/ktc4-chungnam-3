@@ -12,6 +12,7 @@ import com.ktc.chungnam3.remembrall.save.youtube.YoutubeMetadataClient;
 import com.ktc.chungnam3.remembrall.save.youtube.YoutubeUrlParser;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -69,6 +70,9 @@ public class VideoContentAnalyzer {
               표현처럼 상호명이 아닌 해시태그는 무시해라.
             - summary는 영상의 핵심 주제, 소개 대상, 주요 특징과 영상에서 명시된 추천 상황·제약을 간결하게 적어라.
               장소가 없어도 요약은 남겨라.
+            - category에는 카페/맛집/관광지/축제/술집/쇼핑/기타 중 하나만 골라 담아라. 영상 전체의 category는
+              영상의 주된 성격을 기준으로 고르고, placeCandidates 각각의 category는 그 장소 하나하나의 업종을
+              기준으로 따로 고른다(같은 영상 안에서도 장소마다 다를 수 있다). 애매하면 기타로 둬라.
             - 장소 정보가 없으면 placeCandidates를 빈 배열로 두고 절대 추측하지 마라.
             - 장소 이름은 상호명(name)·지점명(branchName)·지역 단서(regionHint)로 나눠 적어라.
               예: "대전 성심당 본점"이면 name="성심당", branchName="본점", regionHint="대전".
@@ -89,6 +93,11 @@ public class VideoContentAnalyzer {
               "type": "object",
               "properties": {
                 "summary": { "type": "string" },
+                "category": {
+                  "type": "string",
+                  "enum": ["카페", "맛집", "관광지", "축제", "술집", "쇼핑", "기타"],
+                  "description": "영상 전체 내용에 맞는 분류 하나"
+                },
                 "placeCandidates": {
                   "type": "array",
                   "items": {
@@ -97,9 +106,14 @@ public class VideoContentAnalyzer {
                       "name": { "type": "string" },
                       "branchName": { "type": "string" },
                       "regionHint": { "type": "string" },
-                      "description": { "type": "string" }
+                      "description": { "type": "string" },
+                      "category": {
+                        "type": "string",
+                        "enum": ["카페", "맛집", "관광지", "축제", "술집", "쇼핑", "기타"],
+                        "description": "이 장소 하나에 맞는 분류 하나"
+                      }
                     },
-                    "required": ["name", "branchName", "regionHint", "description"]
+                    "required": ["name", "branchName", "regionHint", "description", "category"]
                   }
                 },
                 "temporalInfos": {
@@ -119,16 +133,17 @@ public class VideoContentAnalyzer {
                   }
                 }
               },
-              "required": ["summary", "placeCandidates", "temporalInfos"]
+              "required": ["summary", "category", "placeCandidates", "temporalInfos"]
             }
             """;
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record LlmResult(String summary, List<LlmPlace> placeCandidates, List<LlmTemporal> temporalInfos) {
+    private record LlmResult(String summary, String category, List<LlmPlace> placeCandidates,
+                              List<LlmTemporal> temporalInfos) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record LlmPlace(String name, String branchName, String regionHint, String description) {
+    private record LlmPlace(String name, String branchName, String regionHint, String description, String category) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -202,6 +217,7 @@ public class VideoContentAnalyzer {
                 .chatOptions(options)
                 .build();
 
+        long startedAt = System.currentTimeMillis();
         ChatResponse response;
         try {
             response = chatModel.call(prompt);
@@ -214,13 +230,18 @@ public class VideoContentAnalyzer {
             return failedResult(metadata, videoInfo.title(), ExtractionFailureCode.EXTRACTION_API_ERROR);
         }
 
+        Usage usage = response.getMetadata().getUsage();
+        log.info("Gemini 호출 완료: videoId={} durationSec={} elapsedMs={} promptTokens={} completionTokens={} totalTokens={}",
+                videoId, videoInfo.durationSec(), System.currentTimeMillis() - startedAt,
+                usage.getPromptTokens(), usage.getCompletionTokens(), usage.getTotalTokens());
+
         String json = response.getResult().getOutput().getText();
 
         try {
             LlmResult result = objectMapper.readValue(json, LlmResult.class);
             return toExtractionResult(metadata, videoInfo, result);
         } catch (Exception e) {
-            log.warn("Gemini 응답 파싱 실패, raw json: {}", json, e);
+            log.warn("Gemini 응답 파싱 실패: videoId={} raw json: {}", videoId, json, e);
             return failedResult(metadata, videoInfo.title(), ExtractionFailureCode.EXTRACTION_RESULT_ERROR);
         }
     }
@@ -231,6 +252,7 @@ public class VideoContentAnalyzer {
                 ExtractionStatus.FAILED,
                 metadata,
                 title,
+                null,
                 null,
                 List.of(),
                 List.of(),
@@ -255,7 +277,8 @@ public class VideoContentAnalyzer {
                     p.name(),
                     blankToNull(p.branchName()),
                     blankToNull(p.regionHint()),
-                    p.description()
+                    p.description(),
+                    p.category()
             ));
         }
 
@@ -279,6 +302,7 @@ public class VideoContentAnalyzer {
                 metadata,
                 videoInfo.title(),
                 result.summary(),
+                result.category(),
                 places,
                 temporalInfos,
                 null

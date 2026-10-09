@@ -2,6 +2,7 @@ package com.ktc.chungnam3.remembrall.save.analysis;
 
 import com.ktc.chungnam3.remembrall.extraction.dto.YouTubeContentExtractionResultDto;
 import com.ktc.chungnam3.remembrall.extraction.type.ExtractionStatus;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -27,6 +28,7 @@ import org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreAu
  * analyze()는 실패해도 예외를 던지지 않고 status: FAILED인 결과를 정상 반환하므로, 아래 테스트들은
  * try-catch가 아니라 result.status()를 보고 성공/실패를 가른다.
  */
+@Tag("live")
 @SpringBootTest(
         classes = VideoContentAnalyzerLiveTest.TestApp.class,
         properties = {
@@ -73,6 +75,7 @@ class VideoContentAnalyzerLiveTest {
         System.out.println("title: " + result.title());
         System.out.println("analysisMetadata: " + result.analysisMetadata());
         System.out.println("summary: " + result.summary());
+        System.out.println("category: " + result.category());
         System.out.println("placeCandidates: " + result.placeCandidates());
         System.out.println("temporalInfos: " + result.temporalInfos());
         System.out.println("failureCode: " + result.failureCode());
