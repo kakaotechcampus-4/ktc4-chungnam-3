@@ -75,6 +75,7 @@ class VideoContentAnalyzerLiveTest {
         System.out.println("title: " + result.title());
         System.out.println("analysisMetadata: " + result.analysisMetadata());
         System.out.println("summary: " + result.summary());
+        System.out.println("category: " + result.category());
         System.out.println("placeCandidates: " + result.placeCandidates());
         System.out.println("temporalInfos: " + result.temporalInfos());
         System.out.println("failureCode: " + result.failureCode());
