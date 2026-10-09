@@ -206,7 +206,11 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 - 회원당 Device 는 1개다. 다른 폰으로 로그인하면 기존 폰의 세션이 바뀌어 다음 요청에서 401 이 난다.
 - 백엔드는 카카오 토큰의 `app_id` 를 자기 설정(`kakao.app-id`)과 대조한다. 앱은 백엔드와 같은 카카오 앱 키를 쓴다.
 - 아직 연결하지 않는 것: FCM 토큰 등록(`PUT /api/devices/fcm-token`)은 Firebase 프로젝트 설정(google-services.json)이 필요하다.
-  약관 동의 API 는 백엔드 문서에만 있어 연결 시점을 백엔드와 정한다. 00b 의 약관 문구는 링크(이용약관 · 개인정보 처리방침)만 둔다.
+- 동의 API 는 서버에 있다: `GET /api/me/consents`, `PUT /api/me/consents/{consentType}`(유형 `LOCATION_BASED_SERVICE` · `PUBLIC_CANDIDATE_CONTRIBUTION`). 앱은 아직 부르지 않는다.
+    - 서버는 철회되지 않은 `LOCATION_BASED_SERVICE` 동의가 없으면 위치 이벤트를 실행 없이 버리고 그대로 202 를 돌려준다. 지금은 버린 이유가 응답 · 로그 어디에도 없다.
+    - PUT 으로 동의할 때(`agreed: true`) `termsVersion` 은 그 유형의 서버 설정 버전(`consent.*-terms-version`, 기본 v1)과 같아야 하고, 다르면 400 이다. 앱이 현재 버전을 조회할 방법은 아직 없다.
+    - 동의는 OS 위치 권한과 분리해 별도 동의 화면에서 명시적으로 받는다(설계 중).
+- 00b 의 약관 문구는 지금 링크 없이 문구만 있다. 이용약관 · 개인정보 처리방침 페이지가 생기면 링크로 연결한다.
 - 의존 방향: `shared/api/client.ts` → `shared/auth/session.ts`, `shared/auth/login.ts` → `client.ts` · `session.ts` · `providers.ts`.
   `session.ts` 는 클라이언트를 import 하지 않는다(순환 방지). 둘이 같이 읽는 API 주소는 `shared/api/config.ts` 에 둔다.
 
