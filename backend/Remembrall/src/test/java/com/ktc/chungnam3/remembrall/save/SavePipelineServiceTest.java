@@ -1,11 +1,10 @@
 package com.ktc.chungnam3.remembrall.save;
 
 import com.ktc.chungnam3.remembrall.extraction.dto.AnalysisMetadataDto;
-import com.ktc.chungnam3.remembrall.extraction.dto.FailureInfoDto;
 import com.ktc.chungnam3.remembrall.extraction.dto.PlaceCandidateDto;
 import com.ktc.chungnam3.remembrall.extraction.dto.YouTubeContentExtractionResultDto;
+import com.ktc.chungnam3.remembrall.extraction.type.ExtractionFailureCode;
 import com.ktc.chungnam3.remembrall.extraction.type.ExtractionStatus;
-import com.ktc.chungnam3.remembrall.extraction.type.FailureStage;
 import com.ktc.chungnam3.remembrall.save.confirm.ConfirmPolicy;
 import com.ktc.chungnam3.remembrall.save.dto.PlaceOutcomeDto;
 import com.ktc.chungnam3.remembrall.save.dto.SavePipelineRequestDto;
@@ -24,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SavePipelineServiceTest {
 
     private static PlaceCandidateDto candidate(String candidateId, String name, String branchName, String regionHint) {
-        return new PlaceCandidateDto(candidateId, name, branchName, regionHint, "설명", List.of(), List.of());
+        return new PlaceCandidateDto(candidateId, name, branchName, regionHint, "설명");
     }
 
     private static PlaceSearchClient.PlaceSearchResult result(String displayName, double lat, double lon) {
@@ -34,7 +33,7 @@ class SavePipelineServiceTest {
     private static YouTubeContentExtractionResultDto extraction(List<PlaceCandidateDto> candidates) {
         return new YouTubeContentExtractionResultDto(
                 ExtractionStatus.SUCCESS, new AnalysisMetadataDto("v1", "model", "v1"),
-                "요약", List.of(), candidates, List.of(), null);
+                null, "요약", candidates, List.of(), null);
     }
 
     /** name→검색결과를 그대로 매핑하는 PlaceLookup fake. 지정 안 된 이름은 빈 리스트. */
@@ -130,10 +129,9 @@ class SavePipelineServiceTest {
 
     @Test
     void 영상_분석_상태가_SUCCESS가_아니면_FAILED로_처리한다() {
-        var failure = new FailureInfoDto(FailureStage.VIDEO_ACCESS, null, null, "영상 접근 불가", null);
         YouTubeContentExtractionResultDto partial = new YouTubeContentExtractionResultDto(
                 ExtractionStatus.FAILED, new AnalysisMetadataDto("v1", "model", "v1"),
-                null, List.of(), List.of(), List.of(), failure);
+                null, null, List.of(), List.of(), ExtractionFailureCode.VIDEO_UNAVAILABLE);
         VideoAnalyzer analyzer = url -> partial;
         SavePipelineService service = new SavePipelineService(analyzer, lookupOf(java.util.Map.of()),
                 realResolver(), new ConfirmPolicy());
@@ -141,7 +139,7 @@ class SavePipelineServiceTest {
         SavePipelineResultDto resolved = service.save(new SavePipelineRequestDto("https://youtu.be/x", false));
 
         assertThat(resolved.status()).isEqualTo(ExtractionStatus.FAILED);
-        assertThat(resolved.failureMessage()).isEqualTo("영상 접근 불가");
+        assertThat(resolved.failureMessage()).contains("VIDEO_UNAVAILABLE");
     }
 
     @Test

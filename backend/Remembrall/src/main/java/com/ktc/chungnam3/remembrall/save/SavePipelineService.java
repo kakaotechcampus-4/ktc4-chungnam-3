@@ -71,7 +71,9 @@ public class SavePipelineService {
         // VideoContentAnalyzer는 지금 항상 SUCCESS만 반환하지만, 계약상 PARTIAL/FAILED도 가능하므로
         // 무시하지 않는다.
         if (extraction.status() != ExtractionStatus.SUCCESS) {
-            String message = extraction.failure() != null ? extraction.failure().message() : "영상 분석 실패";
+            String message = extraction.failureCode() != null
+                    ? "영상 분석 실패: " + extraction.failureCode()
+                    : "영상 분석 실패";
             return new SavePipelineResultDto(ExtractionStatus.FAILED, null, List.of(), message);
         }
 
@@ -127,8 +129,8 @@ public class SavePipelineService {
             return new PlaceOutcomeDto(
                     candidate.candidateId(), PlaceOutcomeDto.Decision.NEEDS_CONFIRMATION, null, result.confirmRequest());
         }
-        // ConfirmPolicy 클래스 javadoc의 TODO: 이미 물어봤는데도 못 좁혔으면 다시 묻지 않고 "상위 지역"
-        // 좌표로 저장한다.
+        // 이미 물어봤는데도 못 좁혔으면 다시 묻지 않고 "상위 지역" 좌표로 저장한다
+        // (ConfirmPolicy 클래스 javadoc 참고).
         return resolveBroaderRegion(candidate)
                 .map(place -> new PlaceOutcomeDto(candidate.candidateId(), PlaceOutcomeDto.Decision.RESOLVED, place, null))
                 .orElseGet(() -> new PlaceOutcomeDto(candidate.candidateId(), PlaceOutcomeDto.Decision.NO_PLACE, null, null));
