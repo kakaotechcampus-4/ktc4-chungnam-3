@@ -5,7 +5,8 @@ public record PlaceCandidateDto(
         String name,
         String branchName,
         String regionHint,
-        String description
+        String description,
+        String category
 
 ) {
 }

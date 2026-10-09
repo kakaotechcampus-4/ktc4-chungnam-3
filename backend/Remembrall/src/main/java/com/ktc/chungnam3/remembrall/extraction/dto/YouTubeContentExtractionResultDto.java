@@ -10,6 +10,7 @@ public record YouTubeContentExtractionResultDto(
         AnalysisMetadataDto analysisMetadata,
         String title,
         String summary,
+        String category,
         List<PlaceCandidateDto> placeCandidates,
         List<TemporalInfoDto> temporalInfos,
         ExtractionFailureCode failureCode
