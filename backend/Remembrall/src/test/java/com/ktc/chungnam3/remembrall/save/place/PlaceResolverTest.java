@@ -45,12 +45,12 @@ class PlaceResolverTest {
     }
 
     private static DataportalStoreClient.StoreResult store(String bizesNm) {
-        return new DataportalStoreClient.StoreResult(bizesNm, "", "음식", "어딘가", 0, 0);
+        return new DataportalStoreClient.StoreResult("", bizesNm, "", "음식", "어딘가", 0, 0);
     }
 
     private static DataportalStoreClient.StoreResult store(
             String bizesNm, String brchNm, String roadAddress, double lat, double lon) {
-        return new DataportalStoreClient.StoreResult(bizesNm, brchNm, "음식", roadAddress, lat, lon);
+        return new DataportalStoreClient.StoreResult("", bizesNm, brchNm, "음식", roadAddress, lat, lon);
     }
 
     private static PlaceSearchClient.PlaceSearchResult result(String displayName, double lat, double lon) {

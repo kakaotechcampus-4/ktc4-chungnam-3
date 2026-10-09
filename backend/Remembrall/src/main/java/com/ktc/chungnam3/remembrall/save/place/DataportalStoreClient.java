@@ -1,12 +1,14 @@
 package com.ktc.chungnam3.remembrall.save.place;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriBuilder;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,10 +29,16 @@ import java.util.Map;
  * {@code NO_OPENAPI_SERVICE_ERROR}로 죽어있는 경로였고, 실측으로 {@code sdsc2}가 살아있는 경로임을
  * 확인했다.
  */
+@Slf4j
 @Component
 public class DataportalStoreClient implements NearbyStoreLookup {
 
     private static final String BASE_URL = "https://apis.data.go.kr/B553077/api/open/sdsc2";
+
+    // 한 페이지 최대 건수(API 자체 한도) - PR 리뷰(doheelab-coder)로 발견: 광화문 1,519건·목동역 인근
+    // 1,200건대처럼 이 값을 넘는 지역이 실측상 흔해서(2026-10-09), 더 이상 "충분히 큰 값"이 아니라
+    // 페이지네이션이 꼭 필요하다는 게 확인됨 - 아래 call()이 totalCount까지 다 받을 때까지 반복 호출함.
+    private static final int NUM_OF_ROWS = 1000;
 
     private final RestClient restClient;
     private final String apiKey;
@@ -57,8 +65,12 @@ public class DataportalStoreClient implements NearbyStoreLookup {
                 .build();
     }
 
-    /** 도로명주소(rdnmAdr)를 기본으로 노출한다 - 지번주소보다 사용자에게 익숙한 표기라서. */
-    public record StoreResult(String bizesNm, String brchNm, String category, String roadAddress,
+    /**
+     * 도로명주소(rdnmAdr)를 기본으로 노출한다 - 지번주소보다 사용자에게 익숙한 표기라서. bizesId(상가업소
+     * 번호)는 PR 리뷰(doheelab-coder, 2026-10-09)로 추가 - 페이지네이션 때 페이지 간 중복 제거를
+     * "상호명|주소" 조합(동명이인 상가에 취약) 대신 이 고유 식별자로 정확히 할 수 있다.
+     */
+    public record StoreResult(String bizesId, String bizesNm, String brchNm, String category, String roadAddress,
                                double lat, double lon) {
     }
 
@@ -70,12 +82,13 @@ public class DataportalStoreClient implements NearbyStoreLookup {
     private record Header(String resultCode, String resultMsg) {
     }
 
+    /** totalCount: 이 반경·업종코드 조건의 전체 건수(페이지네이션 종료 조건 판단용, 실측으로 필드명 확인함). */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record Body(List<StoreItem> items) {
+    private record Body(List<StoreItem> items, Integer totalCount) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record StoreItem(String bizesNm, String brchNm, String indsLclsNm, String rdnmAdr,
+    private record StoreItem(String bizesId, String bizesNm, String brchNm, String indsLclsNm, String rdnmAdr,
                               double lat, double lon) {
     }
 
@@ -125,18 +138,65 @@ public class DataportalStoreClient implements NearbyStoreLookup {
         return callEach(lon, lat, radiusMeters, "indsSclsCd", industrySubCategoryCodes);
     }
 
+    /**
+     * 업종 코드마다 페이지네이션으로 전부 받은 뒤, 상가업소번호(bizesId)로 중복을 제거해서 합친다
+     * (PR 리뷰(doheelab-coder) 반영, 2026-10-09 - 예전엔 "상호명|주소" 조합으로 중복을 지웠는데,
+     * 페이지 간 응답 순서가 안 정렬돼 있어 동명이인 상가가 섞이면 부정확할 수 있었다). 업종 코드별로
+     * 중복 제거 후 개수가 그 코드의 totalCount와 다르면 경고 로그를 남긴다 - 리뷰어가 제안한 검증
+     * 방법을 코드에 남겨 나중에 빠진 데이터를 알아챌 수 있게 함.
+     */
     private List<StoreResult> callEach(
             double lon, double lat, int radiusMeters, String paramName, List<String> codes) {
         Map<String, StoreResult> merged = new LinkedHashMap<>();
         for (String code : codes) {
-            for (StoreResult store : call(lon, lat, radiusMeters, paramName, code)) {
-                merged.putIfAbsent(store.bizesNm() + "|" + store.roadAddress(), store);
+            List<StoreResult> stores = call(lon, lat, radiusMeters, paramName, code);
+            int beforeDedupe = merged.size();
+            for (StoreResult store : stores) {
+                merged.putIfAbsent(store.bizesId(), store);
+            }
+            int addedByThisCode = merged.size() - beforeDedupe;
+            if (addedByThisCode < stores.size()) {
+                log.debug("업종 코드 {}={} 응답 {}건 중 {}건이 다른 코드와 중복(bizesId 기준) - 정상",
+                        paramName, code, stores.size(), stores.size() - addedByThisCode);
             }
         }
         return List.copyOf(merged.values());
     }
 
+    /**
+     * {@code numOfRows}(1,000건) 상한을 넘는 지역(실측: 광화문 1,519건, 목동역 인근 1,200건대,
+     * PR 리뷰(doheelab-coder) 반영, 2026-10-09)을 위해 {@code totalCount}를 다 받을 때까지
+     * {@link #callPage}를 페이지네이션으로 반복 호출한다. {@code totalCount}가 안 오면(과거 응답
+     * 형식일 가능성 대비) 받은 건수가 {@link #NUM_OF_ROWS}보다 적어지는 페이지에서 멈춘다.
+     */
     private List<StoreResult> call(double lon, double lat, int radiusMeters, String categoryParamName, String categoryCode) {
+        List<StoreResult> all = new ArrayList<>();
+        int pageNo = 1;
+        while (true) {
+            PageResult page = callPage(lon, lat, radiusMeters, categoryParamName, categoryCode, pageNo);
+            all.addAll(page.stores());
+
+            boolean lastPage = page.totalCount() != null
+                    ? (long) pageNo * NUM_OF_ROWS >= page.totalCount()
+                    : page.stores().size() < NUM_OF_ROWS;
+            if (lastPage) {
+                if (page.totalCount() != null && all.size() != page.totalCount()) {
+                    log.warn("공공 상가정보 페이지네이션 결과({}건)가 totalCount({})와 다릅니다 - "
+                                    + "categoryCode={}, cx={}, cy={}, radius={}",
+                            all.size(), page.totalCount(), categoryCode, lon, lat, radiusMeters);
+                }
+                return all;
+            }
+            pageNo++;
+        }
+    }
+
+    /** 한 페이지 조회 결과 + 이 조건(반경·업종코드)의 전체 건수(페이지네이션 종료 판단용). */
+    private record PageResult(List<StoreResult> stores, Integer totalCount) {
+    }
+
+    private PageResult callPage(
+            double lon, double lat, int radiusMeters, String categoryParamName, String categoryCode, int pageNo) {
         // serviceKey는 {serviceKey} 자리표시자 + build(Map.of(...))로 넣는다(팀원 doheelab-coder 리뷰
         // 반영) - 리터럴로 바로 넣으면 키에 '+'가 있을 때 인코딩이 안 돼 서버가 공백으로 읽어버린다.
         StoreListResponse response = restClient.get()
@@ -144,8 +204,8 @@ public class DataportalStoreClient implements NearbyStoreLookup {
                     UriBuilder builder = uriBuilder.path("/storeListInRadius")
                             .queryParam("serviceKey", "{serviceKey}")
                             .queryParam("type", "json")
-                            .queryParam("numOfRows", 1000)
-                            .queryParam("pageNo", 1)
+                            .queryParam("numOfRows", NUM_OF_ROWS)
+                            .queryParam("pageNo", pageNo)
                             .queryParam("cx", lon)
                             .queryParam("cy", lat)
                             .queryParam("radius", radiusMeters);
@@ -163,7 +223,7 @@ public class DataportalStoreClient implements NearbyStoreLookup {
 
         String resultCode = response.header().resultCode();
         if ("03".equals(resultCode)) {
-            return List.of();
+            return new PageResult(List.of(), 0);
         }
         if (!"00".equals(resultCode)) {
             throw new IllegalStateException(
@@ -174,9 +234,11 @@ public class DataportalStoreClient implements NearbyStoreLookup {
         List<StoreItem> items = response.body() == null || response.body().items() == null
                 ? List.of() : response.body().items();
 
-        return items.stream()
+        List<StoreResult> stores = items.stream()
                 .map(item -> new StoreResult(
-                        item.bizesNm(), item.brchNm(), item.indsLclsNm(), item.rdnmAdr(), item.lat(), item.lon()))
+                        item.bizesId(), item.bizesNm(), item.brchNm(), item.indsLclsNm(), item.rdnmAdr(),
+                        item.lat(), item.lon()))
                 .toList();
+        return new PageResult(stores, response.body() == null ? null : response.body().totalCount());
     }
 }
