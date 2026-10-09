@@ -131,6 +131,20 @@ public class PlaceResolver {
     // 보수적인 값 - 애매하면 합치지 않고 그대로 되묻는 쪽이 안전하다(filterByRegion과 같은 원칙).
     private static final double DUPLICATE_MERGE_RADIUS_METERS = 100.0;
 
+    // "CU"처럼 브랜드명이 짧아서 대분류(G2) 반경검색 + 상호명 부분일치만으론 무관한 업소까지 과매칭되던
+    // 브랜드 전용 목록(2026-10-08, 실측으로 CU 과매칭 15건 확인 후 추가) - 이 목록에 있으면 업종
+    // 소분류 코드로 먼저 좁힌다. G20405(편의점) 하나만 둔다 - GS25 일부 지점이 소분류상 "슈퍼마켓"으로
+    // 등록된 사례가 실측으로 확인됐으나(ponytail: 이 경우는 여전히 못 잡음, 슈퍼마켓 소분류 코드 확정되면
+    // 추가), CU는 전부 G20405였다.
+    private static final Set<String> CONVENIENCE_STORE_BRANDS =
+            Set.of("CU", "GS25", "지에스25", "세븐일레븐", "이마트24");
+    private static final List<String> CONVENIENCE_STORE_SUBCATEGORY_CODES = List.of("G20405");
+
+    // 공공상가정보엔 "CU"가 로마자가 아니라 한글 음차("씨유")로 등록돼 있어(2026-10-08 실측 확인) -
+    // Gemini가 영상에서 뽑아내는 이름은 간판 그대로 로마자 "CU"일 걸로 예상되는데, 글자가 아예 안
+    // 겹쳐서 containsIgnoreCase로는 영원히 매칭이 안 된다. 이런 표기 불일치가 또 나오면 여기 추가한다.
+    private static final Map<String, String> BRAND_NAME_ALIASES = Map.of("CU", "씨유");
+
     private final NearbyStoreLookup nearbyStoreLookup;
     private final PlaceLookup placeLookup;
     private final FranchiseAnchorLookup franchiseAnchorLookup;
@@ -269,21 +283,39 @@ public class PlaceResolver {
      */
     private List<PlaceSearchClient.PlaceSearchResult> filterByRegion(
             String regionHint, List<PlaceSearchClient.PlaceSearchResult> results) {
-        if (regionHint == null || regionHint.isBlank()) {
-            return results;
-        }
-
-        List<String> aliases = KoreanProvinces.ROMANIZED_ALIASES.keySet().stream()
-                .filter(regionHint::contains)
-                .flatMap(key -> KoreanProvinces.displayAliasesFor(key).stream())
-                .toList();
-
+        List<String> aliases = regionAliases(regionHint);
         if (aliases.isEmpty()) {
             return results;
         }
-
         return results.stream()
                 .filter(r -> aliases.stream().anyMatch(alias -> containsIgnoreCase(r.displayName(), alias)))
+                .toList();
+    }
+
+    /**
+     * {@link #filterByRegion}과 같은 기준(시·도 별칭 교차검증)을 공공상가정보 주소(roadAddress)에
+     * 적용한다 - {@link #resolveViaVWorldAnchor}가 VWorld 기준점이 엉뚱한 지역으로 잘못 잡히는 걸
+     * 잡아내는 용도. VWorld 응답 자체엔 주소가 없어서(의도적, VWorldSearchClient 참고) 여기서 거른다.
+     */
+    private List<DataportalStoreClient.StoreResult> filterStoresByRegion(
+            String regionHint, List<DataportalStoreClient.StoreResult> stores) {
+        List<String> aliases = regionAliases(regionHint);
+        if (aliases.isEmpty()) {
+            return stores;
+        }
+        return stores.stream()
+                .filter(s -> s.roadAddress() != null
+                        && aliases.stream().anyMatch(alias -> containsIgnoreCase(s.roadAddress(), alias)))
+                .toList();
+    }
+
+    private List<String> regionAliases(String regionHint) {
+        if (regionHint == null || regionHint.isBlank()) {
+            return List.of();
+        }
+        return KoreanProvinces.ROMANIZED_ALIASES.keySet().stream()
+                .filter(regionHint::contains)
+                .flatMap(key -> KoreanProvinces.displayAliasesFor(key).stream())
                 .toList();
     }
 
@@ -357,7 +389,7 @@ public class PlaceResolver {
         if (nearby.isEmpty()) {
             return false;
         }
-        return nearby.stream().noneMatch(store -> containsIgnoreCase(store.bizesNm(), name));
+        return nearby.stream().noneMatch(store -> matchesBrand(store.bizesNm(), name));
     }
 
     /**
@@ -396,7 +428,7 @@ public class PlaceResolver {
      * {@link #resolveViaAnchor}와 같은 "상호명 먼저, 안 되면 거리" 순서를({@link
      * #narrowByBrandThenDistance}) 그대로 재사용한다 - 반경만 훨씬 좁을 뿐 좁히는 방식은 동일하다.
      */
-    private Optional<Result> resolveViaVWorldAnchor(String candidateId, String name, String branchName) {
+    private Optional<Result> resolveViaVWorldAnchor(String candidateId, String name, String branchName, String regionHint) {
         String query = branchName == null || branchName.isBlank() ? name : name + " " + branchName;
 
         Optional<PlaceSearchClient.PlaceSearchResult> anchor;
@@ -411,25 +443,45 @@ public class PlaceResolver {
 
         List<DataportalStoreClient.StoreResult> nearby;
         try {
-            nearby = nearbyStoreLookup.searchByRadius(
-                    anchor.get().lon(), anchor.get().lat(), VWORLD_ANCHOR_RADIUS_METERS, List.of("I2", "G2"));
+            nearby = nearbyStores(name, anchor.get().lon(), anchor.get().lat(), VWORLD_ANCHOR_RADIUS_METERS);
         } catch (RuntimeException e) {
+            return Optional.empty();
+        }
+        // PR 리뷰(doheelab-coder)로 발견된 버그 수정 - VWorld가 같은 지점명("중앙점" 등)을 regionHint와
+        // 무관한 다른 시·도에서 찾아줘도 그대로 기준점으로 믿어버려서, 그 반경 안 업소를 엉뚱한 지역의
+        // 지점으로 확정해버리는 사례가 있었다. VWorld 응답 자체(좌표만 있고 주소 없음, 약관상 의도적으로
+        // 그렇게 만들어둠 - VWorldSearchClient 참고)는 교차검증에 못 쓰므로, 대신 이미 저장 가능한
+        // 공공상가정보 주소(roadAddress)로 regionHint를 교차검증한다 - 기준점이 엉뚱한 지역이면 그 반경
+        // 안 업소들의 주소도 전부 엉뚱한 지역이라 여기서 걸러진다.
+        nearby = filterStoresByRegion(regionHint, nearby);
+        if (nearby.isEmpty()) {
             return Optional.empty();
         }
 
         List<DataportalStoreClient.StoreResult> brandMatches = nearby.stream()
-                .filter(s -> containsIgnoreCase(s.bizesNm(), name))
+                .filter(s -> matchesBrand(s.bizesNm(), name))
                 .toList();
-        // 반경이 좁아서(100m) 상호명이 안 맞아도 브랜드 자체가 전혀 없을 수 있다 - 그럴 땐 상호명
-        // 표기 불일치(이디야류)일 가능성이 있으니, 브랜드 미확인 상태로라도 반경 내 전체를 거리
-        // 판단에 넘긴다(narrowByBrandThenDistance가 비어있으면 폴백하므로, 여기선 전체 nearby로 넘김).
-        List<DataportalStoreClient.StoreResult> candidates = brandMatches.isEmpty() ? nearby : brandMatches;
-        if (candidates.isEmpty()) {
-            return Optional.empty();
+        if (brandMatches.isEmpty()) {
+            // PR 리뷰(doheelab-coder)로 발견된 버그 수정(2026-10-09) - 반경 안 업소가 지역은 맞는데
+            // 브랜드가 확인되는 곳이 하나도 없을 때, 예전엔 "상호명 표기 불일치(이디야류)일 수 있다"며
+            // 브랜드 무관 전체(nearby)를 narrowByBrandThenDistance에 그대로 넘겼다 - 그 결과 반경 안에
+            // 전혀 다른 가게만 있어도 가장 가깝다는 이유로 그 가게가 찾던 브랜드로 확정돼버렸다(예:
+            // "CU 중구청점"을 찾는데 반경 안엔 전혀 다른 가게만 있어도 그게 CU로 확정됨). 브랜드명
+            // 대신 지점명(branchName) 텍스트로 한 번 더 좁혀본다 - 이디야류(등록명엔 "커피"가 없지만
+            // 지점명 "홍대청기와점"은 그대로 들어있는 경우)는 이걸로 걸리니 확정 대신 되묻는다. 지점명
+            // 텍스트로도 전혀 안 걸리거나 너무 많이 걸리면(개수 상한 초과) 이 기준점 자체를 못 믿겠다는
+            // 뜻이니 포기하고 기존 ①~④ 흐름으로 폴백한다.
+            List<DataportalStoreClient.StoreResult> byBranch = nearby.stream()
+                    .filter(s -> containsIgnoreCase(s.brchNm(), branchName) || containsIgnoreCase(s.bizesNm(), branchName))
+                    .toList();
+            if (byBranch.isEmpty() || byBranch.size() > MAX_CONFIRMATION_CANDIDATES) {
+                return Optional.empty();
+            }
+            return Optional.of(confirmOnly(candidateId, byBranch));
         }
 
         return narrowByBrandThenDistance(
-                candidateId, name, branchName, anchor.get().lat(), anchor.get().lon(), candidates);
+                candidateId, name, branchName, anchor.get().lat(), anchor.get().lon(), brandMatches);
     }
 
     /**
@@ -441,7 +493,7 @@ public class PlaceResolver {
      * 기준점)로 폴백한다.
      */
     private Optional<Result> resolveViaAnchor(String candidateId, String name, String branchName, String regionHint) {
-        Optional<Result> viaVWorldAnchor = resolveViaVWorldAnchor(candidateId, name, branchName);
+        Optional<Result> viaVWorldAnchor = resolveViaVWorldAnchor(candidateId, name, branchName, regionHint);
         if (viaVWorldAnchor.isPresent()) {
             return viaVWorldAnchor;
         }
@@ -470,19 +522,13 @@ public class PlaceResolver {
 
         List<DataportalStoreClient.StoreResult> nearby;
         try {
-            // 프랜차이즈 브랜드는 대부분 음식(I2)·소매(G2) 업종이라 이 둘로 서버 쪽에서 먼저 좁힌다 -
-            // 강남역처럼 밀집한 상권은 업종 필터 없이 numOfRows를 늘리는 것만으론 부족했다(실측 확인,
-            // DataportalStoreClient 참고). 다른 업종 브랜드는 이 목록에 없으면 여전히 못 찾을 수 있음 -
-            // 팀 검토 필요한 임시 목록.
-            nearby = nearbyStoreLookup.searchByRadius(
-                    anchor.get().lon(), anchor.get().lat(), franchiseAnchorRadiusMeters,
-                    List.of("I2", "G2"));
+            nearby = nearbyStores(name, anchor.get().lon(), anchor.get().lat(), franchiseAnchorRadiusMeters);
         } catch (RuntimeException e) {
             return Optional.empty();
         }
 
         List<DataportalStoreClient.StoreResult> brandMatches = nearby.stream()
-                .filter(s -> containsIgnoreCase(s.bizesNm(), name))
+                .filter(s -> matchesBrand(s.bizesNm(), name))
                 .toList();
         if (brandMatches.isEmpty()) {
             return Optional.empty();
@@ -490,6 +536,21 @@ public class PlaceResolver {
 
         return narrowByBrandThenDistance(
                 candidateId, name, branchName, anchor.get().lat(), anchor.get().lon(), brandMatches);
+    }
+
+    /**
+     * 기준점(VWorld/LocationIQ 공용) 주변 상가업소를 조회한다 - {@link #CONVENIENCE_STORE_BRANDS}에
+     * 있는 브랜드는 업종 소분류 코드로 먼저 좁히고(2026-10-08, CU 과매칭 수정), 나머지는 기존처럼
+     * 음식(I2)·소매(G2) 대분류로 좁힌다. 다른 업종 브랜드는 이 목록에 없으면 여전히 못 찾을 수 있음 -
+     * 팀 검토 필요한 임시 목록.
+     */
+    private List<DataportalStoreClient.StoreResult> nearbyStores(
+            String name, double lon, double lat, int radiusMeters) {
+        if (CONVENIENCE_STORE_BRANDS.stream().anyMatch(brand -> containsIgnoreCase(name, brand))) {
+            return nearbyStoreLookup.searchByRadiusBySubCategory(
+                    lon, lat, radiusMeters, CONVENIENCE_STORE_SUBCATEGORY_CODES);
+        }
+        return nearbyStoreLookup.searchByRadius(lon, lat, radiusMeters, List.of("I2", "G2"));
     }
 
     /**
@@ -522,21 +583,26 @@ public class PlaceResolver {
         // 2차: 텍스트로 전혀 안 좁혀지면(예: 등록명이 "강남역점"이 아니라 "7번출구"처럼 완전히 다른
         // 표기라 문자열 매칭 자체가 불가능한 경우) 지점명 대신 "기준점에서 가장 가까운 곳"으로 좁힌다.
         // 브랜드명은 이미 확인했으니, 여기서는 거리만 본다. 제일 가까운 곳이 그 다음으로 가까운 곳보다
-        // 확실히(DISTANCE_TIE_MARGIN_METERS 이상) 가까우면 그곳으로 확정하고, 비슷하게 가까운 곳이
+        // 확실히(DISTANCE_TIE_MARGIN_METERS 이상) 가까우면 그곳을 후보로 추리고, 비슷하게 가까운 곳이
         // 여럿이면(같은 건물에 여러 지점 등) 확신할 수 없으면 되묻는다.
+        //
+        // PR 리뷰(doheelab-coder)로 발견된 버그 수정(2026-10-09) - 브랜드는 맞아도 지점명 텍스트가
+        // 전혀 안 걸려서(예: "강남역점"을 찾는데 반경 안엔 같은 체인의 "역삼점"만 있음) 순전히 거리만
+        // 보고 좁힌 경우엔, 그게 찾던 그 지점이라고 확신할 수 없다 - 자동 확정(buildResult) 대신
+        // confirmOnly로 되물어서, 상가정보에 등록된 그 가게의 실제 이름을 보여준다.
         List<DataportalStoreClient.StoreResult> byDistance = brandMatches.stream()
                 .sorted(Comparator.comparingDouble(s -> distanceMeters(anchorLat, anchorLon, s.lat(), s.lon())))
                 .toList();
 
         if (byDistance.size() == 1) {
-            return Optional.of(buildResult(candidateId, name, branchName, byDistance));
+            return Optional.of(confirmOnly(candidateId, byDistance));
         }
 
         double closest = distanceMeters(anchorLat, anchorLon, byDistance.get(0).lat(), byDistance.get(0).lon());
         double secondClosest = distanceMeters(anchorLat, anchorLon, byDistance.get(1).lat(), byDistance.get(1).lon());
 
         if (secondClosest - closest >= DISTANCE_TIE_MARGIN_METERS) {
-            return Optional.of(buildResult(candidateId, name, branchName, List.of(byDistance.get(0))));
+            return Optional.of(confirmOnly(candidateId, List.of(byDistance.get(0))));
         }
 
         return Optional.of(buildResult(candidateId, name, branchName,
@@ -562,6 +628,21 @@ public class PlaceResolver {
         return new Result(Decision.NEEDS_CONFIRMATION, null, confirm);
     }
 
+    /**
+     * 브랜드 자체가 확인 안 된 상황({@link #resolveViaVWorldAnchor}가 지점명 텍스트로만 좁힌 경우,
+     * 2026-10-09 PR 리뷰로 발견된 버그 수정) 전용 - {@link #buildResult}와 달리 후보가 1건이어도
+     * 자동 확정하지 않고 항상 되묻는다(브랜드를 확신할 수 없으므로). 옵션에는 검색했던 브랜드/지점명이
+     * 아니라 그 업소 자체의 실제 상호명(bizesNm)·지점명(brchNm)을 넣는다 - 사용자에게 "이 가게가
+     * 맞나요?"라고 솔직하게 묻기 위함.
+     */
+    private Result confirmOnly(String candidateId, List<DataportalStoreClient.StoreResult> stores) {
+        List<ResolvedPlaceDto> options = IntStream.range(0, stores.size())
+                .mapToObj(i -> new ResolvedPlaceDto(candidateId + "-" + (i + 1), stores.get(i).bizesNm(),
+                        stores.get(i).brchNm(), stores.get(i).roadAddress(), stores.get(i).lat(), stores.get(i).lon()))
+                .toList();
+        return new Result(Decision.NEEDS_CONFIRMATION, null, new ConfirmRequestDto("어느 지점이 맞을까요?", options));
+    }
+
     /** 두 좌표 사이 거리(미터) - Haversine 공식. 반경 몇백m 안에서 순위만 매기면 되므로 정밀도는 충분. */
     private double distanceMeters(double lat1, double lon1, double lat2, double lon2) {
         double earthRadiusMeters = 6371000;
@@ -574,7 +655,23 @@ public class PlaceResolver {
         return earthRadiusMeters * c;
     }
 
+    // haystack=null은 "검색할 텍스트 자체가 없음"이므로 false(불일치)로 처리한다 - LocalDataStoreLookup의
+    // brchNm이 항상 null인 경우(2026-10-09, CompositeNearbyStoreLookup 연결 후 실제 재검증 중 NPE로
+    // 발견)처럼, 모든 호출부가 null 가능성이 있는 필드를 넘길 수 있어 호출부마다 널 체크를 두는 대신
+    // 여기 한 곳에서 안전하게 처리한다.
     private boolean containsIgnoreCase(String haystack, String needle) {
-        return haystack.toLowerCase().contains(needle.toLowerCase());
+        return haystack != null && haystack.toLowerCase().contains(needle.toLowerCase());
+    }
+
+    /**
+     * {@link #containsIgnoreCase}에 {@link #BRAND_NAME_ALIASES}를 더해 브랜드명을 확인한다 - "CU"처럼
+     * 공공상가정보 등록 표기(한글 음차)가 후보 이름(로마자)과 글자 자체가 안 겹치는 브랜드 전용.
+     */
+    private boolean matchesBrand(String bizesNm, String brandName) {
+        if (containsIgnoreCase(bizesNm, brandName)) {
+            return true;
+        }
+        String alias = BRAND_NAME_ALIASES.get(brandName);
+        return alias != null && containsIgnoreCase(bizesNm, alias);
     }
 }
