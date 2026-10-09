@@ -583,21 +583,26 @@ public class PlaceResolver {
         // 2차: 텍스트로 전혀 안 좁혀지면(예: 등록명이 "강남역점"이 아니라 "7번출구"처럼 완전히 다른
         // 표기라 문자열 매칭 자체가 불가능한 경우) 지점명 대신 "기준점에서 가장 가까운 곳"으로 좁힌다.
         // 브랜드명은 이미 확인했으니, 여기서는 거리만 본다. 제일 가까운 곳이 그 다음으로 가까운 곳보다
-        // 확실히(DISTANCE_TIE_MARGIN_METERS 이상) 가까우면 그곳으로 확정하고, 비슷하게 가까운 곳이
+        // 확실히(DISTANCE_TIE_MARGIN_METERS 이상) 가까우면 그곳을 후보로 추리고, 비슷하게 가까운 곳이
         // 여럿이면(같은 건물에 여러 지점 등) 확신할 수 없으면 되묻는다.
+        //
+        // PR 리뷰(doheelab-coder)로 발견된 버그 수정(2026-10-09) - 브랜드는 맞아도 지점명 텍스트가
+        // 전혀 안 걸려서(예: "강남역점"을 찾는데 반경 안엔 같은 체인의 "역삼점"만 있음) 순전히 거리만
+        // 보고 좁힌 경우엔, 그게 찾던 그 지점이라고 확신할 수 없다 - 자동 확정(buildResult) 대신
+        // confirmOnly로 되물어서, 상가정보에 등록된 그 가게의 실제 이름을 보여준다.
         List<DataportalStoreClient.StoreResult> byDistance = brandMatches.stream()
                 .sorted(Comparator.comparingDouble(s -> distanceMeters(anchorLat, anchorLon, s.lat(), s.lon())))
                 .toList();
 
         if (byDistance.size() == 1) {
-            return Optional.of(buildResult(candidateId, name, branchName, byDistance));
+            return Optional.of(confirmOnly(candidateId, byDistance));
         }
 
         double closest = distanceMeters(anchorLat, anchorLon, byDistance.get(0).lat(), byDistance.get(0).lon());
         double secondClosest = distanceMeters(anchorLat, anchorLon, byDistance.get(1).lat(), byDistance.get(1).lon());
 
         if (secondClosest - closest >= DISTANCE_TIE_MARGIN_METERS) {
-            return Optional.of(buildResult(candidateId, name, branchName, List.of(byDistance.get(0))));
+            return Optional.of(confirmOnly(candidateId, List.of(byDistance.get(0))));
         }
 
         return Optional.of(buildResult(candidateId, name, branchName,

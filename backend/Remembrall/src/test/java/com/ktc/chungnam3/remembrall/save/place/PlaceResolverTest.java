@@ -315,9 +315,11 @@ class PlaceResolverTest {
     }
 
     @Test
-    void 지점명_텍스트가_전혀_달라도_기준점에서_확실히_가까우면_거리로_확정한다() {
+    void 지점명_텍스트가_전혀_달라도_기준점에서_확실히_가까우면_거리로_좁혀_되묻는다() {
         // 실측 사례: "강남역점"을 찾는데 실제 등록명은 "7번출구"뿐이라 문자열로는 전혀 안 걸림.
-        // 그래도 기준점(강남역)에서 훨씬 더 가까운 지점이 하나 있으면 그곳으로 확정해야 한다.
+        // 기준점(강남역)에서 훨씬 더 가까운 지점이 하나 있으면 그곳으로 좁히긴 하지만, 순전히 거리로만
+        // 좁힌 거라 그게 찾던 그 지점이라고 확신할 순 없다(PR 리뷰로 발견된 버그 수정, 2026-10-09) -
+        // 자동 확정 대신 confirmOnly로 되묻는다.
         var anchor = result("강남역, 서울특별시", 37.4979, 127.0276);
         var closeBranch = store("스타벅스", "7번출구", "서초구 강남대로 385", 37.4980, 127.0277); // 몇 m 거리
         var farBranch = store("스타벅스", "", "서울 다른 동네 어딘가", 37.65, 126.93); // 수 km 거리
@@ -326,8 +328,9 @@ class PlaceResolverTest {
         PlaceResolver.Result resolved = resolver.resolve(
                 "p1", "스타벅스", "강남역점", "서울 강남", List.of());
 
-        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
-        assertThat(resolved.resolvedPlace().address()).isEqualTo("서초구 강남대로 385");
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.NEEDS_CONFIRMATION);
+        assertThat(resolved.confirmRequest().candidates()).extracting("address")
+                .containsExactly("서초구 강남대로 385");
     }
 
     @Test
