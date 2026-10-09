@@ -93,7 +93,7 @@ public class DataportalStoreClient implements NearbyStoreLookup {
      */
     @Override
     public List<StoreResult> searchByRadius(double lon, double lat, int radiusMeters) {
-        return call(lon, lat, radiusMeters, null);
+        return call(lon, lat, radiusMeters, null, null);
     }
 
     /**
@@ -107,17 +107,36 @@ public class DataportalStoreClient implements NearbyStoreLookup {
         if (industryLargeCategoryCodes == null || industryLargeCategoryCodes.isEmpty()) {
             return searchByRadius(lon, lat, radiusMeters);
         }
+        return callEach(lon, lat, radiusMeters, "indsLclsCd", industryLargeCategoryCodes);
+    }
 
+    /**
+     * 업종 소분류 코드(예: "G20405"=편의점)로 대분류보다 훨씬 좁혀서 조회한다(2026-10-08 추가, 실측
+     * 확인: 강남역 반경에서 "CU"로 대분류(G2)만 걸고 상호명 부분일치로 찾으면 무관한 업소까지 15건
+     * 걸리는데, 소분류로 먼저 걸러두면 편의점끼리만 남아 과매칭이 사라짐). "CU"처럼 브랜드명이 너무
+     * 짧아 상호명 부분일치만으론 과매칭되는 브랜드 전용 - {@link PlaceResolver}가 호출 여부를 판단한다.
+     */
+    @Override
+    public List<StoreResult> searchByRadiusBySubCategory(
+            double lon, double lat, int radiusMeters, List<String> industrySubCategoryCodes) {
+        if (industrySubCategoryCodes == null || industrySubCategoryCodes.isEmpty()) {
+            return searchByRadius(lon, lat, radiusMeters);
+        }
+        return callEach(lon, lat, radiusMeters, "indsSclsCd", industrySubCategoryCodes);
+    }
+
+    private List<StoreResult> callEach(
+            double lon, double lat, int radiusMeters, String paramName, List<String> codes) {
         Map<String, StoreResult> merged = new LinkedHashMap<>();
-        for (String categoryCode : industryLargeCategoryCodes) {
-            for (StoreResult store : call(lon, lat, radiusMeters, categoryCode)) {
+        for (String code : codes) {
+            for (StoreResult store : call(lon, lat, radiusMeters, paramName, code)) {
                 merged.putIfAbsent(store.bizesNm() + "|" + store.roadAddress(), store);
             }
         }
         return List.copyOf(merged.values());
     }
 
-    private List<StoreResult> call(double lon, double lat, int radiusMeters, String industryLargeCategoryCode) {
+    private List<StoreResult> call(double lon, double lat, int radiusMeters, String categoryParamName, String categoryCode) {
         // serviceKey는 {serviceKey} 자리표시자 + build(Map.of(...))로 넣는다(팀원 doheelab-coder 리뷰
         // 반영) - 리터럴로 바로 넣으면 키에 '+'가 있을 때 인코딩이 안 돼 서버가 공백으로 읽어버린다.
         StoreListResponse response = restClient.get()
@@ -130,8 +149,8 @@ public class DataportalStoreClient implements NearbyStoreLookup {
                             .queryParam("cx", lon)
                             .queryParam("cy", lat)
                             .queryParam("radius", radiusMeters);
-                    if (industryLargeCategoryCode != null) {
-                        builder = builder.queryParam("indsLclsCd", industryLargeCategoryCode);
+                    if (categoryCode != null) {
+                        builder = builder.queryParam(categoryParamName, categoryCode);
                     }
                     return builder.build(Map.of("serviceKey", apiKey));
                 })

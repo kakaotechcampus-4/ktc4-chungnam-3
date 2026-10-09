@@ -21,4 +21,15 @@ public interface NearbyStoreLookup {
             double lon, double lat, int radiusMeters, List<String> industryLargeCategoryCodes) {
         return searchByRadius(lon, lat, radiusMeters);
     }
+
+    /**
+     * 업종 소분류 코드(예: "G20405"=편의점)로 대분류보다 훨씬 좁혀서 조회한다(2026-10-08 추가) - "CU"처럼
+     * 브랜드명이 짧아 상호명 부분일치만으론 반경 내 무관한 업소까지 과매칭되는 브랜드 전용({@link
+     * PlaceResolver}가 호출 여부를 판단). 기본 구현은 대분류 필터 없이 위임하므로, 기존 테스트(람다
+     * 구현)는 그대로 동작한다 - 실제 소분류 필터링은 {@link DataportalStoreClient}만 오버라이드해서 제공한다.
+     */
+    default List<DataportalStoreClient.StoreResult> searchByRadiusBySubCategory(
+            double lon, double lat, int radiusMeters, List<String> industrySubCategoryCodes) {
+        return searchByRadius(lon, lat, radiusMeters);
+    }
 }
