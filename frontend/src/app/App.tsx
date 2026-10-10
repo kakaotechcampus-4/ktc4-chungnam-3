@@ -1,5 +1,6 @@
 // 앱 셸. 프로바이더 구성과 RootNavigator 마운트.
 import { GowunDodum_400Regular } from "@expo-google-fonts/gowun-dodum/400Regular";
+import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import {
     DefaultTheme,
     NavigationContainer,
@@ -64,7 +65,10 @@ export default function App() {
             <SafeAreaProvider>
                 <StatusBar style="dark" />
                 <NavigationContainer linking={linking} theme={navigationTheme}>
-                    <RootNavigator />
+                    {/* 모달 시트(동의 시트)는 화면 위 · 하단 바 위에 뜬다. */}
+                    <BottomSheetModalProvider>
+                        <RootNavigator />
+                    </BottomSheetModalProvider>
                 </NavigationContainer>
             </SafeAreaProvider>
         </GestureHandlerRootView>
