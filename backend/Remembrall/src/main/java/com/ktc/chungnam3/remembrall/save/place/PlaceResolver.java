@@ -1,5 +1,6 @@
 package com.ktc.chungnam3.remembrall.save.place;
 
+import com.ktc.chungnam3.remembrall.domain.place.GeocodingProvider;
 import com.ktc.chungnam3.remembrall.save.dto.ConfirmRequestDto;
 import com.ktc.chungnam3.remembrall.save.dto.ResolvedPlaceDto;
 import lombok.extern.slf4j.Slf4j;
@@ -193,14 +194,16 @@ public class PlaceResolver {
 
             if (branchMatchesOrUnspecified && !hasNearbyStoreMismatch(name, match)) {
                 ResolvedPlaceDto place = new ResolvedPlaceDto(
-                        candidateId, name, branchName, match.displayName(), match.lat(), match.lon());
+                        candidateId, name, branchName, match.displayName(), match.lat(), match.lon(),
+                        GeocodingProvider.LOCATIONIQ, match.placeId(), null);
                 return new Result(Decision.RESOLVED, place, null);
             }
 
             // 이름은 맞는데 찾던 지점인지(지점명 불일치), 또는 이 좌표가 실제로 맞는 곳인지
             // (반경 내 상가업소 이름 불일치) 확신할 수 없으니 확정하지 않고 되묻는다.
             ConfirmRequestDto confirm = new ConfirmRequestDto("어느 장소가 맞을까요?", List.of(
-                    new ResolvedPlaceDto(candidateId + "-1", name, branchName, match.displayName(), match.lat(), match.lon())
+                    new ResolvedPlaceDto(candidateId + "-1", name, branchName, match.displayName(), match.lat(), match.lon(),
+                            GeocodingProvider.LOCATIONIQ, match.placeId(), null)
             ));
             return new Result(Decision.NEEDS_CONFIRMATION, null, confirm);
         }
@@ -210,7 +213,8 @@ public class PlaceResolver {
             if (matched.isPresent()) {
                 PlaceSearchClient.PlaceSearchResult match = matched.get();
                 ResolvedPlaceDto place = new ResolvedPlaceDto(
-                        candidateId, name, branchName, match.displayName(), match.lat(), match.lon());
+                        candidateId, name, branchName, match.displayName(), match.lat(), match.lon(),
+                        GeocodingProvider.LOCATIONIQ, match.placeId(), null);
                 return new Result(Decision.RESOLVED, place, null);
             }
         }
@@ -219,7 +223,8 @@ public class PlaceResolver {
                 .mapToObj(i -> {
                     PlaceSearchClient.PlaceSearchResult match = filtered.get(i);
                     return new ResolvedPlaceDto(
-                            candidateId + "-" + (i + 1), name, branchName, match.displayName(), match.lat(), match.lon());
+                            candidateId + "-" + (i + 1), name, branchName, match.displayName(), match.lat(), match.lon(),
+                            GeocodingProvider.LOCATIONIQ, match.placeId(), null);
                 })
                 .toList();
         ConfirmRequestDto confirm = new ConfirmRequestDto("어느 장소가 맞을까요?", options);
@@ -614,14 +619,16 @@ public class PlaceResolver {
                                 List<DataportalStoreClient.StoreResult> matches) {
         if (matches.size() == 1) {
             DataportalStoreClient.StoreResult m = matches.get(0);
-            ResolvedPlaceDto place = new ResolvedPlaceDto(candidateId, name, branchName, m.roadAddress(), m.lat(), m.lon());
+            ResolvedPlaceDto place = new ResolvedPlaceDto(candidateId, name, branchName, m.roadAddress(), m.lat(), m.lon(),
+                    GeocodingProvider.DATAPORTAL, m.bizesId(), null);
             return new Result(Decision.RESOLVED, place, null);
         }
 
         List<ResolvedPlaceDto> options = IntStream.range(0, matches.size())
                 .mapToObj(i -> {
                     DataportalStoreClient.StoreResult m = matches.get(i);
-                    return new ResolvedPlaceDto(candidateId + "-" + (i + 1), name, branchName, m.roadAddress(), m.lat(), m.lon());
+                    return new ResolvedPlaceDto(candidateId + "-" + (i + 1), name, branchName, m.roadAddress(), m.lat(), m.lon(),
+                            GeocodingProvider.DATAPORTAL, m.bizesId(), null);
                 })
                 .toList();
         ConfirmRequestDto confirm = new ConfirmRequestDto("어느 지점이 맞을까요?", options);
@@ -638,7 +645,8 @@ public class PlaceResolver {
     private Result confirmOnly(String candidateId, List<DataportalStoreClient.StoreResult> stores) {
         List<ResolvedPlaceDto> options = IntStream.range(0, stores.size())
                 .mapToObj(i -> new ResolvedPlaceDto(candidateId + "-" + (i + 1), stores.get(i).bizesNm(),
-                        stores.get(i).brchNm(), stores.get(i).roadAddress(), stores.get(i).lat(), stores.get(i).lon()))
+                        stores.get(i).brchNm(), stores.get(i).roadAddress(), stores.get(i).lat(), stores.get(i).lon(),
+                        GeocodingProvider.DATAPORTAL, stores.get(i).bizesId(), null))
                 .toList();
         return new Result(Decision.NEEDS_CONFIRMATION, null, new ConfirmRequestDto("어느 지점이 맞을까요?", options));
     }
