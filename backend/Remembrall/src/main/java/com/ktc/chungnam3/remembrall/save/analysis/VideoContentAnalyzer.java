@@ -73,6 +73,8 @@ public class VideoContentAnalyzer {
             - category에는 카페/맛집/관광지/축제/술집/쇼핑/기타 중 하나만 골라 담아라. 영상 전체의 category는
               영상의 주된 성격을 기준으로 고르고, placeCandidates 각각의 category는 그 장소 하나하나의 업종을
               기준으로 따로 고른다(같은 영상 안에서도 장소마다 다를 수 있다). 애매하면 기타로 둬라.
+              단, placeCandidates의 category에는 축제를 쓰지 마라 - 축제가 열리는 장소는 관광지로 골라라
+              (축제는 일시적 행사라 장소 자체의 성격이 아니다. 축제라는 정보는 영상 category와 기간 정보로 남는다).
             - 장소 정보가 없으면 placeCandidates를 빈 배열로 두고 절대 추측하지 마라.
             - 장소 이름은 상호명(name)·지점명(branchName)·지역 단서(regionHint)로 나눠 적어라.
               예: "대전 성심당 본점"이면 name="성심당", branchName="본점", regionHint="대전".
@@ -109,8 +111,8 @@ public class VideoContentAnalyzer {
                       "description": { "type": "string" },
                       "category": {
                         "type": "string",
-                        "enum": ["카페", "맛집", "관광지", "축제", "술집", "쇼핑", "기타"],
-                        "description": "이 장소 하나에 맞는 분류 하나"
+                        "enum": ["카페", "맛집", "관광지", "술집", "쇼핑", "기타"],
+                        "description": "이 장소 하나에 맞는 분류 하나 (축제는 제외 - 장소 자체의 성격으로 골라라)"
                       }
                     },
                     "required": ["name", "branchName", "regionHint", "description", "category"]
