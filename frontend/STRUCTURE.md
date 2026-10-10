@@ -59,6 +59,7 @@ frontend/
     │   ├── place.ts          앱 모델. 장소
     │   ├── proposal.ts       앱 모델. 꺼내기 결과
     │   ├── notification.ts   알림 페이로드 (발생원 무관)
+    │   ├── consent.ts        앱 모델. 동의 상태(never · agreed · withdrawn)
     │   └── executionTrace.ts 에이전트 궤적
     │
     ├── runtime/              React 밖
@@ -100,6 +101,8 @@ frontend/
         ├── api/
         │   ├── config.ts     API 기본 주소(EXPO_PUBLIC_API_BASE_URL). 비면 목 모드
         │   ├── client.ts     기본 주소 · Bearer 헤더 · ApiError · 401 처리
+        │   ├── consents.ts   동의 API(조회 · 위치 동의 변경) · 목 분기
+        │   ├── consentTerms.ts   약관 버전 · 약관 URL 상수
         │   ├── mappers/      ★ 서버 응답 -> 앱 모델 변환. 백엔드 변경 흡수 지점
         │   └── mock/         UI 개발용 목 데이터. 화면 props 모양. 서버 계약 아님
         ├── storage/
@@ -206,7 +209,7 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 - 회원당 Device 는 1개다. 다른 폰으로 로그인하면 기존 폰의 세션이 바뀌어 다음 요청에서 401 이 난다.
 - 백엔드는 카카오 토큰의 `app_id` 를 자기 설정(`kakao.app-id`)과 대조한다. 앱은 백엔드와 같은 카카오 앱 키를 쓴다.
 - 아직 연결하지 않는 것: FCM 토큰 등록(`PUT /api/devices/fcm-token`)은 Firebase 프로젝트 설정(google-services.json)이 필요하다.
-- 동의 API 는 서버에 있다: `GET /api/me/consents`, `PUT /api/me/consents/{consentType}`(유형 `LOCATION_BASED_SERVICE` · `PUBLIC_CANDIDATE_CONTRIBUTION`). 앱은 아직 부르지 않는다.
+- 동의 API 는 서버에 있다: `GET /api/me/consents`, `PUT /api/me/consents/{consentType}`(유형 `LOCATION_BASED_SERVICE` · `PUBLIC_CANDIDATE_CONTRIBUTION`). 클라이언트 · 목은 있고(`shared/api/consents.ts`, 상수 `consentTerms.ts`, 상태 계산 `mappers/consentMapper.ts`), 화면 연결 전이다.
     - 서버는 철회되지 않은 `LOCATION_BASED_SERVICE` 동의가 없으면 위치 이벤트를 실행 없이 버리고 그대로 202 를 돌려준다. 지금은 버린 이유가 응답 · 로그 어디에도 없다.
     - PUT 으로 동의할 때(`agreed: true`) `termsVersion` 은 그 유형의 서버 설정 버전(`consent.*-terms-version`, 기본 v1)과 같아야 하고, 다르면 400 이다. 앱이 현재 버전을 조회할 방법은 아직 없다.
     - 동의는 OS 위치 권한과 분리해 별도 동의 화면에서 명시적으로 받는다(설계 중).
@@ -295,6 +298,7 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   온보딩 일러스트 사진은 목 이미지다(`mock/onboarding.ts`). 첫 실행은 오프라인일 수 있어 나중에 번들 이미지로 바꾼다.
 - 위치 권한과 현재 위치는 runtime 작업 전까지 목 플래그(`MOCK_SCENARIO`)와 목 좌표로 둔다.
   설정(11)의 권한 표시는 실제 권한 상태를 읽는다. 지도(10 · 08)의 현재 위치 · denied 분기는 runtime 작업 때 실제 권한으로 바꾼다.
+- 위치기반서비스 동의는 목 모드에서 목 플래그다. `MOCK_SCENARIO.locationConsent`(시작 시 동의 상태, never · agreed · withdrawn, 기본 never) · `consentSaveResult`(동의 저장 결과, ok · fail, 기본 ok).
 - 장소 확정 저장물은 모두 상세(`detailId` → 08)를 가진다. 실제 데이터에서도 모든 저장물에 상세가 있다. 미확정 저장물은 저장 결과(02~05)로 간다.
 - 거리 표시: 도보 30분 이내는 "도보 N분", 30분을 넘으면 직선거리 "N.Nkm". 목 데이터는 이 규칙대로 문자열을 넣는다.
 
