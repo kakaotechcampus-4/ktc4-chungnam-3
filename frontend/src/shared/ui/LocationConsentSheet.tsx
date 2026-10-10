@@ -1,21 +1,15 @@
 // 위치 정보 이용 동의 시트. Figma C/LocationConsentSheet 2201:963 (Default 2201:803 · Saving 2201:861 · Error 2201:911).
 // 00d · 06b · 설정에서 띄운다. 동의 저장은 띄운 화면이 하고 상태(status)만 넘긴다.
-// 바깥 닫힘(손잡이 내리기 · 배경 탭 · 시스템 뒤로 가기)도 시트를 닫고 onDismiss 로 알린다. saving 중에는 바깥 닫힘과 두 버튼을 막는다.
-// 앱 루트의 BottomSheetModalProvider 위에 뜬다(하단 바까지 덮는다).
-import {
-    BottomSheetBackdrop,
-    type BottomSheetBackdropProps,
-    BottomSheetModal,
-    BottomSheetView,
-} from "@gorhom/bottom-sheet";
-import { useCallback, useEffect, useRef } from "react";
-import { BackHandler, Pressable, StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+// 틀(바깥 닫힘 · saving 중 차단 · 버튼 묶음)은 ModalSheet 가 맡는다.
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { TERMS_URLS } from "../api/consentTerms";
 import { openExternalUrl } from "../external-links/openExternalUrl";
-import Button from "./Button";
 import Icon, { type IconName } from "./Icon";
+import ModalSheet, {
+    ModalSheetActions,
+    type ModalSheetStatus,
+} from "./ModalSheet";
 import {
     colors,
     metrics,
@@ -26,7 +20,7 @@ import {
     typography,
 } from "./theme";
 
-export type LocationConsentSheetStatus = "default" | "saving" | "error";
+export type LocationConsentSheetStatus = ModalSheetStatus;
 
 type Props = {
     visible: boolean;
@@ -62,163 +56,63 @@ export default function LocationConsentSheet({
     onLater,
     onDismiss,
 }: Props) {
-    const sheetRef = useRef<BottomSheetModal>(null);
-    const insets = useSafeAreaInsets();
     const saving = status === "saving";
-    // 띄운 적 없는 모달에 dismiss 를 부르지 않는다(라이브러리 상태가 닫는 중으로 남는다).
-    const presented = useRef(false);
-
-    useEffect(() => {
-        if (visible) {
-            presented.current = true;
-            sheetRef.current?.present();
-        } else if (presented.current) {
-            sheetRef.current?.dismiss();
-        }
-    }, [visible]);
-
-    const handleDismiss = useCallback(() => {
-        presented.current = false;
-        onDismiss();
-    }, [onDismiss]);
-
-    // 열려 있으면 시스템 뒤로 가기는 시트만 닫는다. 저장 중에는 아무것도 하지 않는다.
-    useEffect(() => {
-        if (!visible) return;
-        const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-            if (!saving) sheetRef.current?.dismiss();
-            return true;
-        });
-        return () => sub.remove();
-    }, [visible, saving]);
-
-    const renderBackdrop = useCallback(
-        (props: BottomSheetBackdropProps) => (
-            <BottomSheetBackdrop
-                {...props}
-                appearsOnIndex={0}
-                disappearsOnIndex={-1}
-                opacity={1}
-                pressBehavior={saving ? "none" : "close"}
-                style={[props.style, styles.backdrop]}
-            />
-        ),
-        [saving],
-    );
-
     return (
-        <BottomSheetModal
-            ref={sheetRef}
-            enablePanDownToClose={!saving}
-            backdropComponent={renderBackdrop}
-            handleComponent={SheetGrip}
-            backgroundStyle={styles.background}
-            onDismiss={handleDismiss}
-        >
-            <BottomSheetView
-                style={[
-                    styles.content,
-                    { paddingBottom: spacing.xl + insets.bottom },
-                ]}
-            >
-                <View style={styles.body}>
-                    <Text accessibilityRole="header" style={styles.heading}>
-                        위치는 이렇게만 써요
-                    </Text>
-                    <View style={styles.facts}>
-                        {FACTS.map((fact) => (
-                            <View key={fact.icon} style={styles.fact}>
-                                <Icon name={fact.icon} size={size.iconMd} />
-                                <View style={styles.text}>
-                                    <Text style={styles.title}>
-                                        {fact.title}
-                                    </Text>
-                                    <Text style={styles.caption}>
-                                        {fact.caption}
-                                    </Text>
-                                </View>
+        <ModalSheet visible={visible} locked={saving} onDismiss={onDismiss}>
+            <View style={styles.body}>
+                <Text accessibilityRole="header" style={styles.heading}>
+                    위치는 이렇게만 써요
+                </Text>
+                <View style={styles.facts}>
+                    {FACTS.map((fact) => (
+                        <View key={fact.icon} style={styles.fact}>
+                            <Icon name={fact.icon} size={size.iconMd} />
+                            <View style={styles.text}>
+                                <Text style={styles.title}>{fact.title}</Text>
+                                <Text style={styles.caption}>
+                                    {fact.caption}
+                                </Text>
                             </View>
-                        ))}
-                    </View>
-                    <Pressable
-                        accessibilityRole="button"
-                        onPress={() =>
-                            openExternalUrl(TERMS_URLS.locationBasedService)
-                        }
-                        style={styles.terms}
-                    >
-                        <View style={styles.text}>
-                            <Text style={styles.title}>
-                                위치기반서비스 이용약관
-                            </Text>
-                            <Text style={styles.caption}>
-                                근처 알림을 쓰려면 이 약관에 동의가 필요해요
-                            </Text>
                         </View>
-                        <Icon name="chevronRight" size={size.iconMd} />
-                    </Pressable>
+                    ))}
                 </View>
-
-                <View style={styles.actions}>
-                    {status === "error" && (
-                        <Text style={styles.error}>
-                            동의를 저장하지 못했어요. 연결을 확인하고 다시
-                            눌러주세요.
+                <Pressable
+                    accessibilityRole="button"
+                    onPress={() =>
+                        openExternalUrl(TERMS_URLS.locationBasedService)
+                    }
+                    style={styles.terms}
+                >
+                    <View style={styles.text}>
+                        <Text style={styles.title}>
+                            위치기반서비스 이용약관
                         </Text>
-                    )}
-                    <View style={styles.buttons}>
-                        <Button
-                            kind="primary"
-                            label={saving ? "저장하고 있어요" : "동의하고 계속"}
-                            disabled={saving}
-                            onPress={onAgree}
-                        />
-                        <Button
-                            kind="text"
-                            label="나중에 할게요"
-                            disabled={saving}
-                            onPress={onLater}
-                        />
+                        <Text style={styles.caption}>
+                            근처 알림을 쓰려면 이 약관에 동의가 필요해요
+                        </Text>
                     </View>
-                </View>
-            </BottomSheetView>
-        </BottomSheetModal>
-    );
-}
+                    <Icon name="chevronRight" size={size.iconMd} />
+                </Pressable>
+            </View>
 
-// 손잡이 36 × 4 (border/default). 위 sm · 아래 md. 이 영역을 끌어 내리면 닫힌다.
-function SheetGrip() {
-    return (
-        <View style={styles.gripRow}>
-            <View style={styles.grip} />
-        </View>
+            <ModalSheetActions
+                primary={{
+                    label: saving ? "저장하고 있어요" : "동의하고 계속",
+                    onPress: onAgree,
+                }}
+                secondary={{ label: "나중에 할게요", onPress: onLater }}
+                error={
+                    status === "error"
+                        ? "동의를 저장하지 못했어요. 연결을 확인하고 다시 눌러주세요."
+                        : undefined
+                }
+                disabled={saving}
+            />
+        </ModalSheet>
     );
 }
 
 const styles = StyleSheet.create({
-    backdrop: {
-        backgroundColor: colors.bg.overlay,
-    },
-    background: {
-        backgroundColor: colors.bg.surface,
-        borderTopLeftRadius: radius.lg,
-        borderTopRightRadius: radius.lg,
-    },
-    gripRow: {
-        alignItems: "center",
-        paddingTop: spacing.sm,
-        paddingBottom: spacing.md,
-    },
-    grip: {
-        width: metrics.sheetHandle.width,
-        height: metrics.sheetHandle.height,
-        borderRadius: metrics.sheetHandle.height / 2,
-        backgroundColor: colors.border.default,
-    },
-    content: {
-        paddingTop: spacing.sm,
-        paddingHorizontal: spacing.lg,
-    },
     body: {
         gap: spacing.lg,
     },
@@ -257,16 +151,5 @@ const styles = StyleSheet.create({
         borderWidth: stroke.thin,
         borderColor: colors.border.default,
         borderRadius: radius.md,
-    },
-    actions: {
-        paddingTop: spacing.xl,
-    },
-    error: {
-        ...typography.captionMeta,
-        color: colors.status.dangerFg,
-        paddingBottom: spacing.sm,
-    },
-    buttons: {
-        gap: spacing.xs,
     },
 });

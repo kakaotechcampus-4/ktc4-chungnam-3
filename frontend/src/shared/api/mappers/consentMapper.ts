@@ -12,3 +12,15 @@ export function toConsentState(
     if (consent == null || consent.termsVersion == null) return "never";
     return consent.agreed ? "agreed" : "withdrawn";
 }
+
+// 동의 중일 때 동의한 시각. 동의 중이 아니면 null.
+export function toConsentAgreedAt(
+    consents: readonly ConsentResponse[],
+    type: ConsentType,
+): Date | null {
+    const consent = consents.find((item) => item.consentType === type);
+    if (consent == null || !consent.agreed || consent.agreedAt == null) {
+        return null;
+    }
+    return new Date(consent.agreedAt);
+}
