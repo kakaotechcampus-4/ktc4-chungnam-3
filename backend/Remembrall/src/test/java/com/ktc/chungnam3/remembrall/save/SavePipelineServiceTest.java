@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SavePipelineServiceTest {
 
     private static PlaceCandidateDto candidate(String candidateId, String name, String branchName, String regionHint) {
-        return new PlaceCandidateDto(candidateId, name, branchName, regionHint, "설명");
+        return new PlaceCandidateDto(candidateId, name, branchName, regionHint, "설명", null);
     }
 
     private static PlaceSearchClient.PlaceSearchResult result(String displayName, double lat, double lon) {
@@ -33,7 +33,7 @@ class SavePipelineServiceTest {
     private static YouTubeContentExtractionResultDto extraction(List<PlaceCandidateDto> candidates) {
         return new YouTubeContentExtractionResultDto(
                 ExtractionStatus.SUCCESS, new AnalysisMetadataDto("v1", "model", "v1"),
-                null, "요약", candidates, List.of(), null);
+                null, "요약", null, candidates, List.of(), null);
     }
 
     /** name→검색결과를 그대로 매핑하는 PlaceLookup fake. 지정 안 된 이름은 빈 리스트. */
@@ -131,7 +131,7 @@ class SavePipelineServiceTest {
     void 영상_분석_상태가_SUCCESS가_아니면_FAILED로_처리한다() {
         YouTubeContentExtractionResultDto partial = new YouTubeContentExtractionResultDto(
                 ExtractionStatus.FAILED, new AnalysisMetadataDto("v1", "model", "v1"),
-                null, null, List.of(), List.of(), ExtractionFailureCode.VIDEO_UNAVAILABLE);
+                null, null, null, List.of(), List.of(), ExtractionFailureCode.VIDEO_UNAVAILABLE);
         VideoAnalyzer analyzer = url -> partial;
         SavePipelineService service = new SavePipelineService(analyzer, lookupOf(java.util.Map.of()),
                 realResolver(), new ConfirmPolicy());
