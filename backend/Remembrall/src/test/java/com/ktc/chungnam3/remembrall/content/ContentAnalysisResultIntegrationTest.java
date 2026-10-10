@@ -379,6 +379,7 @@ class ContentAnalysisResultIntegrationTest {
                 address,
                 36.35,
                 127.38,
+                com.ktc.chungnam3.remembrall.domain.place.GeocodingProvider.LOCATIONIQ,
                 geocodingPlaceId,
                 verificationPlaceId
         );
