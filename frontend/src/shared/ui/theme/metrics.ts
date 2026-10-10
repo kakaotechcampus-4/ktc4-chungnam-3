@@ -195,6 +195,11 @@ export const metrics = {
         rowPaddingHorizontal: 16,
         rowPaddingVertical: 14,
     },
+    // C/LocationConsentSheet 2201:963. 약관 행은 설정 행 · 00d 단계 행과 같은 위아래 14 · 좌우 16(테두리 제외, 코드에서 테두리 두께를 뺀다).
+    locationConsentSheet: {
+        termsPaddingHorizontal: 16,
+        termsPaddingVertical: 14,
+    },
     // C/Switch 2101:424. 손잡이는 트랙 안쪽 3 떨어져 있다. 켜짐·꺼짐 전환은 150ms 슬라이드.
     settingsSwitch: {
         width: 48,
