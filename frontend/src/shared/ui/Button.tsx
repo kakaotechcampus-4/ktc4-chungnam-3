@@ -1,4 +1,5 @@
 // 버튼. Figma C/Button (Primary / Secondary / Text). 앞 아이콘(icon)은 선택이다.
+// disabled: 눌리지 않는다. Primary 는 brand/primary-disabled 배경 · text/on-subtle 글자, Text 는 text/disabled 글자(C/LocationConsentSheet Saving).
 import {
     Pressable,
     type StyleProp,
@@ -17,6 +18,7 @@ type Props = {
     label: string;
     icon?: IconName;
     onPress?: () => void;
+    disabled?: boolean;
     style?: StyleProp<ViewStyle>;
 };
 
@@ -26,22 +28,38 @@ const ICON_COLOR: Record<ButtonKind, string> = {
     text: colors.icon.default,
 };
 
-export default function Button({ kind, label, icon, onPress, style }: Props) {
+export default function Button({
+    kind,
+    label,
+    icon,
+    onPress,
+    disabled = false,
+    style,
+}: Props) {
     return (
         <Pressable
             accessibilityRole="button"
+            accessibilityState={{ disabled }}
+            disabled={disabled}
             onPress={onPress}
             style={({ pressed }) => [
                 styles.base,
                 containerStyles[kind],
                 pressed && kind === "primary" && styles.primaryPressed,
+                disabled && kind === "primary" && styles.primaryDisabled,
                 style,
             ]}
         >
             {icon && (
                 <Icon name={icon} size={size.iconSm} color={ICON_COLOR[kind]} />
             )}
-            <Text style={[typography.labelButton, labelStyles[kind]]}>
+            <Text
+                style={[
+                    typography.labelButton,
+                    labelStyles[kind],
+                    disabled && disabledLabelStyles[kind],
+                ]}
+            >
                 {label}
             </Text>
         </Pressable>
@@ -60,6 +78,9 @@ const styles = StyleSheet.create({
     },
     primaryPressed: {
         backgroundColor: colors.brand.primaryPressed,
+    },
+    primaryDisabled: {
+        backgroundColor: colors.brand.primaryDisabled,
     },
 });
 
@@ -84,5 +105,18 @@ const labelStyles = StyleSheet.create({
     },
     text: {
         color: colors.text.onSubtle,
+    },
+});
+
+// Secondary 의 비활성 모습은 Figma 에 없어 글자만 흐리게 둔다.
+const disabledLabelStyles = StyleSheet.create({
+    primary: {
+        color: colors.text.onSubtle,
+    },
+    secondary: {
+        color: colors.text.disabled,
+    },
+    text: {
+        color: colors.text.disabled,
     },
 });

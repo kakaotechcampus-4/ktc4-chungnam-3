@@ -59,6 +59,7 @@ frontend/
     │   ├── place.ts          앱 모델. 장소
     │   ├── proposal.ts       앱 모델. 꺼내기 결과
     │   ├── notification.ts   알림 페이로드 (발생원 무관)
+    │   ├── consent.ts        앱 모델. 동의 상태(never · agreed · withdrawn)
     │   └── executionTrace.ts 에이전트 궤적
     │
     ├── runtime/              React 밖
@@ -100,11 +101,14 @@ frontend/
         ├── api/
         │   ├── config.ts     API 기본 주소(EXPO_PUBLIC_API_BASE_URL). 비면 목 모드
         │   ├── client.ts     기본 주소 · Bearer 헤더 · ApiError · 401 처리
+        │   ├── consents.ts   동의 API(조회 · 위치 동의 변경) · 목 분기
+        │   ├── consentTerms.ts   약관 버전 · 약관 URL 상수
         │   ├── mappers/      ★ 서버 응답 -> 앱 모델 변환. 백엔드 변경 흡수 지점
         │   └── mock/         UI 개발용 목 데이터. 화면 props 모양. 서버 계약 아님
         ├── storage/
         │   └── secureStore.ts    안전한 저장소(expo-secure-store) 지연 로더. 세션 · 설치 id
         ├── external-links/   지도 딥링크 (단순 URL 빌더)
+        │   └── openExternalUrl.ts  웹 페이지(약관) 열기. expo-web-browser 지연 로드, 실패하면 Linking
         └── ui/               두 개 이상 feature 가 쓰는 공통 컴포넌트
             └── theme/        Figma 토큰 + metrics
 ```
@@ -120,7 +124,7 @@ frontend/
 - 두 개 이상의 feature 에서 쓰면 `shared/ui/`, 한 feature 에서만 쓰면 `features/*/components/`.
 - `app/navigation` 이 하단 바로 쓰는 BottomNav 는 `shared/ui/` 에 둔다.
 - 온보딩 전용: OnboardingLayout(제목 · 본문 · 버튼 영역 틀), PhotoStack(00a · 00b 일러스트), SocialLoginButton(00b, Provider 변형), LoginError(00b-err), NotificationPreview(00c), PermissionStep(00d · 00e), GuideRow(00f). 모두 `features/onboarding/components/`.
-- 두 feature 이상이 쓰는 것: ScreenHeader(근처 · 기억 헤더), Chip(근처 · 지도 필터), PhotoMarker · PinLabel · CurrentLocation(지도 탭 · 08 지도), SheetHandle(08 · 10b 시트), NotFound(저장 결과 · 장소 상세).
+- 두 feature 이상이 쓰는 것: ScreenHeader(근처 · 기억 헤더), Chip(근처 · 지도 필터), PhotoMarker · PinLabel · CurrentLocation(지도 탭 · 08 지도), SheetHandle(08 · 10b 시트), NotFound(저장 결과 · 장소 상세), LocationConsentSheet(00d · 06b · 설정 11 의 위치 정보 이용 동의 시트), ModalSheet(확인 시트 틀 · 버튼 묶음. 바깥 닫힘 · 저장 중 차단. 앱 루트 BottomSheetModalProvider 위에 뜬다. 동의 시트 · 11d 거두기 시트가 쓴다).
 - PhotoMarker(핀)와 PinLabel(이름표)은 별도 마커다. Android 는 마커 뷰를 그 크기의 비트맵으로 찍으므로 핀 비트맵 크기는 선택과 무관하게 고정한다(그림자 있는 핀은 그림자 여백 포함). 다시 찍기는 `redraw()` 로 요청하고 화면에 다시 포커스가 오면 다시 찍는다. `tracksViewChanges` 는 자식 스타일 변화를 다시 찍는다는 보장이 없다.
 - 지도 자식(마커)은 화면이 숨겨진 동안 추가 · 제거 · 재배치되지 않게 한다. react-native-maps(Android)는 지도가 화면에서 떨어지면 마커 목록을 비웠다가 다시 붙을 때 복원하므로, 그 사이의 구조 변경이 어긋난다. 그래서 마커 zIndex 는 바꾸지 않고(Fabric 이 재배치한다), 이름표는 지도마다 하나를 계속 두고 opacity 로 숨긴다.
 - 지도 스타일은 Figma 색 토큰으로 만든 값이라 `shared/ui/theme/mapStyle.ts` 에 둔다.
@@ -206,7 +210,8 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 - 회원당 Device 는 1개다. 다른 폰으로 로그인하면 기존 폰의 세션이 바뀌어 다음 요청에서 401 이 난다.
 - 백엔드는 카카오 토큰의 `app_id` 를 자기 설정(`kakao.app-id`)과 대조한다. 앱은 백엔드와 같은 카카오 앱 키를 쓴다.
 - 아직 연결하지 않는 것: FCM 토큰 등록(`PUT /api/devices/fcm-token`)은 Firebase 프로젝트 설정(google-services.json)이 필요하다.
-- 동의 API 는 서버에 있다: `GET /api/me/consents`, `PUT /api/me/consents/{consentType}`(유형 `LOCATION_BASED_SERVICE` · `PUBLIC_CANDIDATE_CONTRIBUTION`). 앱은 아직 부르지 않는다.
+- 동의 API 는 서버에 있다: `GET /api/me/consents`, `PUT /api/me/consents/{consentType}`(유형 `LOCATION_BASED_SERVICE` · `PUBLIC_CANDIDATE_CONTRIBUTION`). 클라이언트 · 목은 있고(`shared/api/consents.ts`, 상수 `consentTerms.ts`, 상태 계산 `mappers/consentMapper.ts`). 00d "위치 허용하기"에 연결됐다(동의하지 않았으면 `shared/ui/LocationConsentSheet` 로 동의를 받은 뒤 권한 요청)과 설정(11c · 11d, "기기 권한" 절)에 연결됐다. 06b 는 연결 전이다.
+    - 거둬도(`agreed: false`) 지오펜스 해제는 아직 없다(지오펜스 런타임 작업). 서버 기록까지만 한다.
     - 서버는 철회되지 않은 `LOCATION_BASED_SERVICE` 동의가 없으면 위치 이벤트를 실행 없이 버리고 그대로 202 를 돌려준다. 지금은 버린 이유가 응답 · 로그 어디에도 없다.
     - PUT 으로 동의할 때(`agreed: true`) `termsVersion` 은 그 유형의 서버 설정 버전(`consent.*-terms-version`, 기본 v1)과 같아야 하고, 다르면 400 이다. 앱이 현재 버전을 조회할 방법은 아직 없다.
     - 동의는 OS 위치 권한과 분리해 별도 동의 화면에서 명시적으로 받는다(설계 중).
@@ -258,6 +263,10 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 - 설정(11): 위치 권한 행은 실제 상태(항상 허용 · 앱 사용 중에만 허용 · 허용 안 함). 기기 알림이 꺼져 있으면(허용 전 포함)
   "근처에 오면 알려주기" 행이 11b 가 된다(설명 "기기 알림이 꺼져 있어요. 눌러서 켜주세요" status/danger-fg, 스위치 대신 >, 역할 button, 누르면 시스템 알림 설정).
   둘 다 화면에 들어올 때와 앱이 앞으로 돌아올 때 다시 읽는다.
+- 설정(11) 위치 정보 이용 동의(11c 2202:915 · 11c-off 2202:986): 화면에 포커스될 때 서버에서 읽는다(확인하고 있어요 · {M}월 {D}일에 동의했어요 · 동의하지 않았어요 · 확인하지 못했어요).
+  동의 안 함이면 동의 행과 "근처에 오면 알려주기" 행(11b 보다 우선, 설명 "위치 정보 이용 동의가 필요해요. 눌러서 켜주세요")이 동의 시트를 띄운다. 설정에서는 동의만 기록하고 권한은 요청하지 않는다.
+  동의함이면 동의 행이 11d 거두기 시트(2202:1049)를 띄운다. 동의 · 거두기가 성공하면 PUT 응답으로 바로 갱신하고, 실패하면 시트에 오류를 보인다. 읽기에 실패하면 행을 눌러 다시 읽는다.
+- 설정(11) 약관 및 정책: 웹 페이지(`TERMS_URLS.policies`)를 연다. URL 이 없는 동안은 오픈소스 라이선스처럼 눌리지 않는다.
 - 매니페스트 권한과 이유:
     - `ACCESS_FINE_LOCATION` · `ACCESS_COARSE_LOCATION`(expo-location): 지오펜스 진입 판정. 안드로이드 12+ 는 둘을 함께 선언한다.
     - `ACCESS_BACKGROUND_LOCATION`(expo-location plugin `isAndroidBackgroundLocationEnabled`): 앱이 닫혀 있어도 OS 지오펜스가 진입 이벤트를 받는다.
@@ -295,6 +304,7 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   온보딩 일러스트 사진은 목 이미지다(`mock/onboarding.ts`). 첫 실행은 오프라인일 수 있어 나중에 번들 이미지로 바꾼다.
 - 위치 권한과 현재 위치는 runtime 작업 전까지 목 플래그(`MOCK_SCENARIO`)와 목 좌표로 둔다.
   설정(11)의 권한 표시는 실제 권한 상태를 읽는다. 지도(10 · 08)의 현재 위치 · denied 분기는 runtime 작업 때 실제 권한으로 바꾼다.
+- 위치기반서비스 동의는 목 모드에서 목 플래그다. `MOCK_SCENARIO.locationConsent`(시작 시 동의 상태, never · agreed · withdrawn, 기본 never) · `consentSaveResult`(동의 저장 결과, ok · fail, 기본 ok).
 - 장소 확정 저장물은 모두 상세(`detailId` → 08)를 가진다. 실제 데이터에서도 모든 저장물에 상세가 있다. 미확정 저장물은 저장 결과(02~05)로 간다.
 - 거리 표시: 도보 30분 이내는 "도보 N분", 30분을 넘으면 직선거리 "N.Nkm". 목 데이터는 이 규칙대로 문자열을 넣는다.
 
