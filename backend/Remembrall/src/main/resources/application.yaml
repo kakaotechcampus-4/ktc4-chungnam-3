@@ -15,6 +15,12 @@ spring:
 
 # TODO: 협의 필요 - 실제 운영에서는 환경변수/시크릿 매니저로 관리할 것. 지금은 로컬 테스트용.
 # 실제 키 값은 secrets.properties(git-ignored)에 적는다. 이 파일에는 절대 실제 키를 적지 말 것.
+content:
+  embedding:
+    model: ${CONTENT_EMBEDDING_MODEL:gemini-embedding-001}
+    dimensions: ${CONTENT_EMBEDDING_DIMENSIONS:768}
+    timeout: ${CONTENT_EMBEDDING_TIMEOUT:10s}
+
 youtube:
   api:
     key: ${youtube.api.key:}
@@ -25,6 +31,10 @@ kakao:
 auth:
   session:
     ttl: ${session.ttl:30d}
+
+consent:
+  public-candidate-contribution-terms-version: ${CONSENT_PUBLIC_CANDIDATE_CONTRIBUTION_TERMS_VERSION:v1}
+  location-based-service-terms-version: ${CONSENT_LOCATION_BASED_SERVICE_TERMS_VERSION:v1}
 
 recall:
   max-event-age: 30m
@@ -54,3 +64,12 @@ franchise:
   # 프랜차이즈 기준점 반경(PlaceResolver.resolveViaAnchor) - 300 → 1000으로 조정(2026-10-02).
   # "교보문고 광화문점"이 기준점에서 500m+ 떨어져 있어 300m로는 못 찾았던 실측 사례 기반.
   anchor-radius-meters: 1000
+
+# 브이월드(국토교통부) 검색 API - 프랜차이즈 기준점 보정 전용(VWorldSearchClient). 응답은 저장하지
+# 않는다(이용약관 제19조 6항 "사전 승낙 없이 저장 금지" 때문) - 공공 상가정보 반경검색의 중심점으로만
+# 쓰고 버린다.
+vworld:
+  api:
+    key: ${vworld.api.key:}
+  connect-timeout-ms: 2000
+  read-timeout-ms: 3000

@@ -59,5 +59,17 @@ dependencyManagement {
 }
 
 tasks.named('test') {
-	useJUnitPlatform()
+	useJUnitPlatform {
+		excludeTags 'live'
+	}
+}
+
+// 실제 Gemini를 호출하는 수동 검증용 테스트(@Tag("live"))만 따로 돌리는 태스크.
+// 비용이 발생하고 오래 걸려 기본 test에서는 뺀다 - ./gradlew liveTest 로 직접 실행한다.
+tasks.register('liveTest', Test) {
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+	useJUnitPlatform {
+		includeTags 'live'
+	}
 }

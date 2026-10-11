@@ -1,5 +1,6 @@
 // 앱 셸. 프로바이더 구성과 RootNavigator 마운트.
 import { GowunDodum_400Regular } from "@expo-google-fonts/gowun-dodum/400Regular";
+import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import {
     DefaultTheme,
     NavigationContainer,
@@ -13,6 +14,8 @@ import { StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { registerSessionRefresher } from "../shared/auth/login";
+import { restoreSession, useAuthState } from "../shared/auth/session";
 import { colors, fontFamily } from "../shared/ui/theme";
 import { buildLinkingConfig } from "./navigation/linking";
 import RootNavigator from "./navigation/RootNavigator";
@@ -38,7 +41,16 @@ export default function App() {
         [fontFamily.notoSansKrRegular]: require("../../assets/fonts/NotoSansKR-Regular-subset.ttf"),
         [fontFamily.notoSansKrMedium]: require("../../assets/fonts/NotoSansKR-Medium-subset.ttf"),
     });
-    const ready = fontsLoaded || fontError != null;
+    const auth = useAuthState();
+    // 폰트와 저장된 세션을 모두 읽을 때까지 스플래시를 유지한다. 00a 가 잠깐 비치지 않게 한다.
+    const ready =
+        (fontsLoaded || fontError != null) && auth.status !== "loading";
+
+    useEffect(() => {
+        // 게스트 세션이 만료 · 401 이면 API 클라이언트가 조용히 다시 받는다.
+        registerSessionRefresher();
+        restoreSession();
+    }, []);
 
     // 폰트 로드에 실패해도 시스템 폰트로 계속 띄운다.
     useEffect(() => {
@@ -53,7 +65,10 @@ export default function App() {
             <SafeAreaProvider>
                 <StatusBar style="dark" />
                 <NavigationContainer linking={linking} theme={navigationTheme}>
-                    <RootNavigator />
+                    {/* 모달 시트(동의 시트)는 화면 위 · 하단 바 위에 뜬다. */}
+                    <BottomSheetModalProvider>
+                        <RootNavigator />
+                    </BottomSheetModalProvider>
                 </NavigationContainer>
             </SafeAreaProvider>
         </GestureHandlerRootView>
