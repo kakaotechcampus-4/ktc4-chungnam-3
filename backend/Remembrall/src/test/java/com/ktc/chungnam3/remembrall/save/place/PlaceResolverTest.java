@@ -54,12 +54,12 @@ class PlaceResolverTest {
     }
 
     private static PlaceSearchClient.PlaceSearchResult result(String displayName, double lat, double lon) {
-        return new PlaceSearchClient.PlaceSearchResult(displayName, lat, lon, null, null);
+        return new PlaceSearchClient.PlaceSearchResult(displayName, lat, lon, null, null, "");
     }
 
     private static PlaceSearchClient.PlaceSearchResult result(
             String displayName, double lat, double lon, String osmClass, String osmType) {
-        return new PlaceSearchClient.PlaceSearchResult(displayName, lat, lon, osmClass, osmType);
+        return new PlaceSearchClient.PlaceSearchResult(displayName, lat, lon, osmClass, osmType, "");
     }
 
     @Test
@@ -394,7 +394,7 @@ class PlaceResolverTest {
         // 예전엔 이 경우 브랜드 무관 전체를 거리로 확정했었는데(PR 리뷰로 발견된 버그 - 엉뚱한 가게가
         // 확정될 위험), 이제는 지점명("홍대청기와점")이 상호명에 그대로 들어있는지로 한 번 더 좁혀서
         // 찾되, 브랜드가 확인 안 된 거라 자동 확정은 안 하고 되묻는다.
-        var vworldAnchor = new PlaceSearchClient.PlaceSearchResult(null, 37.5556, 126.9207, null, null);
+        var vworldAnchor = new PlaceSearchClient.PlaceSearchResult(null, 37.5556, 126.9207, null, null, null);
         var store = store("이디야홍대청기와점", "", "서울 마포구 월드컵북로 7", 37.5556, 126.9207);
         var resolver = resolverForVWorldAnchor(vworldAnchor, List.of(store));
 
@@ -411,7 +411,7 @@ class PlaceResolverTest {
         // PR 리뷰(doheelab-coder)로 발견된 버그 재현 - "CU 중앙점"처럼 흔한 지점명을 VWorld가 regionHint
         // (대전)와 무관한 다른 지역(부산)에서 찾아줘도, 그 반경 안 공공상가정보 업소를 그대로 확정해버리면
         // 안 된다. 기준점 좌표 자체는 임의값(테스트에서 중요한 건 반경 안 업소의 roadAddress).
-        var vworldAnchor = new PlaceSearchClient.PlaceSearchResult(null, 35.1796, 129.0756, null, null);
+        var vworldAnchor = new PlaceSearchClient.PlaceSearchResult(null, 35.1796, 129.0756, null, null, null);
         var wrongRegionStore = store("CU", "중앙점", "부산광역시 중구 중앙동", 35.1796, 129.0756);
         var resolver = new PlaceResolver(
                 (lon, lat, radiusMeters) -> List.of(wrongRegionStore),
@@ -435,7 +435,7 @@ class PlaceResolverTest {
         // 업소까지 15건 걸려 NO_PLACE가 됐었다. 업종 소분류(G20405=편의점)로 먼저 좁히면 편의점끼리만
         // 남는다. 공공상가정보엔 "CU"가 로마자가 아니라 한글 음차("씨유")로 등록돼 있어서(실측 확인),
         // BRAND_NAME_ALIASES로 브랜드명 매칭도 같이 통과해야 한다.
-        var vworldAnchor = new PlaceSearchClient.PlaceSearchResult(null, 37.4979, 127.0276, null, null);
+        var vworldAnchor = new PlaceSearchClient.PlaceSearchResult(null, 37.4979, 127.0276, null, null, null);
         var cuStore = store("씨유서초삼성타운점", "", "서울특별시 서초구 서초대로74길 23", 37.4956258989903, 127.027094692608);
         NearbyStoreLookup lookup = new NearbyStoreLookup() {
             @Override
@@ -471,7 +471,7 @@ class PlaceResolverTest {
 
     @Test
     void VWorld_기준점_주변에도_공공데이터가_없으면_기존_흐름으로_폴백한다() {
-        var vworldAnchor = new PlaceSearchClient.PlaceSearchResult(null, 37.5556, 126.9207, null, null);
+        var vworldAnchor = new PlaceSearchClient.PlaceSearchResult(null, 37.5556, 126.9207, null, null, null);
         var resolver = new PlaceResolver(
                 (lon, lat, radiusMeters) -> List.of(),
                 (name, branch, region) -> List.of(),
@@ -494,7 +494,7 @@ class PlaceResolverTest {
         // (대전) 브랜드도 지점명도 전혀 다른 가게만 있는 경우, 예전엔 "상호명 표기 불일치일 수 있다"며
         // 그 가게를 그대로 CU로 확정해버렸다. 이제는 이 기준점 자체를 못 믿겠다고 보고 VWorld 경로를
         // 포기해서, 엉뚱한 가게로 확정되는 일 자체가 없어야 한다(폴백한 기존 흐름에서 최종 판정).
-        var vworldAnchor = new PlaceSearchClient.PlaceSearchResult(null, 36.35, 127.38, null, null);
+        var vworldAnchor = new PlaceSearchClient.PlaceSearchResult(null, 36.35, 127.38, null, null, null);
         var unrelatedStore = store("세정 중정점", "", "대전광역시 중구 중앙로 100", 36.35, 127.38);
         var resolver = resolverForVWorldAnchor(vworldAnchor, List.of(unrelatedStore));
 
@@ -513,7 +513,7 @@ class PlaceResolverTest {
         // 없으니 이 기준점 자체를 포기하고 기존 ①~④ 흐름으로 폴백한다(개수 상한 초과 시 바로 NO_PLACE로
         // 끊어버리는 게 아니라, narrowByBrandThenDistance의 1차 텍스트매칭 상한 초과 처리와는 다르게
         // "폴백"을 택한 것 - resolveViaVWorldAnchor는 브랜드 확인이 아예 안 된 상태라 더 보수적으로 감).
-        var vworldAnchor = new PlaceSearchClient.PlaceSearchResult(null, 36.35, 127.38, null, null);
+        var vworldAnchor = new PlaceSearchClient.PlaceSearchResult(null, 36.35, 127.38, null, null, null);
         var unrelatedStores = IntStream.range(0, 4)
                 .mapToObj(i -> store("무관한업소" + i + "중구청점", "", "대전광역시 중구 중앙로 " + i, 36.35, 127.38))
                 .toList();

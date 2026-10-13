@@ -101,6 +101,6 @@ public class VWorldSearchClient implements FranchiseAnchorLookup {
 
         Point point = items.get(0).point();
         return Optional.of(new PlaceSearchClient.PlaceSearchResult(
-                null, Double.parseDouble(point.y()), Double.parseDouble(point.x()), null, null));
+                null, Double.parseDouble(point.y()), Double.parseDouble(point.x()), null, null, null));
     }
 }
