@@ -1,18 +1,25 @@
 # API 명세 (저장 파이프라인)
 
-이 문서는 **저장 파이프라인 범위**의 REST API 계약만 다룬다. 콘텐츠 저장 요청과 그에 대한 되묻기
-응답만 포함하며, 꺼내기 에이전트·알림 등 다른 도메인의 API는 다루지 않는다.
+이 문서는 **저장 파이프라인 범위**의 REST API 계약만 다룬다. 콘텐츠 저장 요청만 포함하며,
+꺼내기 에이전트·알림 등 다른 도메인의 API는 다루지 않는다.
 
-> **초안 상태**: 아직 `SavePipelineService`나 컨트롤러 코드가 없는 상태에서, 설계 문서
-> (`저장 파이프라인.md`, `저장담당 요구 사항.md`) 내용을 기준으로 먼저 작성했다. 경로·필드명은
-> 제안이고, 실제 구현하면서 바뀔 수 있다. 에러 코드 매핑처럼 아직 안 정해진 부분은 TODO로 남겨둔다.
+> **2026-10-11 갱신**: `SavePipelineController`/`SavePipelineService` 실제 구현 완료 후, 아래 내용을
+> 실제 코드(`SaveContentRequestDto`/`SaveContentResponseDto`/`PlaceOutcomeDto`) 기준으로 다시 썼다.
+> 이전 초안(설계 문서만 보고 먼저 쓴 버전)의 `PLACE_RESOLVED`/단일 `place`/`confirm` 필드,
+> 되묻기 전용 엔드포인트(`POST /api/contents/{contentId}/confirm`)는 실제 구현과 달라서 전부 뺐다 —
+> 영상 하나에 장소 후보가 여럿 나올 수 있어(`저장 파이프라인.md` 참고) 후보별로 독립 판정하는
+> 구조로 갔고, 되묻기 응답 제출은 아직 별도 엔드포인트가 없다(아래 "아직 안 된 것" 참고).
+> `/api/personal-saves`를 따로 만들 계획이 팀에 있었다면, 이 엔드포인트가 그 역할까지 겸하고
+> 있다는 점을 담당자와 맞춰야 한다 — 중복/충돌 방지.
 
-## 1. 콘텐츠 저장 요청
+## 1. 콘텐츠 저장 + 분석 요청
 
-`POST /api/contents`
+`POST /api/contents` (인증 필요 - 세션 쿠키/헤더, 기존 `/api/auth/kakao` 로그인 흐름과 동일)
 
-유튜브 URL 하나를 저장 파이프라인에 넘겨, 메타데이터 조회 → 영상 분석 → 장소 탐색·검증 →
-확신도 판정까지 실행한다 (`저장 파이프라인.md` 3장 참고).
+유튜브 URL 하나를 받아 "링크 저장"과 "분석(메타데이터 조회 → 영상 분석 → 장소 탐색·검증 →
+카카오 검증 → 확신도 판정 → DB 반영)"을 한 요청 안에서 전부 실행한다. 분석은 콘텐츠당 한 번만
+실행된다(이미 분석 중이거나 끝난 콘텐츠를 다시 요청하면 `alreadyProcessed=true`만 돌려주고 재실행
+안 함).
 
 ### 요청
 
@@ -22,46 +29,60 @@
 }
 ```
 
-### 응답 200 — `status`에 따라 채워지는 필드가 다름
-
-| status | 의미 | 채워지는 필드 |
-|---|---|---|
-| `PLACE_RESOLVED` | 장소 1건으로 확정됨 | `place` |
-| `NEEDS_CONFIRMATION` | 후보 2~3개로 좁혀짐, 선택 필요 | `confirm` |
-| `NO_PLACE` | 후보 없음/확정 불가 (정상 케이스) | 없음 |
+### 응답 200 — 이미 처리된 콘텐츠
 
 ```json
 {
-  "contentId": "c_123",
-  "status": "NEEDS_CONFIRMATION",
-  "summary": "대전 성심당을 소개하는 영상...",
-  "place": null,
-  "confirm": {
-    "question": "어느 지점을 저장할까요?",
-    "candidates": [
-      { "candidateId": "p1", "name": "성심당", "branchName": "본점", "address": "대전 중구 ..." },
-      { "candidateId": "p2", "name": "성심당", "branchName": "DCC점", "address": "대전 유성구 ..." }
-    ]
-  }
+  "contentId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "alreadyProcessed": true,
+  "status": null,
+  "summary": null,
+  "places": [],
+  "failureMessage": null
 }
 ```
 
-`PLACE_RESOLVED` 예시:
+### 응답 200 — 처음 분석한 콘텐츠
+
+`status`는 콘텐츠 단위(영상 분석 자체 성공 여부), `places[].decision`은 후보 하나하나의 판정이다
+(둘 다 `com.ktc.chungnam3.remembrall.save.dto.SavePipelineResultDto`/`PlaceOutcomeDto` 그대로).
+
+| status | 의미 |
+|---|---|
+| `SUCCESS` | 영상 분석 성공 - 장소가 전부 없어도(`NO_PLACE`)/되묻기(`NEEDS_CONFIRMATION`)가 섞여도 포함 |
+| `PARTIAL` | 영상 분석은 성공했지만 후보 중 하나 이상에서 장소 검색/카카오 검증 API가 실패함 |
+| `FAILED` | 영상 분석(VideoContentAnalyzer) 자체가 실패함 - `summary`/`places` 없음, `failureMessage`만 채워짐 |
+
+`places[].decision` 값: `RESOLVED`(저장 완료, `resolvedPlace` 채워짐) /
+`NEEDS_CONFIRMATION`(`confirmRequest` 채워짐, 아래 "아직 안 된 것" 참고) /
+`NO_PLACE`(정상 케이스, 확정 불가) / `PLACE_SEARCH_FAILED` / `PLACE_VERIFICATION_FAILED`
+(외부 API 호출 자체가 실패).
 
 ```json
 {
-  "contentId": "c_124",
-  "status": "PLACE_RESOLVED",
-  "summary": "...",
-  "place": {
-    "candidateId": "p1",
-    "name": "성심당",
-    "branchName": "본점",
-    "address": "대전 중구 ...",
-    "lat": 36.32,
-    "lng": 127.42
-  },
-  "confirm": null
+  "contentId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "alreadyProcessed": false,
+  "status": "SUCCESS",
+  "summary": "대전 성심당을 소개하는 영상...",
+  "places": [
+    {
+      "candidateId": "p1",
+      "decision": "RESOLVED",
+      "resolvedPlace": {
+        "candidateId": "p1",
+        "name": "성심당",
+        "branchName": "본점",
+        "address": "대전 중구 ...",
+        "lat": 36.32,
+        "lng": 127.42,
+        "geocodingProvider": "LOCATIONIQ",
+        "geocodingPlaceId": "227225446",
+        "verificationPlaceId": "26410594"
+      },
+      "confirmRequest": null
+    }
+  ],
+  "failureMessage": null
 }
 ```
 
@@ -69,48 +90,21 @@
 
 | 상황 | 상태 코드 | 비고 |
 |---|---|---|
-| 지원하지 않는 형식 (Shorts 외 링크) | TODO | `저장 파이프라인.md` 3장 "0. 지원 형식 검증" — 파이프라인 호출 전 Spring이 거절 |
-| 비공개·삭제된 영상 | TODO | `FailureStage.METADATA_FETCH`, 재시도 불가 |
-| 분석 실패 (Gemini 호출/파싱) | TODO | `FailureStage.GEMINI_CALL` / `RESPONSE_MAPPING` |
-| 장소 검색 실패 | TODO | `FailureStage.PLACE_SEARCH` (신규 제안, 아직 확정 아님) |
+| `youtubeUrl`에서 videoId를 못 찾음(지원 안 하는 형식 포함) | 400 (`INVALID_REQUEST`) | `YoutubeUrlParser.extractVideoId` 실패 시 |
+| 인증 안 됨 | 401 | 다른 컨트롤러와 동일한 세션 인증 |
 
-> **TODO**: 내부 `ExtractionStatus`/`FailureStage`/`FailureInfoDto.retryable`을 HTTP 상태 코드·에러
-> 바디로 어떻게 매핑할지는 아직 안 정해짐. `SavePipelineService` 구현하면서 확정 필요.
+영상 분석/장소 검색 자체의 실패는 전부 200으로 응답하고 `status`/`places[].decision`으로 구분한다
+(네트워크·외부 API 실패를 4xx로 올리지 않는다 - 요청 자체는 정상이었기 때문).
 
-## 2. 되묻기 응답 제출
+## 2. 아직 안 된 것 (TODO)
 
-`POST /api/contents/{contentId}/confirm`
-
-`NEEDS_CONFIRMATION` 응답을 받은 뒤, 사용자가 후보 중 하나를 선택하면 호출한다.
-
-### 요청
-
-```json
-{ "selectedCandidateId": "p1" }
-```
-
-### 응답 200
-
-```json
-{
-  "contentId": "c_123",
-  "status": "PLACE_RESOLVED",
-  "place": {
-    "candidateId": "p1",
-    "name": "성심당",
-    "branchName": "본점",
-    "address": "대전 중구 ...",
-    "lat": 36.32,
-    "lng": 127.42
-  }
-}
-```
-
-**참고**
-- 되묻기는 콘텐츠당 최대 1회 (`저장 파이프라인.md` 3장 "핵심 원칙"). 이 엔드포인트가 한 번 호출된
-  콘텐츠는 다시 `NEEDS_CONFIRMATION` 상태로 돌아가지 않는다.
-- 미응답 시엔 상위 지역으로 저장하고 다시 묻지 않는다 — 이걸 **누가/언제 트리거하는지**(스케줄러 vs
-  다음 요청 시점 확인)는 아직 TODO.
+- **되묻기 응답 제출 엔드포인트**: `places[].decision == NEEDS_CONFIRMATION`일 때 사용자가 후보를
+  선택해 반영하는 API가 아직 없다. 지금은 `ConfirmPolicy.shouldAsk(alreadyAsked)`가 `false`를
+  반환하면(이미 한 번 물어봤던 경우) 자동으로 상위 지역 좌표로 저장한다(`SavePipelineService.
+  resolveBroaderRegion`) - 즉 "다시 요청하면 되묻기 없이 넘어간다"는 동작은 있지만, 그 재요청
+  자체를 트리거하는 전용 API는 없음.
+- **분석 상태 조회(polling) API**: `alreadyProcessed=true` 응답은 "이미 처리됐다"만 알려주고 그
+  결과 자체를 돌려주지 않는다. 결과를 다시 보려면 별도 조회 API가 필요(미구현).
 
 ## 3. 참고 문서
 

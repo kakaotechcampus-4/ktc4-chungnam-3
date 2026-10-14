@@ -1,7 +1,7 @@
 package com.ktc.chungnam3.remembrall.save;
 
 import com.ktc.chungnam3.remembrall.content.dto.AnalysisOutcome;
-import com.ktc.chungnam3.remembrall.content.service.ContentPersistenceService;
+import com.ktc.chungnam3.remembrall.content.service.ContentAnalysisResultService;
 import com.ktc.chungnam3.remembrall.domain.content.ContentAnalysisFailureCode;
 import com.ktc.chungnam3.remembrall.domain.content.ContentAnalysisStatus;
 import com.ktc.chungnam3.remembrall.domain.content.ContentSourceStatus;
@@ -35,12 +35,11 @@ import java.util.stream.Collectors;
  * 저장 파이프라인 3단계(전체 조립) - 유튜브 URL 하나를 받아 영상 분석(Module A) → 장소 검색·확정
  * (Module B) → 카카오 장소 검증 → 되묻기 판정까지 묶어서 {@link SavePipelineResultDto}를 만든다.
  * <p>
- * <b>이번 구현 범위</b>: 이 클래스는 순수 로직까지만 담당한다. REST 계층(SavePipelineController)과
- * {@code ContentPersistenceService.applyOutcome} 영속화 연동은 별도 작업으로 분리했다 - 과거엔
- * {@code AnalysisOutcome.PlaceResult}가 요구하는 geocodingPlaceId/verificationPlaceId를 이 파이프라인이
- * 채울 방법이 없어 막혀 있었는데(Place.md 스키마 충돌), 2026-10-10 Place.md 담당자 합의로
- * geocoding_provider에 DATAPORTAL이 추가되고 카카오 장소 검증까지 이 클래스에 연결되면서 해소됐다 -
- * 남은 건 REST 진입점과 실제 applyOutcome 호출 배선뿐이다.
+ * <b>영속화 연동</b>: {@code AnalysisOutcome.PlaceResult}가 요구하는 geocodingPlaceId/verificationPlaceId를
+ * 이 파이프라인이 채울 방법이 없어 막혀 있었는데(Place.md 스키마 충돌), 2026-10-10 Place.md 담당자
+ * 합의로 geocoding_provider에 DATAPORTAL이 추가되고 카카오 장소 검증까지 이 클래스에 연결되면서
+ * 해소됐다 - {@link #saveAndPersist}로 {@code ContentAnalysisResultService.applyOutcome}까지 실제
+ * 호출한다. REST 진입점은 {@code SavePipelineController}.
  * <p>
  * <b>카카오 장소 검증</b>: {@link PlaceResolver}가 확정(RESOLVED)한 좌표라도, Place.md 설계상
  * "같은 장소인지" 판단은 카카오 장소 ID가 기준이라 {@link KakaoPlaceLookup}으로 그 ID를 한 번 더
@@ -60,7 +59,7 @@ public class SavePipelineService {
     private final PlaceResolver placeResolver;
     private final ConfirmPolicy confirmPolicy;
     private final KakaoPlaceLookup kakaoPlaceLookup;
-    private final ContentPersistenceService contentPersistenceService;
+    private final ContentAnalysisResultService contentAnalysisResultService;
     private final Clock clock;
 
     /** Spring이 실제로 쓰는 생성자 - VideoContentAnalyzer(Module A 소유)는 안 건드리고 메서드 참조로
@@ -69,14 +68,14 @@ public class SavePipelineService {
     public SavePipelineService(VideoContentAnalyzer videoContentAnalyzer, PlaceLookup placeLookup,
                                 PlaceResolver placeResolver, ConfirmPolicy confirmPolicy,
                                 KakaoPlaceLookup kakaoPlaceLookup,
-                                ContentPersistenceService contentPersistenceService, Clock clock) {
+                                ContentAnalysisResultService contentAnalysisResultService, Clock clock) {
         this(videoContentAnalyzer::analyze, placeLookup, placeResolver, confirmPolicy, kakaoPlaceLookup,
-                contentPersistenceService, clock);
+                contentAnalysisResultService, clock);
     }
 
     /**
      * 순수 로직만 검증하는 기존 테스트용 생성자(5-인자, 시그니처 그대로 유지) - {@code saveAndPersist}를
-     * 쓰지 않는 테스트는 {@code contentPersistenceService}/{@code clock}이 필요 없어서 이 생성자로
+     * 쓰지 않는 테스트는 {@code contentAnalysisResultService}/{@code clock}이 필요 없어서 이 생성자로
      * 충분하다(team 관행: 람다 fake, 모킹 프레임워크 안 씀).
      */
     SavePipelineService(VideoAnalyzer videoAnalyzer, PlaceLookup placeLookup,
@@ -89,13 +88,13 @@ public class SavePipelineService {
     SavePipelineService(VideoAnalyzer videoAnalyzer, PlaceLookup placeLookup,
                          PlaceResolver placeResolver, ConfirmPolicy confirmPolicy,
                          KakaoPlaceLookup kakaoPlaceLookup,
-                         ContentPersistenceService contentPersistenceService, Clock clock) {
+                         ContentAnalysisResultService contentAnalysisResultService, Clock clock) {
         this.videoAnalyzer = videoAnalyzer;
         this.placeLookup = placeLookup;
         this.placeResolver = placeResolver;
         this.confirmPolicy = confirmPolicy;
         this.kakaoPlaceLookup = kakaoPlaceLookup;
-        this.contentPersistenceService = contentPersistenceService;
+        this.contentAnalysisResultService = contentAnalysisResultService;
         this.clock = clock;
     }
 
@@ -138,7 +137,30 @@ public class SavePipelineService {
     }
 
     public SavePipelineResultDto save(SavePipelineRequestDto request) {
+        return toResultDto(analyze(request));
+    }
+
+    /**
+     * {@link #save}와 같은 분석·확정 과정을 거친 뒤, 실제로 {@code ContentAnalysisResultService.
+     * applyOutcome}까지 호출해 DB에 반영한다(Place.md 담당자 합의로 막혀있던 연동, 2026-10-10 해소).
+     * {@code ContentPersistenceService}를 직접 부르지 않고 {@code ContentAnalysisResultService}를
+     * 거치는 이유: 이 서비스가 임베딩 생성까지 포함한 진짜 저장 진입점인데, 지금까지 프로덕션 어디에서도
+     * 호출되지 않고 있었다(멘토 피드백 "모듈끼리 연결이 안 됨"의 실제 사례, 2026-10-11 발견·수정).
+     * contentId는 {@code ContentPersistenceService.saveAndClaim}이 먼저 만들어둔 값을 그대로 받는다
+     * ({@code SavePipelineController}에서 호출). {@link #save}와 분석을 두 번 돌리지 않도록 같은
+     * {@link Analyzed}를 응답 투영({@link #toResultDto})에도 재사용한다.
+     */
+    public SavePipelineResultDto saveAndPersist(UUID contentId, SavePipelineRequestDto request) {
         Analyzed analyzed = analyze(request);
+        AnalysisOutcome outcome = toAnalysisOutcome(analyzed);
+        boolean applied = contentAnalysisResultService.applyOutcome(contentId, outcome);
+        if (!applied) {
+            log.warn("분석 결과 반영 실패(이미 처리됐거나 contentId 없음) contentId={}", contentId);
+        }
+        return toResultDto(analyzed);
+    }
+
+    private static SavePipelineResultDto toResultDto(Analyzed analyzed) {
         if (analyzed.extraction() == null || analyzed.extraction().status() != ExtractionStatus.SUCCESS) {
             return new SavePipelineResultDto(ExtractionStatus.FAILED, null, List.of(), analyzed.analysisFailureMessage());
         }
@@ -148,18 +170,6 @@ public class SavePipelineService {
                 : ExtractionStatus.SUCCESS;
 
         return new SavePipelineResultDto(status, analyzed.extraction().summary(), analyzed.outcomes(), null);
-    }
-
-    /**
-     * {@link #save}와 같은 분석·확정 과정을 거친 뒤, 실제로 {@code ContentPersistenceService.
-     * applyOutcome}까지 호출해 DB에 반영한다(Place.md 담당자 합의로 막혀있던 연동, 2026-10-10 해소).
-     * REST 진입점(SavePipelineController)이 아직 없어 당장은 직접 호출로만 쓸 수 있다 - contentId는
-     * {@code ContentPersistenceService.saveAndClaim}이 먼저 만들어둔 값을 그대로 받는다.
-     */
-    public boolean saveAndPersist(UUID contentId, SavePipelineRequestDto request) {
-        Analyzed analyzed = analyze(request);
-        AnalysisOutcome outcome = toAnalysisOutcome(analyzed);
-        return contentPersistenceService.applyOutcome(contentId, outcome);
     }
 
     /** package-private: 실제 DB 호출 없이 매핑 로직만 단위테스트하기 위함. */
