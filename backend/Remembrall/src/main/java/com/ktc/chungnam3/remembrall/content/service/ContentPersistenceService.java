@@ -194,6 +194,7 @@ public class ContentPersistenceService {
                 placeResult.address(),
                 placeResult.latitude(),
                 placeResult.longitude(),
+                placeResult.geocodingProvider().name(),
                 placeResult.geocodingPlaceId(),
                 placeResult.verificationPlaceId(),
                 now

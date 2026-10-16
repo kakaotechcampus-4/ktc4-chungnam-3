@@ -21,6 +21,7 @@ import java.util.List;
 public class PlaceSearchClient implements PlaceLookup {
 
     private static final String BASE_URL = "https://us1.locationiq.com/v1";
+    private static final long RATE_LIMIT_BACKOFF_MS = 1000;
 
     private final RestClient restClient;
     private final String apiKey;
@@ -46,8 +47,13 @@ public class PlaceSearchClient implements PlaceLookup {
                 .build();
     }
 
-    /** osmClass/osmType은 도로("highway")·동네("place") 같은 비업체 결과를 걸러내는 데 쓴다 (PlaceResolver 참고). */
-    public record PlaceSearchResult(String displayName, double lat, double lon, String osmClass, String osmType) {
+    /**
+     * osmClass/osmType은 도로("highway")·동네("place") 같은 비업체 결과를 걸러내는 데 쓴다
+     * (PlaceResolver 참고). placeId는 LocationIQ(Nominatim) 자체 장소 식별자(실측 확인, 2026-10-10) -
+     * Place.md의 geocodingPlaceId로 쓰인다. VWorld 기준점처럼 LocationIQ가 준 값이 아닌 경우엔 null.
+     */
+    public record PlaceSearchResult(String displayName, double lat, double lon, String osmClass, String osmType,
+                                     String placeId) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -56,7 +62,8 @@ public class PlaceSearchClient implements PlaceLookup {
             String lat,
             String lon,
             @JsonProperty("class") String osmClass,
-            String type) {
+            String type,
+            @JsonProperty("place_id") String placeId) {
     }
 
     /**
@@ -79,11 +86,24 @@ public class PlaceSearchClient implements PlaceLookup {
      * (예: "명동성당" 검색해도 {@code name:ko}가 "명동대성당"이라 부분일치 안 될 수 있음, 별도 이슈).
      * <p>
      * 일치하는 장소가 없으면 빈 리스트를 반환한다 (정상 케이스, 예외 아님).
+     * <p>
+     * 429(무료 티어 초당 호출 제한, 2026-10-07 실제 파이프라인 재검증 중 "Rate Limited Second"로 확인)는
+     * 한 번 짧게 쉬었다 재시도한다 - 후보마다 매번 선제적으로 딜레이를 두면 제한에 안 걸리는 호출까지
+     * 다 느려지고 기존 타임아웃 예산(2026-10-01, 9초 산정)과도 어긋나서, 실제로 막혔을 때만 비용을
+     * 치르는 쪽을 선택함.
      */
     @Override
     public List<PlaceSearchResult> search(String name, String branchName, String regionHint) {
         String query = buildQuery(name, regionHint);
+        try {
+            return requestSearch(query);
+        } catch (HttpClientErrorException.TooManyRequests e) {
+            sleepBeforeRetry();
+            return requestSearch(query);
+        }
+    }
 
+    private List<PlaceSearchResult> requestSearch(String query) {
         try {
             List<LocationIqItem> response = restClient.get()
                     .uri(uriBuilder -> uriBuilder.path("/search")
@@ -108,11 +128,22 @@ public class PlaceSearchClient implements PlaceLookup {
                             Double.parseDouble(item.lat()),
                             Double.parseDouble(item.lon()),
                             item.osmClass(),
-                            item.type()
+                            item.type(),
+                            item.placeId()
                     ))
                     .toList();
         } catch (HttpClientErrorException.NotFound e) {
             return List.of();
+        }
+    }
+
+    // ponytail: 고정 1회 재시도 + 고정 1초 백오프, 지수 백오프 아님 - 재시도 후에도 계속 429가 나면
+    // 그대로 호출부(PlaceSearchClient 사용처)로 전파됨. 반복적으로 또 걸리면 그때 늘린다.
+    private static void sleepBeforeRetry() {
+        try {
+            Thread.sleep(RATE_LIMIT_BACKOFF_MS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 

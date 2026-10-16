@@ -27,6 +27,10 @@ youtube:
 
 kakao:
   app-id: ${kakao.app-id:}
+  # 로컬 API(키워드 장소검색) REST 키 - 위 app-id(로그인용 OAuth 앱 ID)와는 별개 값.
+  # KakaoPlaceLookup 전용(save/place) - 장소 ID 확보용, 좌표·이름 등은 저장하지 않음(Place.md 참고).
+  api:
+    key: ${kakao.api.key:}
 
 auth:
   session:

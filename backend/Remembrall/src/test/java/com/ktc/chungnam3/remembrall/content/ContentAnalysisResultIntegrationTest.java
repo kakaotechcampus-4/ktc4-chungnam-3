@@ -12,6 +12,7 @@ import com.ktc.chungnam3.remembrall.domain.content.ContentSourceStatus;
 import com.ktc.chungnam3.remembrall.domain.contentplace.ContentPlace;
 import com.ktc.chungnam3.remembrall.domain.member.AuthProvider;
 import com.ktc.chungnam3.remembrall.domain.member.Member;
+import com.ktc.chungnam3.remembrall.domain.place.GeocodingProvider;
 import com.ktc.chungnam3.remembrall.domain.place.Place;
 import com.ktc.chungnam3.remembrall.repository.ContentPlaceRepository;
 import com.ktc.chungnam3.remembrall.repository.ContentRepository;
@@ -304,6 +305,24 @@ class ContentAnalysisResultIntegrationTest {
         assertNoEmbedding(claim.contentId());
     }
 
+    @Test
+    void 공공데이터로_확정한_장소도_DATAPORTAL로_저장한다() {
+        // V14 마이그레이션(place.geocoding_provider CHECK 제약에 DATAPORTAL 추가)이 실제로 적용돼
+        // 있는지 검증한다 - 이 파일의 place() 헬퍼는 전부 LOCATIONIQ만 써서, DATAPORTAL 저장 자체를
+        // 한 번도 안 해봤었다(리뷰 반영).
+        ContentSaveClaim claim = persistenceService.saveAndClaim(memberId, "dataportal-place");
+        AnalysisOutcome.PlaceResult place = new AnalysisOutcome.PlaceResult(
+                "설명", "스타벅스", "서울 강남구 강남대로 390", 37.498, 127.028,
+                GeocodingProvider.DATAPORTAL, "MA0101", "kakao-starbucks-gangnam");
+
+        assertThat(resultService.applyOutcome(claim.contentId(), outcome(
+                ContentAnalysisStatus.SUCCESS, null, ContentSourceStatus.AVAILABLE, List.of(place)))).isTrue();
+
+        assertThat(placeRepository.findAll()).singleElement()
+                .extracting(Place::getGeocodingProvider)
+                .isEqualTo(GeocodingProvider.DATAPORTAL);
+    }
+
     private void assertEmbedding(UUID contentId) {
         String literal = jdbcTemplate.queryForObject(
                 "SELECT embedding::text FROM content WHERE id = ?", String.class, contentId);
@@ -379,6 +398,7 @@ class ContentAnalysisResultIntegrationTest {
                 address,
                 36.35,
                 127.38,
+                com.ktc.chungnam3.remembrall.domain.place.GeocodingProvider.LOCATIONIQ,
                 geocodingPlaceId,
                 verificationPlaceId
         );

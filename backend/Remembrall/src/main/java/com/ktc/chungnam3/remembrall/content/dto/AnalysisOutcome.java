@@ -3,6 +3,7 @@ package com.ktc.chungnam3.remembrall.content.dto;
 import com.ktc.chungnam3.remembrall.domain.content.ContentAnalysisFailureCode;
 import com.ktc.chungnam3.remembrall.domain.content.ContentAnalysisStatus;
 import com.ktc.chungnam3.remembrall.domain.content.ContentSourceStatus;
+import com.ktc.chungnam3.remembrall.domain.place.GeocodingProvider;
 
 import java.time.Instant;
 import java.util.List;
@@ -55,6 +56,7 @@ public record AnalysisOutcome(
             String address,
             double latitude,
             double longitude,
+            GeocodingProvider geocodingProvider,
             String geocodingPlaceId,
             String verificationPlaceId
     ) {
@@ -71,6 +73,7 @@ public record AnalysisOutcome(
             if (longitude < -180 || longitude > 180) {
                 throw new IllegalArgumentException("longitude must be between -180 and 180");
             }
+            Objects.requireNonNull(geocodingProvider, "geocodingProvider");
             if (geocodingPlaceId == null || geocodingPlaceId.isBlank()
                     || geocodingPlaceId.length() > 100) {
                 throw new IllegalArgumentException("geocodingPlaceId must contain 1 to 100 characters");
