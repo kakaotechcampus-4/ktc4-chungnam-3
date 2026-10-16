@@ -201,7 +201,7 @@ public class SavePipelineService {
         ContentAnalysisFailureCode failureCode = anyLookupFailure ? dominantLookupFailureCode(analyzed.outcomes()) : null;
 
         return new AnalysisOutcome(status, failureCode, null,
-                extraction.title(), extraction.summary(), null, analysisVersion, clock.instant(), places);
+                extraction.title(), extraction.summary(), extraction.category(), analysisVersion, clock.instant(), places);
     }
 
     /**
