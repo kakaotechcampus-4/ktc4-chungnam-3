@@ -1,5 +1,6 @@
 package com.ktc.chungnam3.remembrall.save.place;
 
+import com.ktc.chungnam3.remembrall.domain.place.GeocodingProvider;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -564,5 +565,30 @@ class PlaceResolverTest {
 
         assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.NEEDS_CONFIRMATION);
         assertThat(resolved.confirmRequest().candidates()).hasSize(2);
+    }
+
+    @Test
+    void LocationIQ로_확정하면_출처는_LOCATIONIQ이고_ID는_그_결과의_place_id다() {
+        var match = new PlaceSearchClient.PlaceSearchResult("성심당 본점, 대전", 36.32, 127.42, null, null, "227225446");
+
+        PlaceResolver.Result resolved = resolver.resolve("p1", "성심당", null, null, List.of(match));
+
+        assertThat(resolved.resolvedPlace().geocodingProvider()).isEqualTo(GeocodingProvider.LOCATIONIQ);
+        assertThat(resolved.resolvedPlace().geocodingPlaceId()).isEqualTo("227225446");
+    }
+
+    @Test
+    void 공공데이터로_확정하면_출처는_DATAPORTAL이고_ID는_bizesId다() {
+        var anchor = result("강남역, 서울특별시", 37.498, 127.028);
+        var branchStore = new DataportalStoreClient.StoreResult(
+                "MA0101", "스타벅스", "강남역점", "음식", "서울 강남구 어딘가", 37.498, 127.028);
+        var resolver = resolverForAnchor(List.of(anchor), List.of(branchStore));
+
+        PlaceResolver.Result resolved = resolver.resolve(
+                "p1", "스타벅스", "강남역점", "서울 강남",
+                List.of(result("스타벅스, 은평구, 서울특별시", 37.65, 126.93)));
+
+        assertThat(resolved.resolvedPlace().geocodingProvider()).isEqualTo(GeocodingProvider.DATAPORTAL);
+        assertThat(resolved.resolvedPlace().geocodingPlaceId()).isEqualTo("MA0101");
     }
 }
