@@ -230,9 +230,10 @@ class SavePipelineServiceTest {
     }
 
     @Test
-    void 카카오_장소_ID를_못_찾으면_RESOLVED_대신_PLACE_VERIFICATION_FAILED로_처리한다() {
+    void 카카오에_장소가_없으면_RESOLVED_대신_NO_PLACE를_처리한다() {
         // Place.md: "결과가 모호하거나 일치하지 않으면 Place를 생성하지 않고 실패 기록" - PlaceResolver가
-        // 확정해도 카카오 검증이 안 되면 RESOLVED로 내보내면 안 된다.
+        // 확정해도 카카오 검증이 안 되면 RESOLVED로 내보내면 안 된다. 단, 정상 호출인데 못 찾은
+        // 것뿐이라 오류가 아니라 NO_PLACE다(저장담당 요구사항.md "결과 없음은 API 오류와 구분").
         var place = candidate("p1", "성심당", "본점", null);
         VideoAnalyzer analyzer = url -> extraction(List.of(place));
         PlaceLookup lookup = lookupOf(java.util.Map.of("성심당", List.of(result("성심당 본점, 대전", 36.32, 127.42))));
@@ -241,8 +242,27 @@ class SavePipelineServiceTest {
 
         SavePipelineResultDto resolved = service.save(new SavePipelineRequestDto("https://youtu.be/x", false));
 
+        assertThat(resolved.places().get(0).decision()).isEqualTo(PlaceOutcomeDto.Decision.NO_PLACE);
+        assertThat(resolved.status()).isEqualTo(ExtractionStatus.SUCCESS);
+    }
+
+    @Test
+    void 카카오_호출이_실패하면_PLACE_VERIFICATION_FAILED이고_콘텐츠는_PLACE_VERIFICATION_API_ERROR다() {
+        var place = candidate("p1", "성심당", "본점", null);
+        VideoAnalyzer analyzer = url -> extraction(List.of(place));
+        PlaceLookup lookup = lookupOf(java.util.Map.of("성심당", List.of(result("성심당 본점, 대전", 36.32, 127.42))));
+        KakaoPlaceLookup kakaoFails = (name, branch, lat, lon) -> {
+            throw new RuntimeException("401 Unauthorized");
+        };
+        SavePipelineService service = new SavePipelineService(analyzer, lookup, realResolver(), new ConfirmPolicy(), kakaoFails);
+
+        SavePipelineResultDto resolved = service.save(new SavePipelineRequestDto("https://youtu.be/x", false));
+        AnalysisOutcome outcome = service.toAnalysisOutcome(
+                new SavePipelineService.Analyzed(extraction(List.of(place)), null, resolved.places()));
+
         assertThat(resolved.places().get(0).decision()).isEqualTo(PlaceOutcomeDto.Decision.PLACE_VERIFICATION_FAILED);
         assertThat(resolved.status()).isEqualTo(ExtractionStatus.PARTIAL);
+        assertThat(outcome.failureCode()).isEqualTo(ContentAnalysisFailureCode.PLACE_VERIFICATION_API_ERROR);
     }
 
     private static SavePipelineService serviceForMapping() {
