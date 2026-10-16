@@ -425,6 +425,7 @@ class TriggerPersistenceIntegrationTest {
     private AnalysisOutcome.PlaceResult place(String verificationId) {
         return new AnalysisOutcome.PlaceResult(
                 "Description", "Place " + verificationId, "Address", 36.35, 127.38,
+                com.ktc.chungnam3.remembrall.domain.place.GeocodingProvider.LOCATIONIQ,
                 "locationiq-" + verificationId, verificationId
         );
     }

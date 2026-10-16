@@ -35,7 +35,7 @@ public interface PlaceRepository extends JpaRepository<Place, UUID> {
                 :address,
                 :latitude,
                 :longitude,
-                'LOCATIONIQ',
+                :geocodingProvider,
                 :geocodingPlaceId,
                 'KAKAO',
                 :verificationPlaceId,
@@ -51,6 +51,7 @@ public interface PlaceRepository extends JpaRepository<Place, UUID> {
             @Param("address") String address,
             @Param("latitude") double latitude,
             @Param("longitude") double longitude,
+            @Param("geocodingProvider") String geocodingProvider,
             @Param("geocodingPlaceId") String geocodingPlaceId,
             @Param("verificationPlaceId") String verificationPlaceId,
             @Param("now") Instant now

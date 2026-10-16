@@ -1,0 +1,8 @@
+# 생성물. 사람이 손으로 고치지 않는 파일은 포맷하지 않는다.
+package-lock.json
+android/
+ios/
+.expo/
+dist/
+web-build/
+expo-env.d.ts

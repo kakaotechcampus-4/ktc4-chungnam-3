@@ -4,12 +4,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import Icon from "../../../shared/ui/Icon";
 import Thumb, { type ThumbFade } from "../../../shared/ui/Thumb";
-import {
-    colors,
-    metrics,
-    spacing,
-    typography,
-} from "../../../shared/ui/theme";
+import { colors, metrics, spacing, typography } from "../../../shared/ui/theme";
 
 export type PinSummaryProps = {
     time: string;

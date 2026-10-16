@@ -32,6 +32,13 @@
                     "image": "./assets/images/splash-icon.png",
                     "imageWidth": 76
                 }
+            ],
+            [
+                "expo-location",
+                {
+                    "isAndroidBackgroundLocationEnabled": true,
+                    "isAndroidForegroundServiceEnabled": false
+                }
             ]
         ],
         "experiments": {

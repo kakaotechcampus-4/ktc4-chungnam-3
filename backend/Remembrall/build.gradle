@@ -31,6 +31,9 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-restclient'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 	implementation 'org.flywaydb:flyway-database-postgresql'
+	// 지방행정인허가 좌표(EPSG:5174, Bessel 중부원점 TM)를 WGS84로 변환하는 용도 - 손으로 투영식을
+	// 짜면 지오펜스 정확도가 걸린 부분이라 검증된 라이브러리를 쓴다.
+	implementation 'org.locationtech.proj4j:proj4j:1.3.0'
 	implementation 'org.springframework.ai:spring-ai-starter-model-google-genai'
 	implementation 'org.springframework.ai:spring-ai-starter-model-google-genai-embedding'
 	implementation 'org.springframework.ai:spring-ai-starter-vector-store-pgvector'
@@ -59,5 +62,17 @@ dependencyManagement {
 }
 
 tasks.named('test') {
-	useJUnitPlatform()
+	useJUnitPlatform {
+		excludeTags 'live'
+	}
+}
+
+// 실제 Gemini를 호출하는 수동 검증용 테스트(@Tag("live"))만 따로 돌리는 태스크.
+// 비용이 발생하고 오래 걸려 기본 test에서는 뺀다 - ./gradlew liveTest 로 직접 실행한다.
+tasks.register('liveTest', Test) {
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+	useJUnitPlatform {
+		includeTags 'live'
+	}
 }

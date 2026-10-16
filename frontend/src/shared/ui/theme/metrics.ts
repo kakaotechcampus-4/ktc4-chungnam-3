@@ -88,7 +88,7 @@ export const metrics = {
         thumbWidth: 96,
         infoGap: 6,
     },
-    // 02 장소 후보 2061:799 · 2061:804.
+    // 02 장소 후보 2061:799 · 2061:804. 높이 70. padding 은 Figma 값(테두리 제외)이고 코드에서 테두리 두께를 뺀다.
     placeOption: {
         paddingHorizontal: 16,
         paddingVertical: 14,
@@ -112,6 +112,7 @@ export const metrics = {
         noteGap: 6,
         tagGap: 6,
         tagPaddingVertical: 2,
+        // 원본 영상 행 왼쪽 padding. Figma 값(테두리 제외)이고 코드에서 테두리 두께를 뺀다. 행 높이 64.
         sourcePaddingLeft: 14,
         noteCollapsedLines: 2,
         // 지도: 현재 위치 → 장소 점선 경로(text/secondary, 두께 2 는 stroke 토큰에 없음, 점선 4 · 4).
@@ -128,14 +129,24 @@ export const metrics = {
         height: 4,
     },
     // 지도 사진 핀 (10 2103:471 · 2103:439 · 2103:449). 9:16, 폭과 테두리는 fade 로 정한다.
-    // 선택 라벨(10b 2103:570)은 핀 아래 7 떨어진다. 라벨 높이 = captionMeta 16 + 위아래 3.
+    // 이름표(10b 2103:570)는 핀 아래 7 떨어진다. 이름표 높이 = captionMeta 16 + 위아래 3.
+    // shadowMargin: 그림자 있는 핀의 비트맵 여백 = elevationLow blur 12 + offsetY 2.
+    // redrawDelayMs: 다음 프레임에 한 번 찍은 뒤 다시 한 번 찍는 지연. 뷰가 덜 그려진 채 굳지 않게 한다. 구현값이다.
     photoMarker: {
         recent: { width: 40, borderWidth: 3 },
         weeks: { width: 26, borderWidth: 2 },
         months: { width: 22, borderWidth: 2 },
+        // variant 는 fade 와 관계없이 크기 · 테두리 · 그림자를 정한다. detail: 08 장소 핀(2061:971 · 08b 2106:625), 그림자 있음.
+        // mini: 08 의 다른 저장 장소, 그림자 없음.
+        variant: {
+            detail: { width: 40, borderWidth: 3 },
+            mini: { width: 22, borderWidth: 2 },
+        },
         labelGap: 7,
         labelPaddingHorizontal: 8,
         labelPaddingVertical: 3,
+        shadowMargin: 14,
+        redrawDelayMs: 100,
     },
     // 현재 위치 (10 2103:469 · 2103:470). 바깥 원은 status/info-fg 15%, 안쪽 점은 bg/surface 테두리 3.
     currentLocation: {
@@ -161,12 +172,13 @@ export const metrics = {
         summaryThumbWidth: 56,
         summaryChevronSize: 20,
     },
-    // push 화면 상단 바 (11 설정 2103:633 · 02c 2105:593). 뒤로가기 아이콘 24 → 사방 12 씩 48dp.
+    // 상단 바 (11 설정 2103:633 · 02c 2105:593 · 12 2105:682). 뒤로 · 닫기 아이콘 24 → 사방 12 씩 48dp.
     topBar: {
-        backHitSlop: { top: 12, bottom: 12, left: 12, right: 12 },
+        iconHitSlop: { top: 12, bottom: 12, left: 12, right: 12 },
     },
     // C/SearchField 2104:567. 지우기 아이콘 18 → 사방 15 씩 48dp.
     // inputPadding 은 Android TextInput 기본 여백을 없애 높이 48 안에서 글자를 가운데 둔다.
+    // paddingLeft 는 Figma 값(테두리 제외)이고 코드에서 테두리 두께를 뺀다.
     searchField: {
         paddingLeft: 14,
         iconSize: 20,
@@ -183,6 +195,11 @@ export const metrics = {
         rowPaddingHorizontal: 16,
         rowPaddingVertical: 14,
     },
+    // C/LocationConsentSheet 2201:963. 약관 행은 설정 행 · 00d 단계 행과 같은 위아래 14 · 좌우 16(테두리 제외, 코드에서 테두리 두께를 뺀다).
+    locationConsentSheet: {
+        termsPaddingHorizontal: 16,
+        termsPaddingVertical: 14,
+    },
     // C/Switch 2101:424. 손잡이는 트랙 안쪽 3 떨어져 있다. 켜짐·꺼짐 전환은 150ms 슬라이드.
     settingsSwitch: {
         width: 48,
@@ -191,10 +208,60 @@ export const metrics = {
         knobInset: 3,
         durationMs: 150,
     },
-    // 12 저장물 없음 2105:682. 빈 썸네일 자리 96 × 9:16, 닫기 · 뒤로 아이콘 24 → 사방 12 씩 48dp.
+    // 12 저장물 없음 2105:682. 빈 썸네일 자리 96 × 9:16. 상단 바는 topBar 를 쓴다.
     notFound: {
         thumbWidth: 96,
-        closeHitSlop: { top: 12, bottom: 12, left: 12, right: 12 },
+    },
+    // 온보딩 00a~00f(2175:676 ~ 2175:891). 위 여백은 상태바 아래부터 잰다.
+    // 일러스트 사진은 회전 전 크기와 중심점(cx, cy)으로 둔다. Figma 는 회전 뒤 외곽 상자 좌표라 중심을 계산해 옮겼다.
+    // 행(00d · 00e 단계, 00f 안내)은 위아래 14 · 좌우 16. 테두리 있는 단계 행은 테두리 두께를 뺀다.
+    onboarding: {
+        messageTop: 72,
+        introMessageTop: 8,
+        previewMessageTop: 40,
+        listTop: 24,
+        legalPaddingTop: 16,
+        legalPaddingBottom: 40,
+        rowPaddingHorizontal: 16,
+        rowPaddingVertical: 14,
+        stepBadgeSize: 28,
+        stepCheckSize: 16,
+        guideIconSize: 36,
+        guideGlyphSize: 20,
+        previewPaddingHorizontal: 16,
+        previewPaddingVertical: 14,
+        previewAppGap: 6,
+        previewAppIconPadding: 3,
+        previewAppGlyphSize: 12,
+        previewImageSize: 48,
+        errorPaddingHorizontal: 12,
+        errorPaddingVertical: 10,
+        // 제공자 심볼 높이 18. 카카오 심볼 파일(kakao-symbol.svg)은 22 × 21 이라 폭은 비율로 정한다.
+        providerSymbolSize: 18,
+        providerSymbolAspectRatio: 22 / 21,
+        // 카카오 레이블은 OS 기본 시스템 서체(가이드 규정)라 Figma 텍스트 스타일 대신 굵기만 둔다.
+        providerLabelWeight: "500",
+        // 00a 2175:683. 뒤에서 앞 순서. 마지막 장만 그림자 · Shorts 표식이 있다.
+        intro: {
+            width: 360,
+            height: 360,
+            photos: [
+                { cx: 105.2, cy: 170.1, width: 104, rotate: "10deg" },
+                { cx: 255.8, cy: 145.2, width: 104, rotate: "-9deg" },
+                { cx: 143.1, cy: 147.1, width: 104, rotate: "3deg" },
+                { cx: 201.3, cy: 212.1, width: 120, rotate: "-4deg" },
+            ],
+        },
+        // 00b 2175:1034. 뒤에서 앞 순서.
+        login: {
+            width: 360,
+            height: 240,
+            photos: [
+                { cx: 139.2, cy: 123.6, width: 84, rotate: "8deg" },
+                { cx: 222.8, cy: 108.8, width: 84, rotate: "-7deg" },
+                { cx: 178.7, cy: 105.2, width: 84, rotate: "1deg" },
+            ],
+        },
     },
     // 03 분석 중 스켈레톤 2061:831.
     skeleton: {

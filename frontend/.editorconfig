@@ -1,0 +1,14 @@
+# prettier 를 쓰지 않는 에디터(Android Studio · IntelliJ 등)용. 값은 .prettierrc 와 같다.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = true
+
+# 줄 끝 공백 두 칸이 줄바꿈 문법이다.
+[*.md]
+trim_trailing_whitespace = false

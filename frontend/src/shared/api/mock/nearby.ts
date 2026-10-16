@@ -24,6 +24,7 @@ export const nearbyMock = {
         [
             {
                 id: "afternoon-four",
+                detailId: "afternoon-four",
                 time: "2주 전",
                 place: "오후 네시",
                 meta: "도보 9분 · 카페",
@@ -47,6 +48,7 @@ export const nearbyMock = {
         [
             {
                 id: "skyroad",
+                detailId: "skyroad",
                 time: "4개월 전",
                 place: "으능정이 스카이로드",
                 meta: "도보 8분 · 가볼 곳",
@@ -57,6 +59,7 @@ export const nearbyMock = {
             },
             {
                 id: "hanbat-kalguksu",
+                detailId: "hanbat-kalguksu",
                 time: "5개월 전",
                 place: "한밭 손칼국수",
                 meta: "도보 13분 · 식당",
