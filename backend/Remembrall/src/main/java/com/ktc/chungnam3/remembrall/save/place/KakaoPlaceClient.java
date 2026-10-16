@@ -66,27 +66,26 @@ public class KakaoPlaceClient implements KakaoPlaceLookup {
      * 브랜드+지점명과 이미 확정된 좌표로 카카오 장소 ID를 찾는다. 반경 안에 상호명이 브랜드를 포함하는
      * 결과가 없으면(카카오 미등록·동명이인 매장만 있음 등) 빈 값을 반환한다 - 호출부가 "ID 못 찾음"을
      * 정상 케이스로 처리할 수 있어야 한다(VWorld/LocationIQ 등 기존 클라이언트와 같은 원칙).
+     * <p>
+     * 호출 자체의 예외(401 등)는 여기서 삼키지 않고 그대로 던진다 - "정상 호출했는데 결과 없음"과
+     * "호출 실패"를 호출부(SavePipelineService.verifyWithKakao)가 구분해 NO_PLACE/PLACE_VERIFICATION_FAILED로
+     * 각각 처리해야 하기 때문이다(리뷰 반영, 저장담당 요구사항.md "결과 없음은 API 오류와 구분").
      */
     @Override
     public Optional<String> findPlaceId(String name, String branchName, double lat, double lon) {
         String query = branchName == null || branchName.isBlank() ? name : name + " " + branchName;
 
-        ResponseWrapper response;
-        try {
-            response = restClient.get()
-                    .uri(uriBuilder -> uriBuilder.path("/v2/local/search/keyword.json")
-                            .queryParam("query", query)
-                            .queryParam("x", lon)
-                            .queryParam("y", lat)
-                            .queryParam("radius", RADIUS_METERS)
-                            .queryParam("sort", "distance")
-                            .build())
-                    .header("Authorization", "KakaoAK " + apiKey)
-                    .retrieve()
-                    .body(ResponseWrapper.class);
-        } catch (RuntimeException e) {
-            return Optional.empty();
-        }
+        ResponseWrapper response = restClient.get()
+                .uri(uriBuilder -> uriBuilder.path("/v2/local/search/keyword.json")
+                        .queryParam("query", query)
+                        .queryParam("x", lon)
+                        .queryParam("y", lat)
+                        .queryParam("radius", RADIUS_METERS)
+                        .queryParam("sort", "distance")
+                        .build())
+                .header("Authorization", "KakaoAK " + apiKey)
+                .retrieve()
+                .body(ResponseWrapper.class);
 
         if (response == null || response.documents() == null) {
             return Optional.empty();

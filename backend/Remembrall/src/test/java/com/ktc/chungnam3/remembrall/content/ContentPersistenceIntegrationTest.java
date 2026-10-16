@@ -240,6 +240,21 @@ class ContentPersistenceIntegrationTest {
         assertThat(personalSaveRepository.findById(failedClaim.personalSaveId())).isPresent();
     }
 
+    @Test
+    void Gemini_호출_실패로_끝난_영상은_다시_저장하면_분석을_다시_맡는다() {
+        UUID memberId = createMember();
+        ContentSaveClaim apiError = service.saveAndClaim(memberId, "gemini-failed");
+        ContentSaveClaim unavailable = service.saveAndClaim(memberId, "video-gone");
+        service.applyOutcome(apiError.contentId(), new AnalysisOutcome(ContentAnalysisStatus.FAILED,
+                ContentAnalysisFailureCode.EXTRACTION_API_ERROR, null, null, null, null, null, null, List.of()));
+        service.applyOutcome(unavailable.contentId(), new AnalysisOutcome(ContentAnalysisStatus.FAILED,
+                ContentAnalysisFailureCode.VIDEO_UNAVAILABLE, ContentSourceStatus.UNAVAILABLE,
+                null, null, null, null, null, List.of()));
+
+        assertThat(service.saveAndClaim(memberId, "gemini-failed").analysisClaimed()).isTrue();
+        assertThat(service.saveAndClaim(memberId, "video-gone").analysisClaimed()).isFalse();
+    }
+
     private UUID createMember() {
         return memberRepository.save(Member.create(
                 AuthProvider.KAKAO,
