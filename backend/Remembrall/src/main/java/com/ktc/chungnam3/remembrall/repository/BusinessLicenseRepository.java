@@ -71,4 +71,8 @@ public interface BusinessLicenseRepository extends JpaRepository<BusinessLicense
             @Param("lon") double lon,
             @Param("radiusMeters") int radiusMeters
     );
+
+    /** 폐업 전환된 매장을 지운다(리뷰 반영) - {@code source_id}가 없어도(한 번도 적재된 적 없어도)
+     * 안전하게 0건 삭제로 끝난다. */
+    void deleteBySourceId(String sourceId);
 }

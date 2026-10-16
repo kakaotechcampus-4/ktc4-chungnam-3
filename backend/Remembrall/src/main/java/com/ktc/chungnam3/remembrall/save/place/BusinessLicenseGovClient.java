@@ -140,9 +140,13 @@ public class BusinessLicenseGovClient implements BusinessLicenseSource {
                 .queryParam("pageNo", pageNo)
                 .queryParam("numOfRows", PAGE_SIZE)
                 .queryParam("returnType", "json")
-                .queryParam("cond[BPLC_NM::LIKE]", "{brand}")
-                .queryParam("cond[SALS_STTS_CD::EQ]", OPERATING_STATUS_CODE);
-        if (updatedSince != null) {
+                .queryParam("cond[BPLC_NM::LIKE]", "{brand}");
+        // 델타 동기화(updatedSince != null)에 영업상태 필터까지 같이 걸면, 폐업으로 막 바뀐 행이
+        // "영업중 아님"이라 조회 자체에서 걸러져 폐업 감지를 영영 못 한다(리뷰 반영) - 델타일 땐
+        // 변경분 조건만, 최초 전체 적재일 땐 영업중 조건만 건다.
+        if (updatedSince == null) {
+            uri.queryParam("cond[SALS_STTS_CD::EQ]", OPERATING_STATUS_CODE);
+        } else {
             uri.queryParam("cond[DAT_UPDT_PNT::GTE]", "{updatedSince}");
         }
 

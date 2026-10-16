@@ -13,8 +13,10 @@ import java.util.UUID;
 
 /**
  * {@link BusinessLicenseBulkLoader}(최초 1회 적재)와 {@link BusinessLicenseSyncScheduler}(매일 델타
- * 동기화)가 공유하는 적재 로직. 영업상태가 "영업중"이 아닌 행(폐업·휴업)은 여기서 걸러낸다 - 이
- * 판단을 한 곳에만 둬서, 데이터셋마다 조금씩 다른 상태 표기 문자열을 여기서만 관리하면 된다.
+ * 동기화)가 공유하는 적재 로직. 영업상태가 "영업중"이 아닌 행(폐업·휴업)은 저장하지 않고, 이미
+ * 저장돼 있었다면 지운다(리뷰 반영 - 폐업 전환이 델타 동기화로 들어오면 기존 행을 삭제해야
+ * {@code findWithinRadius}의 "이 테이블엔 영업중인 곳만 있다"는 전제가 계속 성립한다). 이 판단을
+ * 한 곳에만 둬서, 데이터셋마다 조금씩 다른 상태 표기 문자열을 여기서만 관리하면 된다.
  */
 @Slf4j
 @Service
@@ -40,6 +42,8 @@ public class BusinessLicenseIngestService {
         int ingested = 0;
         for (BusinessLicenseRecord record : records) {
             if (!OPERATING_STATUSES.contains(record.licenseStatus())) {
+                repository.deleteBySourceId(record.sourceId());
+                log.info("지방행정인허가 폐업 반영: sourceId={} status={}", record.sourceId(), record.licenseStatus());
                 continue;
             }
             repository.upsert(
