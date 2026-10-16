@@ -278,6 +278,19 @@ class SavePipelineServiceTest {
     }
 
     @Test
+    void toAnalysisOutcome_콘텐츠_category를_그대로_넘긴다() {
+        SavePipelineService service = serviceForMapping();
+        YouTubeContentExtractionResultDto extraction = new YouTubeContentExtractionResultDto(
+                ExtractionStatus.SUCCESS, new AnalysisMetadataDto("v1", "model", "v1"),
+                "대전 맛집 TOP10", "요약", "맛집", List.of(), List.of(), null);
+
+        AnalysisOutcome outcome = service.toAnalysisOutcome(
+                new SavePipelineService.Analyzed(extraction, null, List.of()));
+
+        assertThat(outcome.category()).isEqualTo("맛집");
+    }
+
+    @Test
     void toAnalysisOutcome_장소검색실패가_섞이면_PARTIAL이고_실패후보는_빠진다() {
         SavePipelineService service = serviceForMapping();
         var candidate = candidate("p1", "성심당", "본점", null);
