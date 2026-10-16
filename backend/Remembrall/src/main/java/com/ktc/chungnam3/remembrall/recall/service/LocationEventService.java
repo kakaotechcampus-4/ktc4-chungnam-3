@@ -7,8 +7,6 @@ import com.ktc.chungnam3.remembrall.recall.dto.LocationEventRequest;
 import com.ktc.chungnam3.remembrall.repository.RecallExecutionRepository;
 import com.ktc.chungnam3.remembrall.repository.TriggerRepository;
 import com.ktc.chungnam3.remembrall.repository.MemberRepository;
-import com.ktc.chungnam3.remembrall.repository.MemberConsentRepository;
-import com.ktc.chungnam3.remembrall.domain.memberconsent.ConsentType;
 import com.ktc.chungnam3.remembrall.notification.service.NotificationDeliveryService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,13 +36,11 @@ public class LocationEventService {
     private final TransactionTemplate transactions;
     private final MemberRepository members;
     private final NotificationDeliveryService delivery;
-    private final MemberConsentRepository consents;
 
     public LocationEventService(TriggerRepository triggerRepository, RecallExecutionRepository executionRepository,
                                 RecallExecutionService executionService, RecallAgent agent, RecallProperties properties,
                                 Clock clock, PlatformTransactionManager transactionManager,
-                                MemberRepository members, NotificationDeliveryService delivery,
-                                MemberConsentRepository consents) {
+                                MemberRepository members, NotificationDeliveryService delivery) {
         this.triggerRepository = triggerRepository;
         this.executionRepository = executionRepository;
         this.executionService = executionService;
@@ -53,7 +49,6 @@ public class LocationEventService {
         this.clock = clock;
         this.members = members;
         this.delivery = delivery;
-        this.consents = consents;
         this.transactions = new TransactionTemplate(transactionManager);
         this.transactions.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -97,9 +92,6 @@ public class LocationEventService {
             return null;
         }
         if (executionRepository.existsRecentByMemberId(memberId, now.minus(properties.memberCooldown()))) {
-            return null;
-        }
-        if (!consents.existsByMemberIdAndConsentTypeAndWithdrawnAtIsNull(memberId, ConsentType.LOCATION_BASED_SERVICE)) {
             return null;
         }
 

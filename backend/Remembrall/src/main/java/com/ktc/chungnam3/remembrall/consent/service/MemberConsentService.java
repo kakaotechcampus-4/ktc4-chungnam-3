@@ -47,7 +47,7 @@ public class MemberConsentService {
         }
         var active = consents.findByMemberIdAndConsentTypeAndWithdrawnAtIsNull(memberId, type).orElse(null);
         if (request.agreed() && active != null && active.getTermsVersion().equals(request.termsVersion())) {
-            return ConsentResponse.from(type, active);
+            return ConsentResponse.from(type, active, properties.currentVersion(type));
         }
         if (!request.agreed() && active == null) {
             return current(memberId, type);
@@ -58,16 +58,16 @@ public class MemberConsentService {
             consents.flush();
         }
         if (!request.agreed()) {
-            return ConsentResponse.from(type, active);
+            return ConsentResponse.from(type, active, properties.currentVersion(type));
         }
         var consent = consents.saveAndFlush(MemberConsent.create(memberId, type, request.termsVersion(), now));
-        return ConsentResponse.from(type, consent);
+        return ConsentResponse.from(type, consent, properties.currentVersion(type));
     }
 
     private ConsentResponse current(UUID memberId, ConsentType type) {
         var consent = consents.findByMemberIdAndConsentTypeAndWithdrawnAtIsNull(memberId, type)
                 .or(() -> consents.findFirstByMemberIdAndConsentTypeOrderByAgreedAtDescCreatedAtDescIdDesc(memberId, type))
                 .orElse(null);
-        return ConsentResponse.from(type, consent);
+        return ConsentResponse.from(type, consent, properties.currentVersion(type));
     }
 }

@@ -32,10 +32,6 @@ auth:
   session:
     ttl: ${session.ttl:30d}
 
-consent:
-  public-candidate-contribution-terms-version: ${CONSENT_PUBLIC_CANDIDATE_CONTRIBUTION_TERMS_VERSION:v1}
-  location-based-service-terms-version: ${CONSENT_LOCATION_BASED_SERVICE_TERMS_VERSION:v1}
-
 recall:
   max-event-age: 30m
   member-cooldown: 10m
@@ -45,6 +41,14 @@ notification:
   max-title-length: 120
   max-body-length: 200
   fcm-credentials-path: ${FCM_CREDENTIALS_PATH:}
+
+geofence:
+  ios-limit: 20
+  android-limit: 100
+  place-radius-meters: 150
+  resync-margin-meters: 500
+  resync-min-radius-meters: 3000
+
 locationiq:
   api:
     key: ${locationiq.api.key:}

@@ -26,7 +26,7 @@ public class SecurityConfig {
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint(authenticationEntryPoint))
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers(HttpMethod.POST, "/api/auth/kakao").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/kakao", "/api/auth/guest").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .anyRequest().authenticated())

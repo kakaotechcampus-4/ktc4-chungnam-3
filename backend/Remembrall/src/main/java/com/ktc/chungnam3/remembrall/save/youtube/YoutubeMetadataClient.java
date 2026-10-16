@@ -75,7 +75,18 @@ public class YoutubeMetadataClient {
     private record AuthorChannelId(String value) {
     }
 
-    /** 비공개/삭제된 영상이면 예외를 던진다 (호출하는 쪽에서 FailureStage.METADATA_FETCH로 처리). */
+    /**
+     * 유튜브가 "이 영상을 찾을 수 없다"고 명확히 확인해준 경우(비공개/삭제)에만 던지는 전용 예외.
+     * 호출하는 쪽에서 이 예외만 따로 잡아서 SourceStatus.UNAVAILABLE로 확정한다 - 그 외 실패(네트워크
+     * 오류 등)는 "접근 불가가 확인된 것"이 아니므로 이 예외를 쓰지 않는다.
+     */
+    public static class VideoUnavailableException extends RuntimeException {
+        public VideoUnavailableException(String message) {
+            super(message);
+        }
+    }
+
+    /** 비공개/삭제된 영상이면 VideoUnavailableException을 던진다 (그 외 실패는 일반 예외). */
     public VideoInfo getVideoInfo(String videoId) {
         VideoListResponse response = restClient.get()
                 .uri(uriBuilder -> uriBuilder.path("/videos")
@@ -87,7 +98,7 @@ public class YoutubeMetadataClient {
                 .body(VideoListResponse.class);
 
         if (response == null || response.items() == null || response.items().isEmpty()) {
-            throw new IllegalStateException("영상을 찾을 수 없음 (비공개/삭제됨): " + videoId);
+            throw new VideoUnavailableException("영상을 찾을 수 없음 (비공개/삭제됨): " + videoId);
         }
 
         VideoItem item = response.items().get(0);
