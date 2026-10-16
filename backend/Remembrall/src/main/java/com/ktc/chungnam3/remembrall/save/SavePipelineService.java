@@ -302,7 +302,7 @@ public class SavePipelineService {
             return new PlaceOutcomeDto(candidateId, PlaceOutcomeDto.Decision.PLACE_VERIFICATION_FAILED, null, null);
         }
         if (verificationPlaceId.isEmpty()) {
-            return new PlaceOutcomeDto(candidateId, PlaceOutcomeDto.Decision.PLACE_VERIFICATION_FAILED, null, null);
+            return new PlaceOutcomeDto(candidateId, PlaceOutcomeDto.Decision.NO_PLACE, null, null);
         }
 
         ResolvedPlaceDto verified = new ResolvedPlaceDto(
