@@ -35,6 +35,7 @@ dependencies {
 	// 짜면 지오펜스 정확도가 걸린 부분이라 검증된 라이브러리를 쓴다.
 	implementation 'org.locationtech.proj4j:proj4j:1.3.0'
 	implementation 'org.springframework.ai:spring-ai-starter-model-google-genai'
+	implementation 'org.springframework.ai:spring-ai-openai'
 	implementation 'org.springframework.ai:spring-ai-starter-model-google-genai-embedding'
 	implementation 'org.springframework.ai:spring-ai-starter-vector-store-pgvector'
 	implementation 'org.springframework.ai:spring-ai-vector-store-advisor'
@@ -74,5 +75,14 @@ tasks.register('liveTest', Test) {
 	classpath = sourceSets.test.runtimeClasspath
 	useJUnitPlatform {
 		includeTags 'live'
+	}
+}
+
+tasks.register('recallEval', JavaExec) {
+	dependsOn testClasses
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = 'com.ktc.chungnam3.remembrall.recall.evaluation.RecallEvaluationMain'
+	systemProperties System.properties.findAll { key, value ->
+		key.startsWith('recall.') || key.startsWith('spring.ai.google.genai.')
 	}
 }

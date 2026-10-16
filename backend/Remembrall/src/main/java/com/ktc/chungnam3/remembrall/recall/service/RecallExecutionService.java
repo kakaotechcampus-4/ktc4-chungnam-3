@@ -4,12 +4,15 @@ import com.ktc.chungnam3.remembrall.domain.recallexecution.RecallExecutionStatus
 import com.ktc.chungnam3.remembrall.domain.recallexecution.RecallExecutionResult;
 import com.ktc.chungnam3.remembrall.notification.config.NotificationProperties;
 import com.ktc.chungnam3.remembrall.recall.agent.RecallAgentResult;
+import com.ktc.chungnam3.remembrall.recall.agent.RecallAgent;
 import com.ktc.chungnam3.remembrall.repository.NotificationRepository;
 import com.ktc.chungnam3.remembrall.repository.TriggerRepository;
 import com.ktc.chungnam3.remembrall.repository.RecallExecutionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
@@ -28,11 +31,14 @@ public class RecallExecutionService {
     private final ProposalValidator validator;
     private final NotificationProperties properties;
     private final ObjectMapper mapper;
+    private final RecallAgent agent;
+    private final RecallAgentInputService inputs;
 
     public RecallExecutionService(RecallExecutionRepository repository, Clock clock,
                                   PlatformTransactionManager transactionManager, TriggerRepository triggers,
                                   NotificationRepository notifications, ProposalValidator validator,
-                                  NotificationProperties properties, ObjectMapper mapper) {
+                                  NotificationProperties properties, ObjectMapper mapper,
+                                  RecallAgent agent, RecallAgentInputService inputs) {
         this.repository = repository;
         this.clock = clock;
         this.triggers = triggers;
@@ -40,12 +46,20 @@ public class RecallExecutionService {
         this.validator = validator;
         this.properties = properties;
         this.mapper = mapper;
+        this.agent = agent;
+        this.inputs = inputs;
         this.transactions = new TransactionTemplate(transactionManager);
         this.transactions.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     public boolean start(UUID executionId) {
         return Boolean.TRUE.equals(transactions.execute(status -> repository.start(executionId, clock.instant()) == 1));
+    }
+
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public UUID execute(UUID executionId) throws Exception {
+        var input = inputs.prepare(executionId);
+        return complete(executionId, agent.execute(executionId, input));
     }
 
     public boolean completeNoAction(UUID executionId) {
@@ -73,7 +87,7 @@ public class RecallExecutionService {
                 return null;
             }
             UUID memberId = trigger.getMemberId();
-            if (!validator.valid(memberId, result)) {
+            if (!validator.valid(memberId, trigger.getPlaceId(), result)) {
                 repository.fail(executionId, RecallExecutionStatus.RUNNING.name(), "INVALID_PROPOSAL", now);
                 return null;
             }

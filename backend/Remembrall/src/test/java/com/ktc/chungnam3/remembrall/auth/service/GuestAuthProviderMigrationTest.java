@@ -34,7 +34,7 @@ class GuestAuthProviderMigrationTest {
                 UUID.randomUUID(), "a".repeat(64)))
                 .isInstanceOf(DataIntegrityViolationException.class).hasMessageContaining("ck_member_auth_provider");
 
-        flyway("14").migrate();
+        flyway("15").migrate();
 
         assertThat(jdbc.queryForMap("SELECT * FROM member WHERE id = ?", kakaoId)).isEqualTo(existing);
         UUID guestId = UUID.randomUUID();

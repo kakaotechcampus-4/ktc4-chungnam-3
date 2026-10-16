@@ -3,6 +3,10 @@ package com.ktc.chungnam3.remembrall.notification;
 import com.ktc.chungnam3.remembrall.auth.token.SessionTokenHasher;
 import com.ktc.chungnam3.remembrall.common.exception.ApiErrorResponse;
 import com.ktc.chungnam3.remembrall.common.exception.ErrorCode;
+import com.ktc.chungnam3.remembrall.consent.config.ConsentProperties;
+import com.ktc.chungnam3.remembrall.consent.dto.ConsentRequest;
+import com.ktc.chungnam3.remembrall.consent.service.MemberConsentService;
+import com.ktc.chungnam3.remembrall.domain.memberconsent.ConsentType;
 import com.ktc.chungnam3.remembrall.domain.device.Device;
 import com.ktc.chungnam3.remembrall.domain.member.AuthProvider;
 import com.ktc.chungnam3.remembrall.domain.member.Member;
@@ -21,12 +25,15 @@ import com.ktc.chungnam3.remembrall.notification.service.NotificationDeliverySer
 import com.ktc.chungnam3.remembrall.recall.agent.ProposalPayload;
 import com.ktc.chungnam3.remembrall.recall.agent.ProposalSource;
 import com.ktc.chungnam3.remembrall.recall.agent.RecallAgent;
+import com.ktc.chungnam3.remembrall.recall.agent.RecallAgentInput;
 import com.ktc.chungnam3.remembrall.recall.agent.RecallAgentResult;
 import com.ktc.chungnam3.remembrall.recall.agent.StubRecallAgent;
 import com.ktc.chungnam3.remembrall.recall.dto.LocationEventRequest;
 import com.ktc.chungnam3.remembrall.recall.dto.LocationEventType;
+import com.ktc.chungnam3.remembrall.recall.config.RecallProperties;
 import com.ktc.chungnam3.remembrall.recall.service.RecallExecutionService;
 import com.ktc.chungnam3.remembrall.recall.service.ProposalValidator;
+import com.ktc.chungnam3.remembrall.recall.service.WalkingTimeCalculator;
 import com.ktc.chungnam3.remembrall.repository.ContentPlaceRepository;
 import com.ktc.chungnam3.remembrall.repository.ContentRepository;
 import com.ktc.chungnam3.remembrall.repository.DeviceRepository;
@@ -40,6 +47,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -91,7 +99,8 @@ import static org.mockito.Mockito.when;
 @Testcontainers
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "spring.ai.google.genai.api-key=test-api-key", "spring.ai.google.genai.embedding.api-key=test-api-key",
-        "youtube.api.key=test-api-key", "kakao.app-id=1"
+        "youtube.api.key=test-api-key", "kakao.app-id=1",
+        "dataportal.api.key=test-api-key", "locationiq.api.key=test-api-key"
 })
 @Import(NotificationIntegrationTest.ClockConfiguration.class)
 class NotificationIntegrationTest {
@@ -103,6 +112,8 @@ class NotificationIntegrationTest {
             DockerImageName.parse("pgvector/pgvector:pg16").asCompatibleSubstituteFor("postgres"));
 
     @Autowired private MemberRepository members;
+    @Autowired private MemberConsentService consents;
+    @Autowired private ConsentProperties consentProperties;
     @Autowired private DeviceRepository devices;
     @Autowired private PlaceRepository places;
     @Autowired private TriggerRepository triggers;
@@ -112,6 +123,8 @@ class NotificationIntegrationTest {
     @Autowired private PersonalSaveRepository saves;
     @Autowired private ContentPlaceRepository links;
     @Autowired private RecallExecutionService executionService;
+    @Autowired private RecallProperties recallProperties;
+    @Autowired private WalkingTimeCalculator walking;
     @Autowired private SessionTokenHasher hasher;
     @Autowired private ObjectMapper mapper;
     @Autowired private JdbcTemplate jdbc;
@@ -250,7 +263,7 @@ class NotificationIntegrationTest {
             boolean valid = (boolean) invocation.callRealMethod();
             executionService.fail(id, "TEST_STATE_CHANGE");
             return valid;
-        }).when(validator).valid(any(), any());
+        }).when(validator).valid(any(), any(), any());
 
         assertThat(executionService.complete(id, proposal(ProposalType.PLACE,
                 item(fixture.contentId(), fixture.placeId())))).isNull();
@@ -281,7 +294,7 @@ class NotificationIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"missingContent", "missingPlace", "unlinkedPlace", "otherMember", "PUBLIC",
+    @ValueSource(strings = {"missingContent", "missingPlace", "unlinkedPlace", "otherMember",
             "placeMissingPlace", "placeTwoItems", "contentWithPlace", "courseOneItem", "courseMissingPlace",
             "nullPayload", "nullItems", "nullItem", "nullSource", "nullType", "emptyItems"})
     void invalidPayloadFailsExecutionWithoutNotification(String invalid) throws Exception {
@@ -294,8 +307,6 @@ class NotificationIntegrationTest {
                 var other = fixture();
                 yield proposal(ProposalType.PLACE, item(other.contentId(), other.placeId()));
             }
-            case "PUBLIC" -> proposal(ProposalType.PLACE, new ProposalPayload.Item(
-                    fixture.contentId(), fixture.placeId(), ProposalSource.PUBLIC));
             case "placeMissingPlace" -> proposal(ProposalType.PLACE, item(fixture.contentId(), null));
             case "placeTwoItems" -> proposal(ProposalType.PLACE, valid, valid);
             case "contentWithPlace" -> proposal(ProposalType.CONTENT, valid);
@@ -317,6 +328,238 @@ class NotificationIntegrationTest {
         assertThat(execution.getFailureCode()).isEqualTo("INVALID_PROPOSAL");
         assertThat(notifications.count()).isZero();
         verifyNoInteractions(sender);
+    }
+
+    @Test
+    void publicProposalCompletesAndCreatesNotificationWithoutSaveRelationshipDetails() throws Exception {
+        Fixture contributor = fixture();
+        contribute(contributor);
+        choose(proposal(ProposalType.PLACE, publicItem(contributor.contentId(), contributor.placeId())));
+        AtomicReference<UUID> pendingId = new AtomicReference<>();
+        doAnswer(invocation -> {
+            UUID id = invocation.getArgument(0);
+            var notification = notifications.findById(id).orElseThrow();
+            assertThat(notification.getStatus()).isEqualTo(NotificationStatus.PENDING);
+            assertThat(notification.getMemberId()).isEqualTo(fixture.memberId());
+            pendingId.set(id);
+            return invocation.callRealMethod();
+        }).when(delivery).send(any());
+
+        UUID executionId = accept();
+
+        assertProposed(executionId);
+        assertThat(notifications.findByExecutionId(executionId).orElseThrow().getId()).isEqualTo(pendingId.get());
+        var response = request("GET", pendingId.get().toString(), fixture);
+        assertThat(response.statusCode()).isEqualTo(200);
+        var detail = mapper.readValue(response.body(), NotificationDetail.class);
+        assertThat(detail.items()).containsExactly(new NotificationDetail.Item(contributor.contentId(),
+                ProposalSource.PUBLIC, null, "Content title", "Summary",
+                new NotificationDetail.Place(contributor.placeId(), "Place", "Address", 36.35, 127.38)));
+        var json = mapper.readTree(response.body()).get("items").get(0);
+        assertThat(json.propertyNames()).containsExactlyInAnyOrder(
+                "contentId", "source", "personalSaveId", "title", "summary", "place");
+        assertThat(json.get("source").asString()).isEqualTo("PUBLIC");
+        assertThat(json.get("personalSaveId").isNull()).isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"noConsent", "withdrawn", "deletedSave"})
+    void publicProposalWithoutActiveContributionFails(String state) throws Exception {
+        Fixture contributor = fixture();
+        if (!state.equals("noConsent")) {
+            contribute(contributor);
+        }
+        if (state.equals("withdrawn")) {
+            withdrawContribution(contributor);
+        } else if (state.equals("deletedSave")) {
+            jdbc.update("DELETE FROM personal_save WHERE member_id = ?", contributor.memberId());
+        }
+        choose(proposal(ProposalType.PLACE, publicItem(contributor.contentId(), contributor.placeId())));
+
+        assertProposalFailed(accept());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"withdrawn", "deletedSave"})
+    void remainingConsentingContributorKeepsPublicProposalEligible(String state) throws Exception {
+        Fixture contributor = fixture();
+        Fixture remaining = fixture();
+        contribute(contributor);
+        contribute(remaining);
+        transactions.executeWithoutResult(status -> saves.insertIfAbsent(UUID.randomUUID(), remaining.memberId(),
+                contributor.contentId(), NOW));
+        if (state.equals("withdrawn")) {
+            withdrawContribution(contributor);
+        } else {
+            jdbc.update("DELETE FROM personal_save WHERE member_id = ?", contributor.memberId());
+        }
+        choose(proposal(ProposalType.PLACE, publicItem(contributor.contentId(), contributor.placeId())));
+
+        assertProposed(accept());
+    }
+
+    @Test
+    void requesterCannotReferenceTheirOwnEligibleSaveAsPublic() throws Exception {
+        contribute(fixture);
+        choose(proposal(ProposalType.PLACE, publicItem(fixture.contentId(), fixture.placeId())));
+
+        assertProposalFailed(accept());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"missing", "unlinked"})
+    void publicProposalRequiresExistingLinkedPlace(String state) throws Exception {
+        Fixture contributor = fixture();
+        contribute(contributor);
+        UUID placeId = state.equals("missing") ? UUID.randomUUID() : fixture.placeId();
+        choose(proposal(ProposalType.PLACE, publicItem(contributor.contentId(), placeId)));
+
+        assertProposalFailed(accept());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void publicContentProposalPassesRegardlessOfPlaceConnectionsAndDetailHasNullPlace(boolean hasPlace) throws Exception {
+        Fixture contributor = fixture();
+        contribute(contributor);
+        if (!hasPlace) {
+            jdbc.update("DELETE FROM content_place WHERE content_id = ?", contributor.contentId());
+        }
+        assertThat(links.findAllByContent_Id(contributor.contentId())).hasSize(hasPlace ? 1 : 0);
+        choose(proposal(ProposalType.CONTENT, publicItem(contributor.contentId(), null)));
+
+        UUID executionId = accept();
+
+        assertProposed(executionId);
+        var detail = detail(notifications.findByExecutionId(executionId).orElseThrow().getId());
+        assertThat(detail.proposalType()).isEqualTo(ProposalType.CONTENT);
+        assertThat(detail.items()).containsExactly(new NotificationDetail.Item(contributor.contentId(),
+                ProposalSource.PUBLIC, null, "Content title", "Summary", null));
+    }
+
+    @Test
+    void mixedPersonalPublicCourseCompletesAndRetainsOrder() throws Exception {
+        Fixture contributor = fixture();
+        contribute(contributor);
+        choose(proposal(ProposalType.COURSE, publicItem(contributor.contentId(), contributor.placeId()),
+                item(fixture.contentId(), fixture.placeId())));
+
+        UUID executionId = accept();
+
+        assertProposed(executionId);
+        var detail = detail(notifications.findByExecutionId(executionId).orElseThrow().getId());
+        assertThat(detail.items()).extracting(NotificationDetail.Item::contentId)
+                .containsExactly(contributor.contentId(), fixture.contentId());
+        assertThat(detail.items()).extracting(NotificationDetail.Item::source)
+                .containsExactly(ProposalSource.PUBLIC, ProposalSource.PERSONAL);
+        assertThat(detail.items().getFirst().personalSaveId()).isNull();
+        assertThat(detail.items().getLast().personalSaveId()).isEqualTo(fixture.saveId());
+    }
+
+    @Test
+    void courseWithinWalkingLimitStartsAtTriggerWithoutReturnTrip() throws Exception {
+        var first = savedCourseTarget(36.354);
+        var last = savedCourseTarget(36.362);
+        double total = walkingMinutes(fixture.placeId(), first.placeId())
+                + walkingMinutes(first.placeId(), last.placeId());
+        assertThat(total).isLessThan(recallProperties.maxCourseWalkingMinutes());
+        assertThat(total + walkingMinutes(last.placeId(), fixture.placeId()))
+                .isGreaterThan(recallProperties.maxCourseWalkingMinutes());
+        choose(proposal(ProposalType.COURSE, item(first.contentId(), first.placeId()),
+                item(last.contentId(), last.placeId())));
+
+        assertProposed(accept());
+    }
+
+    @Test
+    void courseOverWalkingLimitIncludesFirstLegAndFailsWithoutNotification() throws Exception {
+        var first = savedCourseTarget(36.37);
+        var last = savedCourseTarget(36.3701);
+        assertThat(walkingMinutes(first.placeId(), last.placeId()))
+                .isLessThan(recallProperties.maxCourseWalkingMinutes());
+        assertThat(walkingMinutes(fixture.placeId(), first.placeId())
+                + walkingMinutes(first.placeId(), last.placeId()))
+                .isGreaterThan(recallProperties.maxCourseWalkingMinutes());
+        choose(proposal(ProposalType.COURSE, item(first.contentId(), first.placeId()),
+                item(last.contentId(), last.placeId())));
+
+        assertProposalFailed(accept());
+    }
+
+    @Test
+    void changingCourseOrderChangesWalkingLimitOutcome() throws Exception {
+        var near = savedCourseTarget(36.354);
+        var far = savedCourseTarget(36.362);
+        assertThat(walkingMinutes(fixture.placeId(), near.placeId()) + walkingMinutes(near.placeId(), far.placeId()))
+                .isLessThan(recallProperties.maxCourseWalkingMinutes());
+        assertThat(walkingMinutes(fixture.placeId(), far.placeId()) + walkingMinutes(far.placeId(), near.placeId()))
+                .isGreaterThan(recallProperties.maxCourseWalkingMinutes());
+        choose(proposal(ProposalType.COURSE, item(far.contentId(), far.placeId()),
+                item(near.contentId(), near.placeId())));
+        assertProposalFailed(accept());
+
+        UUID executionId = pending();
+        assertThat(executionService.start(executionId)).isTrue();
+        assertThat(executionService.complete(executionId, proposal(ProposalType.COURSE,
+                item(near.contentId(), near.placeId()), item(far.contentId(), far.placeId())))).isNotNull();
+        assertProposed(executionId);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ProposalType.class, names = {"PLACE", "CONTENT"})
+    void placeAndContentProposalsIgnoreCourseWalkingLimit(ProposalType type) throws Exception {
+        var target = savedCourseTarget(37.35);
+        assertThat(walkingMinutes(fixture.placeId(), target.placeId()))
+                .isGreaterThan(recallProperties.maxCourseWalkingMinutes());
+        choose(proposal(type, item(target.contentId(), type == ProposalType.PLACE ? target.placeId() : null)));
+
+        assertProposed(accept());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void mixedCourseCannotRepeatPlaceRegardlessOfSourceOrder(boolean publicFirst) throws Exception {
+        Fixture contributor = fixture();
+        contribute(contributor);
+        transactions.executeWithoutResult(status -> links.insertIfAbsent(UUID.randomUUID(), contributor.contentId(),
+                fixture.placeId(), "Link", NOW));
+        var personalItem = item(fixture.contentId(), fixture.placeId());
+        var publicItem = publicItem(contributor.contentId(), fixture.placeId());
+        choose(publicFirst ? proposal(ProposalType.COURSE, publicItem, personalItem)
+                : proposal(ProposalType.COURSE, personalItem, publicItem));
+
+        assertProposalFailed(accept());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"PERSONAL, FAILED, AVAILABLE", "PERSONAL, SUCCESS, UNAVAILABLE",
+            "PUBLIC, FAILED, AVAILABLE", "PUBLIC, SUCCESS, UNAVAILABLE"})
+    void failedOrUnavailableContentCannotBeProposedFromEitherSource(
+            ProposalSource source, String analysisStatus, String sourceStatus) throws Exception {
+        Fixture target = source == ProposalSource.PERSONAL ? fixture : fixture();
+        contribute(target);
+        jdbc.update("UPDATE content SET analysis_status = ?, source_status = ? WHERE id = ?",
+                analysisStatus, sourceStatus, target.contentId());
+        choose(proposal(ProposalType.PLACE, new ProposalPayload.Item(target.contentId(), target.placeId(), source)));
+
+        assertProposalFailed(accept());
+    }
+
+    @Test
+    void publicProposalRechecksConsentAfterAgentInputWasPrepared() throws Exception {
+        Fixture contributor = fixture();
+        contribute(contributor);
+        var result = proposal(ProposalType.PLACE, publicItem(contributor.contentId(), contributor.placeId()));
+        StubRecallAgent stub = new StubRecallAgent(result);
+        doAnswer(invocation -> {
+            RecallAgentInput input = invocation.getArgument(1);
+            assertThat(input.nearbyPublicCandidates().stream().flatMap(place -> place.contents().stream()))
+                    .extracting(RecallAgentInput.PublicContent::contentId).contains(contributor.contentId());
+            withdrawContribution(contributor);
+            return stub.execute(invocation.getArgument(0), input);
+        }).when(agent).execute(any(), any());
+
+        assertProposalFailed(accept());
     }
 
     @ParameterizedTest
@@ -465,6 +708,87 @@ class NotificationIntegrationTest {
         assertThat(detail(id).items()).isEmpty();
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"withdrawn", "deletedSave", "failed", "unavailable", "content", "link", "place"})
+    void detailDropsInvalidPublicItemWithoutAffectingPersonalItem(String change) throws Exception {
+        Fixture contributor = fixture();
+        contribute(contributor);
+        choose(proposal(ProposalType.COURSE, item(fixture.contentId(), fixture.placeId()),
+                publicItem(contributor.contentId(), contributor.placeId())));
+        UUID id = notifications.findByExecutionId(accept()).orElseThrow().getId();
+        assertThat(detail(id).items()).hasSize(2);
+
+        switch (change) {
+            case "withdrawn" -> withdrawContribution(contributor);
+            case "deletedSave" -> jdbc.update("DELETE FROM personal_save WHERE member_id = ?", contributor.memberId());
+            case "failed" -> jdbc.update("UPDATE content SET analysis_status = 'FAILED' WHERE id = ?", contributor.contentId());
+            case "unavailable" -> jdbc.update("UPDATE content SET source_status = 'UNAVAILABLE' WHERE id = ?", contributor.contentId());
+            case "content" -> jdbc.update("DELETE FROM content WHERE id = ?", contributor.contentId());
+            case "link" -> jdbc.update("DELETE FROM content_place WHERE content_id = ?", contributor.contentId());
+            default -> jdbc.update("DELETE FROM place WHERE id = ?", contributor.placeId());
+        }
+
+        assertThat(detail(id).items()).containsExactly(new NotificationDetail.Item(fixture.contentId(),
+                ProposalSource.PERSONAL, fixture.saveId(), "Content title", "Summary",
+                new NotificationDetail.Place(fixture.placeId(), "Place", "Address", 36.35, 127.38)));
+    }
+
+    @Test
+    void publicDetailRemainsWhileAnotherConsentingSaveExists() throws Exception {
+        Fixture contributor = fixture();
+        Fixture remaining = fixture();
+        contribute(contributor);
+        contribute(remaining);
+        transactions.executeWithoutResult(status -> saves.insertIfAbsent(UUID.randomUUID(), remaining.memberId(),
+                contributor.contentId(), NOW));
+        choose(proposal(ProposalType.COURSE, item(fixture.contentId(), fixture.placeId()),
+                publicItem(contributor.contentId(), contributor.placeId())));
+        UUID id = notifications.findByExecutionId(accept()).orElseThrow().getId();
+
+        withdrawContribution(contributor);
+
+        assertThat(detail(id).items()).extracting(NotificationDetail.Item::contentId)
+                .containsExactly(fixture.contentId(), contributor.contentId());
+        assertThat(detail(id).items().getLast().personalSaveId()).isNull();
+
+        jdbc.update("DELETE FROM personal_save WHERE member_id = ? AND content_id = ?",
+                remaining.memberId(), contributor.contentId());
+
+        assertThat(detail(id).items()).extracting(NotificationDetail.Item::contentId).containsExactly(fixture.contentId());
+    }
+
+    @Test
+    void laterPersonalSaveDoesNotChangePublicDetailSourceOrExposeSaveId() throws Exception {
+        Fixture contributor = fixture();
+        contribute(contributor);
+        choose(proposal(ProposalType.PLACE, publicItem(contributor.contentId(), contributor.placeId())));
+        UUID id = notifications.findByExecutionId(accept()).orElseThrow().getId();
+        UUID saveId = UUID.randomUUID();
+        transactions.executeWithoutResult(status -> saves.insertIfAbsent(saveId, fixture.memberId(),
+                contributor.contentId(), NOW));
+        assertThat(saves.findByMemberIdAndContentId(fixture.memberId(), contributor.contentId())).isPresent();
+
+        var item = detail(id).items().getFirst();
+
+        assertThat(item.contentId()).isEqualTo(contributor.contentId());
+        assertThat(item.source()).isEqualTo(ProposalSource.PUBLIC);
+        assertThat(item.personalSaveId()).isNull();
+        var json = mapper.readTree(request("GET", id.toString(), fixture).body()).get("items").get(0);
+        assertThat(json.propertyNames()).containsExactlyInAnyOrder(
+                "contentId", "source", "personalSaveId", "title", "summary", "place");
+        assertThat(json.get("personalSaveId").isNull()).isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"analysis_status = 'FAILED'", "source_status = 'UNAVAILABLE'"})
+    void personalDetailKeepsExistingStatusTreatment(String mutation) throws Exception {
+        UUID id = sentNotification();
+        jdbc.update("UPDATE content SET " + mutation + " WHERE id = ?", fixture.contentId());
+
+        assertThat(detail(id).items()).extracting(NotificationDetail.Item::contentId).containsExactly(fixture.contentId());
+        assertThat(detail(id).items().getFirst().personalSaveId()).isEqualTo(fixture.saveId());
+    }
+
     @Test
     void contentProposalHasNullPlaceAndCourseRetainsOrder() throws Exception {
         choose(proposal(ProposalType.CONTENT, item(fixture.contentId(), null)));
@@ -520,6 +844,34 @@ class NotificationIntegrationTest {
                 .when(agent).execute(any(), any());
     }
 
+    private void contribute(Fixture contributor) {
+        consents.change(contributor.memberId(), ConsentType.PUBLIC_CANDIDATE_CONTRIBUTION,
+                new ConsentRequest(true, consentProperties.currentVersion(ConsentType.PUBLIC_CANDIDATE_CONTRIBUTION)));
+    }
+
+    private void withdrawContribution(Fixture contributor) {
+        consents.change(contributor.memberId(), ConsentType.PUBLIC_CANDIDATE_CONTRIBUTION,
+                new ConsentRequest(false, null));
+    }
+
+    private void assertProposed(UUID executionId) {
+        var execution = executions.findById(executionId).orElseThrow();
+        assertThat(execution.getStatus()).isEqualTo(RecallExecutionStatus.COMPLETED);
+        assertThat(execution.getResult()).isEqualTo(RecallExecutionResult.PROPOSE);
+        assertThat(execution.getFailureCode()).isNull();
+        assertThat(notifications.findByExecutionId(executionId)).isPresent();
+        assertThat(notifications.count()).isOne();
+    }
+
+    private void assertProposalFailed(UUID executionId) {
+        var execution = executions.findById(executionId).orElseThrow();
+        assertThat(execution.getStatus()).isEqualTo(RecallExecutionStatus.FAILED);
+        assertThat(execution.getFailureCode()).isEqualTo("INVALID_PROPOSAL");
+        assertThat(execution.getResult()).isNull();
+        assertThat(notifications.count()).isZero();
+        verifyNoInteractions(sender);
+    }
+
     private RecallAgentResult proposal(ProposalType type, ProposalPayload.Item... items) {
         return RecallAgentResult.propose(type, new ProposalPayload(Arrays.asList(items)),
                 "Decision", "Agent title", "Agent body");
@@ -527,6 +879,10 @@ class NotificationIntegrationTest {
 
     private ProposalPayload.Item item(UUID contentId, UUID placeId) {
         return new ProposalPayload.Item(contentId, placeId, ProposalSource.PERSONAL);
+    }
+
+    private ProposalPayload.Item publicItem(UUID contentId, UUID placeId) {
+        return new ProposalPayload.Item(contentId, placeId, ProposalSource.PUBLIC);
     }
 
     private UUID sentNotification() throws Exception {
@@ -553,6 +909,21 @@ class NotificationIntegrationTest {
         return id;
     }
 
+    private Fixture savedCourseTarget(double latitude) {
+        var target = fixture();
+        jdbc.update("UPDATE place SET latitude = ? WHERE id = ?", latitude, target.placeId());
+        transactions.executeWithoutResult(status -> saves.insertIfAbsent(UUID.randomUUID(), fixture.memberId(),
+                target.contentId(), NOW));
+        return target;
+    }
+
+    private double walkingMinutes(UUID fromPlaceId, UUID toPlaceId) {
+        var from = places.findById(fromPlaceId).orElseThrow();
+        var to = places.findById(toPlaceId).orElseThrow();
+        return walking.estimatedMinutes(walking.straightLineMeters(from.getLatitude(), from.getLongitude(),
+                to.getLatitude(), to.getLongitude()));
+    }
+
     private Fixture fixture() {
         UUID memberId = members.save(Member.create(AuthProvider.KAKAO, UUID.randomUUID().toString(), NOW)).getId();
         String token = UUID.randomUUID().toString();
@@ -573,6 +944,8 @@ class NotificationIntegrationTest {
             links.insertIfAbsent(UUID.randomUUID(), contentId, placeId, "Link", NOW);
         });
         jdbc.update("UPDATE content SET title = 'Content title', summary = 'Summary' WHERE id = ?", contentId);
+        consents.change(memberId, ConsentType.LOCATION_BASED_SERVICE,
+                new ConsentRequest(true, consentProperties.currentVersion(ConsentType.LOCATION_BASED_SERVICE)));
         return new Fixture(memberId, deviceId, token, fcm, placeId, triggerId, contentId, saveId);
     }
 

@@ -36,10 +36,36 @@ auth:
   session:
     ttl: ${session.ttl:30d}
 
+consent:
+  public-candidate-contribution-terms-version: ${CONSENT_PUBLIC_CANDIDATE_CONTRIBUTION_TERMS_VERSION:v1}
+  location-based-service-terms-version: ${CONSENT_LOCATION_BASED_SERVICE_TERMS_VERSION:v1}
+
 recall:
   max-event-age: 30m
-  member-cooldown: 10m
-  agent-version: stub-v1
+  member-cooldown: 2h
+  max-course-walking-minutes: 30
+  agent:
+    mode: ${RECALL_AGENT_MODE:stub}
+    provider: ${RECALL_AGENT_PROVIDER:google-genai}
+    model: ${RECALL_AGENT_MODEL:gemini-3.6-flash}
+    timeout: ${RECALL_AGENT_TIMEOUT:30s}
+    openai-base-url: ${RECALL_OPENAI_BASE_URL:https://api.openai.com/v1}
+    openai-api-key: ${RECALL_OPENAI_API_KEY:}
+  candidates:
+    radius-meters: 1000
+    nearby-personal-limit: 10
+    nearby-public-limit: 10
+    semantic-limit: 5
+    max-summary-length: 200
+  tools:
+    max-radius-meters: 5000
+    search-place-limit: 20
+    search-content-limit: 20
+    max-content-details: 20
+    details-summary-length: 2000
+    max-place-distances: 10
+    walking-detour-factor: 1.3
+    walking-speed-meters-per-minute: 80
 
 notification:
   max-title-length: 120

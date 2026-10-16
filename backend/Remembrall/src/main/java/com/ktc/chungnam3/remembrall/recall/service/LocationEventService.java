@@ -7,6 +7,8 @@ import com.ktc.chungnam3.remembrall.recall.dto.LocationEventRequest;
 import com.ktc.chungnam3.remembrall.repository.RecallExecutionRepository;
 import com.ktc.chungnam3.remembrall.repository.TriggerRepository;
 import com.ktc.chungnam3.remembrall.repository.MemberRepository;
+import com.ktc.chungnam3.remembrall.repository.MemberConsentRepository;
+import com.ktc.chungnam3.remembrall.domain.memberconsent.ConsentType;
 import com.ktc.chungnam3.remembrall.notification.service.NotificationDeliveryService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,25 +32,28 @@ public class LocationEventService {
     private final TriggerRepository triggerRepository;
     private final RecallExecutionRepository executionRepository;
     private final RecallExecutionService executionService;
-    private final RecallAgent agent;
     private final RecallProperties properties;
     private final Clock clock;
     private final TransactionTemplate transactions;
     private final MemberRepository members;
     private final NotificationDeliveryService delivery;
+    private final MemberConsentRepository consents;
+    private final RecallAgent agent;
 
     public LocationEventService(TriggerRepository triggerRepository, RecallExecutionRepository executionRepository,
-                                RecallExecutionService executionService, RecallAgent agent, RecallProperties properties,
+                                RecallExecutionService executionService, RecallProperties properties,
                                 Clock clock, PlatformTransactionManager transactionManager,
-                                MemberRepository members, NotificationDeliveryService delivery) {
+                                MemberRepository members, NotificationDeliveryService delivery,
+                                MemberConsentRepository consents, RecallAgent agent) {
         this.triggerRepository = triggerRepository;
         this.executionRepository = executionRepository;
         this.executionService = executionService;
-        this.agent = agent;
         this.properties = properties;
         this.clock = clock;
         this.members = members;
         this.delivery = delivery;
+        this.consents = consents;
+        this.agent = agent;
         this.transactions = new TransactionTemplate(transactionManager);
         this.transactions.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -64,7 +69,7 @@ public class LocationEventService {
             if (!executionService.start(executionId)) {
                 return;
             }
-            UUID notificationId = executionService.complete(executionId, agent.execute(executionId, event));
+            UUID notificationId = executionService.execute(executionId);
             if (notificationId != null) {
                 delivery.send(notificationId);
             }
@@ -94,10 +99,13 @@ public class LocationEventService {
         if (executionRepository.existsRecentByMemberId(memberId, now.minus(properties.memberCooldown()))) {
             return null;
         }
+        if (!consents.existsByMemberIdAndConsentTypeAndWithdrawnAtIsNull(memberId, ConsentType.LOCATION_BASED_SERVICE)) {
+            return null;
+        }
 
         UUID executionId = UUID.randomUUID();
         int inserted = executionRepository.insertPendingIfAbsent(
-                executionId, trigger.getId(), event.triggerEventId(), properties.agentVersion(), event.eventOccurredAt(), now);
+                executionId, trigger.getId(), event.triggerEventId(), agent.version(), event.eventOccurredAt(), now);
         return inserted == 1 ? executionId : null;
     }
 }

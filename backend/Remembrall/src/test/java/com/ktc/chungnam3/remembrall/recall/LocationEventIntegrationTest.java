@@ -3,6 +3,10 @@ package com.ktc.chungnam3.remembrall.recall;
 import com.ktc.chungnam3.remembrall.auth.token.SessionTokenHasher;
 import com.ktc.chungnam3.remembrall.common.exception.ApiErrorResponse;
 import com.ktc.chungnam3.remembrall.common.exception.ErrorCode;
+import com.ktc.chungnam3.remembrall.consent.config.ConsentProperties;
+import com.ktc.chungnam3.remembrall.consent.dto.ConsentRequest;
+import com.ktc.chungnam3.remembrall.consent.service.MemberConsentService;
+import com.ktc.chungnam3.remembrall.domain.memberconsent.ConsentType;
 import com.ktc.chungnam3.remembrall.domain.device.Device;
 import com.ktc.chungnam3.remembrall.domain.member.AuthProvider;
 import com.ktc.chungnam3.remembrall.domain.member.Member;
@@ -13,6 +17,9 @@ import com.ktc.chungnam3.remembrall.domain.recallexecution.RecallExecution;
 import com.ktc.chungnam3.remembrall.domain.recallexecution.RecallExecutionResult;
 import com.ktc.chungnam3.remembrall.domain.recallexecution.RecallExecutionStatus;
 import com.ktc.chungnam3.remembrall.recall.agent.RecallAgent;
+import com.ktc.chungnam3.remembrall.recall.agent.RecallAgentInput;
+import com.ktc.chungnam3.remembrall.recall.agent.LlmRecallAgent;
+import com.ktc.chungnam3.remembrall.recall.agent.RecallPrompt;
 import com.ktc.chungnam3.remembrall.recall.config.RecallProperties;
 import com.ktc.chungnam3.remembrall.recall.dto.LocationEventRequest;
 import com.ktc.chungnam3.remembrall.recall.dto.LocationEventType;
@@ -40,6 +47,13 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -75,6 +89,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -84,7 +100,9 @@ import static org.mockito.Mockito.verifyNoInteractions;
         "spring.ai.google.genai.api-key=test-api-key",
         "spring.ai.google.genai.embedding.api-key=test-api-key",
         "youtube.api.key=test-api-key",
-        "kakao.app-id=1"
+        "kakao.app-id=1",
+        "dataportal.api.key=test-api-key",
+        "locationiq.api.key=test-api-key"
 })
 @Import(LocationEventIntegrationTest.ClockConfiguration.class)
 class LocationEventIntegrationTest {
@@ -102,6 +120,12 @@ class LocationEventIntegrationTest {
 
     @Autowired
     private MemberRepository memberRepository;
+
+    @Autowired
+    private MemberConsentService consents;
+
+    @Autowired
+    private ConsentProperties consentProperties;
 
     @Autowired
     private DeviceRepository deviceRepository;
@@ -151,6 +175,7 @@ class LocationEventIntegrationTest {
         triggerRepository.deleteAll();
         placeRepository.deleteAll();
         memberRepository.deleteAll();
+        jdbcTemplate.update("DELETE FROM content");
         transactions = new TransactionTemplate(transactionManager);
         fixture = createFixture();
     }
@@ -170,6 +195,11 @@ class LocationEventIntegrationTest {
         doAnswer(invocation -> {
             UUID executionId = invocation.getArgument(0);
             assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+            RecallAgentInput input = invocation.getArgument(1);
+            assertThat(input.origin().placeId()).isEqualTo(fixture.placeId());
+            assertThat(input.origin().name()).isEqualTo("Place");
+            assertThat(input.situation().localDateTime()).isEqualTo(NOW.atZone(java.time.ZoneId.of("Asia/Seoul"))
+                    .toLocalDateTime());
             try (ExecutorService reader = Executors.newSingleThreadExecutor()) {
                 RecallExecution committed = reader.submit(() -> executionRepository.findById(executionId).orElseThrow())
                         .get(10, TimeUnit.SECONDS);
@@ -202,7 +232,38 @@ class LocationEventIntegrationTest {
         assertThat(execution.getProposalPayload()).isNull();
         assertThat(execution.getDecisionSummary()).isNull();
         assertThat(properties.maxEventAge()).isEqualTo(Duration.ofMinutes(30));
-        assertThat(properties.memberCooldown()).isEqualTo(Duration.ofMinutes(10));
+        assertThat(properties.memberCooldown()).isEqualTo(Duration.ofHours(2));
+    }
+
+    @Test
+    void preparesSavedOriginInputImmediatelyBeforeAgentCall() throws Exception {
+        UUID contentId = UUID.randomUUID();
+        UUID saveId = UUID.randomUUID();
+        jdbcTemplate.update("""
+                INSERT INTO content (id, video_id, title, summary, category, analysis_status, source_status)
+                VALUES (?, ?, 'Origin title', 'Origin summary', 'FOOD', 'SUCCESS', 'AVAILABLE')
+                """, contentId, contentId.toString().substring(0, 32));
+        jdbcTemplate.update("INSERT INTO personal_save (id, member_id, content_id, saved_at) VALUES (?, ?, ?, ?)",
+                saveId, fixture.memberId(), contentId, java.sql.Timestamp.from(NOW));
+        jdbcTemplate.update("INSERT INTO content_place (id, content_id, place_id, description) VALUES (?, ?, ?, ?)",
+                UUID.randomUUID(), contentId, fixture.placeId(), "Video place description");
+        AtomicInteger observations = new AtomicInteger();
+        doAnswer(invocation -> {
+            assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+            RecallAgentInput input = invocation.getArgument(1);
+            assertThat(input.origin().contents()).containsExactly(new RecallAgentInput.PersonalContent(
+                    contentId, saveId, "Origin title", "Origin summary", "FOOD", NOW, "Video place description"));
+            observations.incrementAndGet();
+            return invocation.callRealMethod();
+        }).when(agent).execute(any(), any());
+
+        assertAccepted(post(fixture, body(fixture.placeId(), UUID.randomUUID(), NOW, "ENTER", null)));
+
+        assertThat(observations.get()).isEqualTo(1);
+        assertThat(executionRepository.findAll()).hasSize(1).allSatisfy(execution -> {
+            assertThat(execution.getStatus()).isEqualTo(RecallExecutionStatus.COMPLETED);
+            assertThat(execution.getResult()).isEqualTo(RecallExecutionResult.NO_ACTION);
+        });
     }
 
     @Test
@@ -284,6 +345,31 @@ class LocationEventIntegrationTest {
     }
 
     @ParameterizedTest
+    @ValueSource(strings = {"missing", "withdrawn", "publicOnly"})
+    void locationConsentIsRequiredBeforeEventCanCreateExecution(String state) throws Exception {
+        consents.change(fixture.memberId(), ConsentType.LOCATION_BASED_SERVICE, new ConsentRequest(false, null));
+        if (!"withdrawn".equals(state)) {
+            jdbcTemplate.update("DELETE FROM member_consent WHERE member_id = ?", fixture.memberId());
+        }
+        if ("publicOnly".equals(state)) {
+            consents.change(fixture.memberId(), ConsentType.PUBLIC_CANDIDATE_CONTRIBUTION,
+                    new ConsentRequest(true, consentProperties.currentVersion(ConsentType.PUBLIC_CANDIDATE_CONTRIBUTION)));
+        }
+        UUID eventId = UUID.randomUUID();
+        String event = body(fixture.placeId(), eventId, NOW, "ENTER", null);
+
+        assertAccepted(post(fixture, event));
+        assertThat(executionRepository.count()).isZero();
+        verifyNoInteractions(agent);
+
+        consents.change(fixture.memberId(), ConsentType.LOCATION_BASED_SERVICE,
+                new ConsentRequest(true, consentProperties.currentVersion(ConsentType.LOCATION_BASED_SERVICE)));
+        assertAccepted(post(fixture, event));
+        assertThat(executionRepository.count()).isOne();
+        verify(agent, times(1)).execute(any(), any());
+    }
+
+    @ParameterizedTest
     @EnumSource(RecallExecutionStatus.class)
     void memberCooldownBlocksRepeatEventsAtSamePlaceForEveryStatus(RecallExecutionStatus status) throws Exception {
         UUID eventId = UUID.randomUUID();
@@ -292,6 +378,20 @@ class LocationEventIntegrationTest {
             jdbcTemplate.update("UPDATE recall_execution SET status = ?, result = NULL WHERE trigger_id = ? AND trigger_event_id = ?",
                     status.name(), fixture.triggerId(), eventId);
         }
+        clearInvocations(agent);
+
+        assertAccepted(post(fixture, body(fixture.placeId(), UUID.randomUUID(), NOW, "DWELL", null)));
+
+        assertThat(executionRepository.count()).isOne();
+        verifyNoInteractions(agent);
+    }
+
+    @Test
+    void defaultMemberCooldownBlocksEventNinetyMinutesAfterPreviousExecution() throws Exception {
+        assertThat(properties.memberCooldown()).isEqualTo(Duration.ofHours(2));
+        assertAccepted(post(fixture, body(fixture.placeId(), UUID.randomUUID(), NOW, "ENTER", null)));
+        jdbcTemplate.update("UPDATE recall_execution SET created_at = ? WHERE trigger_id = ?",
+                java.sql.Timestamp.from(NOW.minus(Duration.ofMinutes(90))), fixture.triggerId());
         clearInvocations(agent);
 
         assertAccepted(post(fixture, body(fixture.placeId(), UUID.randomUUID(), NOW, "DWELL", null)));
@@ -361,7 +461,7 @@ class LocationEventIntegrationTest {
     void anotherTriggerIsAllowedAfterMemberCooldown() throws Exception {
         assertAccepted(post(fixture, body(fixture.placeId(), UUID.randomUUID(), NOW, "ENTER", null)));
         jdbcTemplate.update("UPDATE recall_execution SET created_at = ? WHERE trigger_id = ?",
-                java.sql.Timestamp.from(NOW.minus(Duration.ofMinutes(11))), fixture.triggerId());
+                java.sql.Timestamp.from(NOW.minus(properties.memberCooldown()).minusSeconds(60)), fixture.triggerId());
         Fixture other = anotherTriggerFor(fixture);
         assertAccepted(post(other, body(other.placeId(), UUID.randomUUID(), NOW, "ENTER", null)));
         assertThat(executionRepository.count()).isEqualTo(2);
@@ -395,10 +495,71 @@ class LocationEventIntegrationTest {
         RecallExecution execution = executionRepository.findByTriggerIdAndTriggerEventId(fixture.triggerId(), eventId)
                 .orElseThrow();
         assertThat(execution.getStatus()).isEqualTo(RecallExecutionStatus.FAILED);
+        assertThat(execution.getAgentVersion()).isEqualTo("stub-v1");
         assertThat(execution.getFailureCode()).isEqualTo("AGENT_EXECUTION_ERROR");
         assertThat(execution.getResult()).isNull();
         assertThat(execution.getFinishedAt()).isEqualTo(NOW);
         assertThat(execution.getStartedAt()).isEqualTo(NOW);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "google-genai, gemini-3.6-flash, v1, original",
+            "openai, gemini-3.6-flash, v1, original",
+            "google-genai, other-model, v1, original",
+            "google-genai, gemini-3.6-flash, v2, original",
+            "google-genai, gemini-3.6-flash, v1, changed",
+            "google-genai, long-model, v1, original"
+    })
+    void persistsVersionProvidedByLlmAgentWithoutTruncating(String provider, String modelName,
+                                                          String promptVersion, String promptText) throws Exception {
+        String selectedModel = modelName.equals("long-model") ? "model-" + "x".repeat(80) : modelName;
+        try (var llm = llmAgent(provider, selectedModel, new RecallPrompt(promptVersion, promptText), false)) {
+            useLlmAgent(llm);
+            UUID eventId = UUID.randomUUID();
+            assertAccepted(post(fixture, body(fixture.placeId(), eventId, NOW, "ENTER", null)));
+            var execution = executionRepository.findByTriggerIdAndTriggerEventId(fixture.triggerId(), eventId).orElseThrow();
+            assertThat(execution.getStatus()).isEqualTo(RecallExecutionStatus.COMPLETED);
+            assertThat(execution.getAgentVersion()).isEqualTo(llm.version());
+            if (modelName.equals("long-model")) {
+                assertThat(execution.getAgentVersion().length()).isGreaterThan(50);
+            }
+        }
+    }
+
+    @Test
+    void failedLlmInvocationKeepsVersionCommittedBeforeModelCall() throws Exception {
+        try (var llm = llmAgent("openai", "failing-model", new RecallPrompt("v1", "failure prompt"), true)) {
+            useLlmAgent(llm);
+            UUID eventId = UUID.randomUUID();
+            assertAccepted(post(fixture, body(fixture.placeId(), eventId, NOW, "ENTER", null)));
+            var execution = executionRepository.findByTriggerIdAndTriggerEventId(fixture.triggerId(), eventId).orElseThrow();
+            assertThat(execution.getStatus()).isEqualTo(RecallExecutionStatus.FAILED);
+            assertThat(execution.getFailureCode()).isEqualTo("AGENT_EXECUTION_ERROR");
+            assertThat(execution.getAgentVersion()).isEqualTo(llm.version());
+        }
+    }
+
+    private LlmRecallAgent llmAgent(String provider, String modelName, RecallPrompt prompt, boolean fail) {
+        ChatModel model = mock(ChatModel.class);
+        when(model.getOptions()).thenReturn(ChatOptions.builder().build());
+        if (fail) {
+            when(model.call(any(Prompt.class))).thenThrow(new IllegalStateException("Test model failure"));
+        } else {
+            when(model.call(any(Prompt.class))).thenReturn(new ChatResponse(List.of(new Generation(new AssistantMessage("""
+                    {"result":"NO_ACTION","proposalType":null,"items":[],"decisionSummary":null,"title":null,"body":null}
+                    """)))));
+        }
+        return new LlmRecallAgent(ChatClient.builder(model).build(), provider, modelName, prompt, () -> {});
+    }
+
+    private void useLlmAgent(LlmRecallAgent llm) throws Exception {
+        doAnswer(invocation -> llm.version()).when(agent).version();
+        doAnswer(invocation -> {
+            UUID id = invocation.getArgument(0);
+            assertThat(executionRepository.findById(id).orElseThrow().getAgentVersion()).isEqualTo(llm.version());
+            return llm.execute(id, invocation.getArgument(1));
+        }).when(agent).execute(any(), any());
     }
 
     @ParameterizedTest
@@ -494,6 +655,8 @@ class LocationEventIntegrationTest {
                 VerificationProvider.KAKAO, UUID.randomUUID().toString(), NOW, NOW)).getId();
         UUID triggerId = UUID.randomUUID();
         transactions.executeWithoutResult(status -> triggerRepository.insertIfAbsent(triggerId, memberId, placeId, NOW));
+        consents.change(memberId, ConsentType.LOCATION_BASED_SERVICE,
+                new ConsentRequest(true, consentProperties.currentVersion(ConsentType.LOCATION_BASED_SERVICE)));
         return new Fixture(memberId, placeId, triggerId, token);
     }
 
