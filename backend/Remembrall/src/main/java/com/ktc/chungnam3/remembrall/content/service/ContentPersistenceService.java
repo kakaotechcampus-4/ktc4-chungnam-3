@@ -89,7 +89,8 @@ public class ContentPersistenceService {
                     personalSave.getId(),
                     inserted == 1,
                     content.getAnalysisStatus(),
-                    claimed
+                    claimed,
+                    personalSave.getSavedAt()
             );
         }));
     }
