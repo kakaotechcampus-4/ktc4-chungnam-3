@@ -26,6 +26,12 @@ public interface ContentRepository extends JpaRepository<Content, UUID> {
     @Query(value = "SELECT id FROM content WHERE id = :contentId FOR UPDATE", nativeQuery = true)
     Optional<UUID> findIdForUpdate(@Param("contentId") UUID contentId);
 
+    /**
+     * PENDING이면 최초 시도, FAILED + EXTRACTION_API_ERROR면 재시도로 다시 선점한다 - Gemini 호출
+     * 자체의 일시적 실패(재시도하면 되는 경우, 실측 10건 중 2건)와 영상 자체가 없어진 경우
+     * (VIDEO_UNAVAILABLE 등, 재시도해도 소용없음)를 구분한다(리뷰 반영, PR #20 "분석 중단 후 재시도"
+     * 설계에서 보류됐던 항목 중 일부).
+     */
     @Modifying
     @Query(value = """
             UPDATE content
@@ -33,7 +39,8 @@ public interface ContentRepository extends JpaRepository<Content, UUID> {
                    analysis_started_at = :startedAt,
                    updated_at = :startedAt
              WHERE id = :contentId
-               AND analysis_status = 'PENDING'
+               AND (analysis_status = 'PENDING'
+                   OR (analysis_status = 'FAILED' AND last_analysis_error_code = 'EXTRACTION_API_ERROR'))
             """, nativeQuery = true)
     int claimAnalysis(@Param("contentId") UUID contentId, @Param("startedAt") Instant startedAt);
 
