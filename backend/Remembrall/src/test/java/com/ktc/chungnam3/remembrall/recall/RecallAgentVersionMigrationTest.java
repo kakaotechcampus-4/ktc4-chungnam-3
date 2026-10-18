@@ -21,7 +21,7 @@ class RecallAgentVersionMigrationTest {
 
     @Test
     void widensVersionToTwoHundredCharactersWithoutChangingExistingExecution() {
-        flyway("12").migrate();
+        flyway("15").migrate();
         var jdbc = new JdbcTemplate(new DriverManagerDataSource(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
         UUID memberId = UUID.randomUUID();
@@ -39,7 +39,7 @@ class RecallAgentVersionMigrationTest {
         insert(jdbc, executionId, triggerId, "stub-v1");
         var existing = jdbc.queryForMap("SELECT * FROM recall_execution WHERE id = ?", executionId);
 
-        flyway("13").migrate();
+        flyway("16").migrate();
 
         assertThat(jdbc.queryForMap("SELECT * FROM recall_execution WHERE id = ?", executionId)).isEqualTo(existing);
         assertThat(jdbc.queryForObject("""

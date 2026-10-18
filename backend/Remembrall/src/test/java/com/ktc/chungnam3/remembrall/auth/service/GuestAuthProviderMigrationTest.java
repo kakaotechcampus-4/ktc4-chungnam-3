@@ -22,8 +22,8 @@ class GuestAuthProviderMigrationTest {
             DockerImageName.parse("pgvector/pgvector:pg16").asCompatibleSubstituteFor("postgres"));
 
     @Test
-    void appliedV13UpgradesToAllowGuestsWhilePreservingExistingKakaoMemberAndRejectingUnknownProvider() {
-        flyway("13").migrate();
+    void appliedV14UpgradesToAllowGuestsWhilePreservingExistingKakaoMemberAndRejectingUnknownProvider() {
+        flyway("14").migrate();
         var jdbc = new JdbcTemplate(new DriverManagerDataSource(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
         UUID kakaoId = UUID.randomUUID();
