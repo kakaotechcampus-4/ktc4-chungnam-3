@@ -24,6 +24,8 @@ public class VertexEmbeddingClient implements EmbeddingClient {
     private final int timeoutMillis;
 
     public VertexEmbeddingClient(
+            @Value("${spring.ai.google.genai.vertex-ai:false}") boolean vertexAi,
+            @Value("${spring.ai.google.genai.api-key:}") String apiKey,
             @Value("${spring.ai.google.genai.project-id:}") String projectId,
             @Value("${spring.ai.google.genai.location:us-central1}") String location,
             @Value("${content.embedding.model:gemini-embedding-001}") String model,
@@ -39,10 +41,19 @@ public class VertexEmbeddingClient implements EmbeddingClient {
         Client initialized = null;
         RuntimeException failure = null;
         try {
-            initialized = Client.builder().vertexAI(true).project(projectId).location(location).build();
+            if (!vertexAi && (apiKey == null || apiKey.isBlank())) {
+                throw new IllegalArgumentException("Gemini API key is required for embeddings");
+            }
+            Client.Builder builder = Client.builder().vertexAI(vertexAi);
+            if (vertexAi) {
+                builder.project(projectId).location(location);
+            } else {
+                builder.apiKey(apiKey);
+            }
+            initialized = builder.build();
         } catch (com.google.genai.errors.GenAiIOException | IllegalArgumentException exception) {
             failure = exception;
-            log.warn("Vertex embedding client unavailable: {}", exception.getClass().getSimpleName());
+            log.warn("Embedding client unavailable: {}", exception.getClass().getSimpleName());
         }
         this.client = initialized;
         this.initializationFailure = failure;
@@ -51,7 +62,7 @@ public class VertexEmbeddingClient implements EmbeddingClient {
     @Override
     public Result embed(String text, TaskType taskType) {
         if (client == null) {
-            throw new IllegalStateException("Vertex embedding client unavailable", initializationFailure);
+            throw new IllegalStateException("Embedding client unavailable", initializationFailure);
         }
         List<ContentEmbedding> embeddings = client.models.embedContent(model, text, configFor(taskType))
                 .embeddings().orElseThrow(() -> new IllegalStateException("Missing embedding response"));
