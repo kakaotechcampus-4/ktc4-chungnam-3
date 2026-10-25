@@ -83,6 +83,15 @@ tasks.register('recallEval', JavaExec) {
 	classpath = sourceSets.test.runtimeClasspath
 	mainClass = 'com.ktc.chungnam3.remembrall.recall.evaluation.RecallEvaluationMain'
 	systemProperties System.properties.findAll { key, value ->
-		key.startsWith('recall.') || key.startsWith('spring.ai.google.genai.')
+		key.startsWith('recall.') || key.startsWith('spring.ai.google.genai.') || key.startsWith('content.embedding.')
+	}
+}
+
+tasks.register('recallJudge', JavaExec) {
+	dependsOn testClasses
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = 'com.ktc.chungnam3.remembrall.recall.evaluation.judge.RecallJudgeMain'
+	systemProperties System.properties.findAll { key, value ->
+		key.startsWith('recall.judge.') || key.startsWith('spring.ai.google.genai.')
 	}
 }

@@ -3,11 +3,11 @@ package com.ktc.chungnam3.remembrall.recall.tool;
 import com.ktc.chungnam3.remembrall.content.embedding.EmbeddingClient;
 import com.ktc.chungnam3.remembrall.recall.agent.ProposalSource;
 import com.ktc.chungnam3.remembrall.recall.config.RecallCandidateProperties;
+import com.ktc.chungnam3.remembrall.recall.config.RecallProperties;
 import com.ktc.chungnam3.remembrall.recall.config.RecallToolProperties;
-import com.ktc.chungnam3.remembrall.recall.service.WalkingTimeCalculator;
-import com.ktc.chungnam3.remembrall.recall.tool.RecallToolResults.ContentCandidate;
-import com.ktc.chungnam3.remembrall.recall.tool.RecallToolResults.ContentDetail;
-import com.ktc.chungnam3.remembrall.recall.tool.RecallToolResults.PlaceCandidate;
+import com.ktc.chungnam3.remembrall.recall.evaluation.FakeWeatherClient;
+import com.ktc.chungnam3.remembrall.recall.tool.RecallToolResults.*;
+import com.ktc.chungnam3.remembrall.recall.weather.WeatherClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -19,6 +19,7 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -32,48 +33,39 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
-import tools.jackson.databind.ObjectMapper;
 
 import java.sql.Timestamp;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.data.Offset.offset;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyDouble;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.reset;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 import static org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase.Replace.NONE;
 
 @Testcontainers
 @DataJpaTest(properties = {
         "recall.candidates.radius-meters=1000", "recall.candidates.max-summary-length=5",
         "recall.tools.max-radius-meters=2000", "recall.tools.search-place-limit=2",
-        "recall.tools.search-content-limit=2", "recall.tools.max-content-details=3",
-        "recall.tools.details-summary-length=10", "recall.tools.max-place-distances=3",
-        "recall.tools.walking-detour-factor=1.5", "recall.tools.walking-speed-meters-per-minute=100"
+        "recall.tools.search-content-limit=2", "recall.tools.max-visit-places=3",
+        "recall.tools.visit-summary-length=2500", "recall.tools.recent-proposal-window=7d"
 })
 @AutoConfigureTestDatabase(replace = NONE)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-@Import({RecallToolRepository.class, RecallToolService.class, WalkingTimeCalculator.class,
-        RecallToolIntegrationTest.PropertiesConfiguration.class})
+@Import({RecallToolRepository.class, RecallToolService.class, RecallToolIntegrationTest.PropertiesConfiguration.class})
 class RecallToolIntegrationTest {
-
     private static final Instant SAVED_AT = Instant.parse("2026-10-01T00:00:00Z");
+    private static final Instant NOW = Instant.parse("2026-10-10T09:00:00Z");
 
-    @Container
-    @ServiceConnection
+    @Container @ServiceConnection
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(
             DockerImageName.parse("pgvector/pgvector:pg16").asCompatibleSubstituteFor("postgres"));
 
@@ -81,8 +73,8 @@ class RecallToolIntegrationTest {
     @Autowired private RecallToolService tools;
     @Autowired private PlatformTransactionManager transactionManager;
     @MockitoBean private EmbeddingClient embeddings;
+    @MockitoBean private WeatherClient weather;
     @MockitoSpyBean private RecallToolRepository repository;
-
     private UUID memberId;
     private UUID contributor;
     private RecallToolScope scope;
@@ -92,9 +84,11 @@ class RecallToolIntegrationTest {
         jdbc.update("DELETE FROM member");
         jdbc.update("DELETE FROM content");
         jdbc.update("DELETE FROM place");
-        reset(embeddings);
+        reset(embeddings, weather);
         when(embeddings.embedQuery(anyString())).thenCallRealMethod();
         when(embeddings.embed(anyString(), any())).thenReturn(new EmbeddingClient.Result(vector(1, 0), "test-model"));
+        when(weather.read(anyDouble(), anyDouble(), any())).thenAnswer(call ->
+                new FakeWeatherClient().read(call.getArgument(0), call.getArgument(1), call.getArgument(2)));
         memberId = member();
         contributor = member();
         consent(contributor);
@@ -102,248 +96,205 @@ class RecallToolIntegrationTest {
     }
 
     @Test
-    void searchSplitsListsRanksPlaceByBestContentAndAppliesLimitsAndPersonalPrecedence() {
-        UUID geographicNearest = place(37.001, 127.0);
-        savedContent(memberId, geographicNearest, vector(-1, 0));
-        UUID semanticBest = place(37.004, 127.0);
-        UUID publicPlaceContent = savedContent(contributor, semanticBest, vector(1, 0));
-        UUID ownPlaceContent = savedContent(memberId, semanticBest, vector(0, 1));
-        save(contributor, ownPlaceContent);
-        UUID semanticSecond = place(37.002, 127.0);
-        savedContent(memberId, semanticSecond, vector(0.8, 0.6));
+    void searchRanksBothListsAndHonorsPersonalPrecedenceAndPrivacy() {
+        UUID near = place(37.001, 127.0);
+        savedContent(memberId, near, vector(-1, 0));
+        UUID best = place(37.004, 127.0);
+        UUID publicContent = savedContent(contributor, best, vector(1, 0));
+        UUID ownContent = savedContent(memberId, best, vector(0, 1));
+        save(contributor, ownContent);
+        UUID second = place(37.002, 127.0);
+        savedContent(memberId, second, vector(0.8, 0.6));
         UUID publicNoPlace = savedContent(contributor, null, vector(1, 0));
         UUID ownNoPlace = savedContent(memberId, null, vector(0.8, 0.6));
         save(contributor, ownNoPlace);
-        UUID overLimit = savedContent(memberId, null, vector(0, 1));
-        UUID privateMember = member();
-        UUID privateContent = savedContent(privateMember, null, vector(1, 0));
-        UUID privatePlace = place(37.0001, 127.0);
-        savedContent(privateMember, privatePlace, vector(1, 0));
-        UUID noEmbedding = savedContent(memberId, null, null);
-        UUID noEmbeddingPlace = place(37.0002, 127.0);
-        savedContent(memberId, noEmbeddingPlace, null);
-
+        UUID privateContent = savedContent(member(), null, vector(1, 0));
+        savedContent(memberId, null, null);
         var result = tools.searchCandidates(scope, "  조용한 카페  ", null);
-
-        assertThat(result.error()).isNull();
         verify(embeddings).embed("조용한 카페", EmbeddingClient.TaskType.RETRIEVAL_QUERY);
-        assertThat(result.places()).extracting(PlaceCandidate::placeId).containsExactly(semanticBest, semanticSecond);
+        assertThat(result.places()).extracting(PlaceCandidate::placeId).containsExactly(best, second);
         assertThat(result.places().getFirst().contents()).extracting(ContentCandidate::contentId)
-                .containsExactly(publicPlaceContent, ownPlaceContent);
-        assertThat(result.places().getFirst().contents()).extracting(ContentCandidate::source)
-                .containsExactly(ProposalSource.PUBLIC, ProposalSource.PERSONAL);
+                .containsExactly(publicContent, ownContent);
         assertThat(result.contents()).extracting(ContentCandidate::contentId).containsExactly(publicNoPlace, ownNoPlace)
-                .doesNotContain(overLimit, privateContent, noEmbedding, publicPlaceContent, ownPlaceContent);
-        assertThat(result.contents()).extracting(ContentCandidate::source)
-                .containsExactly(ProposalSource.PUBLIC, ProposalSource.PERSONAL);
+                .doesNotContain(privateContent);
+        assertThat(result.contents()).extracting(ContentCandidate::source).containsExactly(ProposalSource.PUBLIC, ProposalSource.PERSONAL);
         assertThat(result.contents().getLast().savedAt()).isEqualTo(SAVED_AT);
         assertThat(result.contents()).allSatisfy(item -> assertThat(item.summary()).isEqualTo("가😀나다라"));
-        var mapper = new ObjectMapper();
-        var json = mapper.readTree(mapper.writeValueAsString(result.contents().getFirst()));
-        assertThat(json.propertyNames()).containsExactlyInAnyOrder("contentId", "source", "title", "category", "summary");
         assertThat(result.places().getFirst().distanceMeters()).isCloseTo(444.7797, offset(0.001));
     }
 
     @Test
-    void searchUsesDefaultRadiusAndClampsOversizedRadiusBeforeSemanticRanking() {
-        UUID near = place(37.001, 127.0);
-        UUID middle = place(37.013, 127.0);
-        UUID outsideMaximum = place(37.027, 127.0);
-        savedContent(memberId, near, vector(-1, 0));
-        savedContent(memberId, middle, vector(0, 1));
-        savedContent(memberId, outsideMaximum, vector(1, 0));
-
-        assertThat(tools.searchCandidates(scope, "카페", null).places()).extracting(PlaceCandidate::placeId)
-                .containsExactly(near);
-        assertThat(tools.searchCandidates(scope, "카페", 10000.0).places()).extracting(PlaceCandidate::placeId)
-                .containsExactly(middle, near);
-        assertThat(tools.searchCandidates(scope, "카페", 50.0).places()).isEmpty();
+    void sourceSelectionAndSeenCandidatesAreAppliedBeforeLimits() {
+        UUID seenPlace = place(37.001, 127);
+        UUID seenContent = savedContent(memberId, seenPlace, vector(1, 0));
+        UUID nextPlace = place(37.002, 127);
+        UUID nextContent = savedContent(memberId, nextPlace, vector(0.8, 0.6));
+        UUID publicPlace = place(37.003, 127);
+        savedContent(contributor, publicPlace, vector(1, 0));
+        UUID knownNoPlace = savedContent(memberId, null, vector(1, 0));
+        UUID nextNoPlace = savedContent(memberId, null, vector(0.8, 0.6));
+        var personal = tools.searchCandidates(scope, "카페", null, SearchSource.PERSONAL,
+                Set.of(knownNoPlace), Set.of(seenPlace));
+        assertThat(personal.places()).extracting(PlaceCandidate::placeId).containsExactly(nextPlace);
+        assertThat(personal.contents()).extracting(ContentCandidate::contentId).containsExactly(nextNoPlace);
+        var publicOnly = tools.searchCandidates(scope, "카페", null, SearchSource.PUBLIC, Set.of(), Set.of());
+        assertThat(publicOnly.places()).extracting(PlaceCandidate::placeId).containsExactly(publicPlace);
+        var excludeContents = tools.searchCandidates(scope, "카페", null, SearchSource.ALL,
+                Set.of(seenContent, nextContent), Set.of());
+        assertThat(excludeContents.places()).extracting(PlaceCandidate::placeId).containsExactly(publicPlace);
     }
 
     @Test
-    void withdrawnPublicContributionDisappearsFromAllThreeTools() {
-        UUID place = place(37.001, 127.0);
-        UUID placed = savedContent(contributor, place, vector(1, 0));
-        UUID noPlace = savedContent(contributor, null, vector(1, 0));
-        assertThat(tools.searchCandidates(scope, "카페", null).places()).hasSize(1);
-        assertThat(tools.searchCandidates(scope, "카페", null).contents()).hasSize(1);
-        assertThat(tools.getContentDetails(scope, List.of(placed, noPlace)).contents()).hasSize(2);
-        assertThat(tools.getPlaceDistances(scope, List.of(place)).pairs()).hasSize(1);
+    void radiusUsesDefaultAndClampsToMaximum() {
+        UUID near = place(37.001, 127);
+        UUID middle = place(37.013, 127);
+        UUID far = place(37.027, 127);
+        savedContent(memberId, near, vector(-1, 0));
+        savedContent(memberId, middle, vector(0, 1));
+        savedContent(memberId, far, vector(1, 0));
+        assertThat(tools.searchCandidates(scope, "카페", null).places()).extracting(PlaceCandidate::placeId).containsExactly(near);
+        assertThat(tools.searchCandidates(scope, "카페", 10000.0).places()).extracting(PlaceCandidate::placeId).containsExactly(middle, near);
+    }
 
+    @Test
+    void fullOperatingSummariesAndContextAreReturnedWithoutContributorSaveInformation() {
+        UUID place = place(37.001, 127);
+        UUID own = savedContent(memberId, place, null);
+        UUID pub = savedContent(contributor, place, null);
+        String summary = "설명".repeat(700) + " 오늘은 휴무입니다.";
+        jdbc.update("UPDATE content SET summary = ?", summary);
+        var result = tools.checkVisitConditions(scope, List.of(place));
+        assertThat(result.error()).isNull();
+        assertThat(result.places()).hasSize(1);
+        var conditions = result.places().getFirst().operatingConditions();
+        assertThat(conditions).hasSize(2).allSatisfy(item -> assertThat(item.summary()).isEqualTo(summary));
+        var personal = conditions.stream().filter(item -> item.contentId().equals(own)).findFirst().orElseThrow();
+        var publicItem = conditions.stream().filter(item -> item.contentId().equals(pub)).findFirst().orElseThrow();
+        assertThat(personal.referenceAt()).isEqualTo(SAVED_AT);
+        assertThat(personal.referenceTimeBasis()).isEqualTo("PERSONAL_SAVE");
+        assertThat(publicItem.referenceTimeBasis()).isEqualTo("CONTENT_FIRST_STORED");
+        assertThat(publicItem.referenceAt()).isNotNull();
+        assertThat(personal.description()).isEqualTo("Description " + own);
+        verify(weather).read(scope.latitude(), scope.longitude(), NOW);
+    }
+
+    @Test
+    void weatherFailureKeepsOperatingConditionsAndRecentSentHistory() {
+        UUID place = place(37.001, 127);
+        UUID content = savedContent(memberId, place, null);
+        Instant sent = NOW.minusSeconds(3600);
+        notification(memberId, place, content, "SENT", sent, true);
+        notification(memberId, place, content, "FAILED", sent, false);
+        notification(memberId, place, content, "PENDING", sent, false);
+        notification(memberId, place, content, "SENT", NOW.minusSeconds(8 * 86400), false);
+        notification(member(), place, content, "SENT", sent, false);
+        doThrow(new IllegalStateException("weather secret")).when(weather).read(anyDouble(), anyDouble(), any());
+        var result = tools.checkVisitConditions(scope, List.of(place));
+        assertThat(result.weather().available()).isFalse();
+        assertThat(result.weather().error()).isEqualTo("WEATHER_UNAVAILABLE");
+        var checked = result.places().getFirst();
+        assertThat(checked.operatingConditions()).hasSize(1);
+        assertThat(checked.recentProposals().hasRecentProposal()).isTrue();
+        assertThat(checked.recentProposals().notifications()).hasSize(1);
+        assertThat(checked.recentProposals().notifications().getFirst().sentAt()).isEqualTo(sent);
+        assertThat(checked.recentProposals().notifications().getFirst().opened()).isTrue();
+    }
+
+    @Test
+    void unreadSentNotificationIsReportedAndWeatherIsFetchedOnceForSeveralPlaces() {
+        UUID first = place(37.001, 127);
+        UUID second = place(37.002, 127);
+        UUID content = savedContent(memberId, first, null);
+        savedContent(memberId, second, null);
+        notification(memberId, first, content, "SENT", NOW.minusSeconds(60), false);
+        var result = tools.checkVisitConditions(scope, List.of(first, second));
+        assertThat(result.places().getFirst().recentProposals().notifications().getFirst().opened()).isFalse();
+        assertThat(result.places().getLast().recentProposals().hasRecentProposal()).isFalse();
+        verify(weather, times(1)).read(scope.latitude(), scope.longitude(), NOW);
+    }
+
+    @Test
+    void inaccessibleAndMissingPlacesUseSameErrorAndWithdrawnPublicContentDisappears() {
+        UUID pubPlace = place(37.001, 127);
+        savedContent(contributor, pubPlace, vector(1, 0));
+        assertThat(tools.checkVisitConditions(scope, List.of(pubPlace)).places()).hasSize(1);
         jdbc.update("UPDATE member_consent SET withdrawn_at = CURRENT_TIMESTAMP WHERE member_id = ?", contributor);
+        UUID privatePlace = place(37.002, 127);
+        savedContent(member(), privatePlace, null);
+        var result = tools.checkVisitConditions(scope, List.of(pubPlace, privatePlace, UUID.randomUUID()));
+        assertThat(result.places()).isEmpty();
+        assertThat(result.errors()).extracting(TargetError::error)
+                .containsExactly("대상을 찾을 수 없습니다.", "대상을 찾을 수 없습니다.", "대상을 찾을 수 없습니다.");
+        assertThat(tools.searchCandidates(scope, "카페", null).places()).isEmpty();
+    }
 
+    @ParameterizedTest
+    @CsvSource({"FAILED, AVAILABLE", "SUCCESS, UNAVAILABLE"})
+    void invalidContentStatusIsExcludedFromBothTools(String analysis, String source) {
+        UUID place = place(37.001, 127);
+        savedContent(memberId, place, vector(1, 0));
+        savedContent(contributor, null, vector(1, 0));
+        jdbc.update("UPDATE content SET analysis_status = ?, source_status = ?", analysis, source);
         assertThat(tools.searchCandidates(scope, "카페", null).places()).isEmpty();
         assertThat(tools.searchCandidates(scope, "카페", null).contents()).isEmpty();
-        assertThat(tools.getContentDetails(scope, List.of(placed, noPlace)).contents()).isEmpty();
-        assertThat(tools.getPlaceDistances(scope, List.of(place)).pairs()).isEmpty();
+        assertThat(tools.checkVisitConditions(scope, List.of(place)).places()).isEmpty();
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"", " ", "\n\t"})
-    void blankSearchReturnsErrorWithoutEmbedding(String condition) {
+    void blankSearchDoesNotCallEmbedding(String condition) {
         assertThat(tools.searchCandidates(scope, condition, null).error()).isNotBlank();
         verifyNoInteractions(embeddings);
     }
 
     @Test
-    void embeddingFailureAndMalformedVectorReturnErrors() {
-        when(embeddings.embed(anyString(), any())).thenThrow(new IllegalStateException("Credential secret must not leak"));
-        var result = tools.searchCandidates(scope, "카페", null);
-        assertThat(result.error()).isEqualTo("검색 임베딩을 만들 수 없습니다.");
-        assertThat(result.places()).isEmpty();
-        assertThat(result.contents()).isEmpty();
-        doReturn(new EmbeddingClient.Result(new float[2], "model")).when(embeddings).embed(anyString(), any());
-        assertThat(tools.searchCandidates(scope, "카페", null).error()).isNotBlank();
-        when(embeddings.embed(anyString(), any())).thenReturn(new EmbeddingClient.Result(new float[768], "model"));
-        assertThat(tools.searchCandidates(scope, "카페", null).error()).isNotBlank();
-        float[] invalid = vector(1, 0);
-        invalid[0] = Float.NaN;
-        when(embeddings.embed(anyString(), any())).thenReturn(new EmbeddingClient.Result(invalid, "model"));
-        assertThat(tools.searchCandidates(scope, "카페", null).error()).isNotBlank();
-    }
-
-    @Test
-    void detailsResolvePersonalAndPublicWithAllPlacesAndLongerSummariesWithoutPublicSaveInformation() {
-        UUID firstPlace = place(37.001, 127.0);
-        UUID secondPlace = place(37.002, 127.0);
-        UUID own = savedContent(memberId, firstPlace, null);
-        link(own, secondPlace);
-        save(contributor, own);
-        UUID publicContent = savedContent(contributor, firstPlace, null);
-
-        var result = tools.getContentDetails(scope, List.of(own, publicContent));
-
-        assertThat(result.error()).isNull();
-        assertThat(result.errors()).isEmpty();
-        assertThat(result.contents()).extracting(ContentDetail::contentId).containsExactly(own, publicContent);
-        assertThat(result.contents()).extracting(ContentDetail::source)
-                .containsExactly(ProposalSource.PERSONAL, ProposalSource.PUBLIC);
-        assertThat(result.contents().getFirst().savedAt()).isEqualTo(SAVED_AT);
-        assertThat(result.contents().getFirst().places()).extracting(RecallToolResults.ContentPlace::placeId)
-                .containsExactlyInAnyOrder(firstPlace, secondPlace);
-        assertThat(result.contents().getFirst().places()).allSatisfy(place -> {
-            assertThat(place.description()).isEqualTo("Description " + own);
-            assertThat(place.distanceMeters()).isBetween(111.0, 223.0);
-        });
-        assertThat(result.contents()).allSatisfy(item -> assertThat(item.summary()).isEqualTo("가😀나다라마바사아자"));
-        assertThat(result.contents().getLast().savedAt()).isNull();
-        var mapper = new ObjectMapper();
-        var json = mapper.readTree(mapper.writeValueAsString(result.contents().getLast()));
-        assertThat(json.propertyNames()).containsExactlyInAnyOrder("contentId", "source", "title", "summary", "category", "places");
-    }
-
-    @Test
-    void inaccessibleAndMissingContentHaveIdenticalNotFoundErrors() {
-        UUID inaccessible = savedContent(member(), null, null);
-        UUID missing = UUID.randomUUID();
-
-        var result = tools.getContentDetails(scope, List.of(inaccessible, missing));
-
-        assertThat(result.error()).isNull();
-        assertThat(result.contents()).isEmpty();
-        assertThat(result.errors()).extracting(RecallToolResults.TargetError::id).containsExactly(inaccessible, missing);
-        assertThat(result.errors()).extracting(RecallToolResults.TargetError::error)
-                .containsExactly("대상을 찾을 수 없습니다.", "대상을 찾을 수 없습니다.");
-    }
-
-    @Test
-    void distancesIncludeOriginAndAllUniquePairsWithConfiguredWalkingEstimate() {
-        UUID firstPlace = place(37.001, 127.0);
-        UUID secondPlace = place(37.002, 127.0);
-        savedContent(memberId, firstPlace, null);
-        savedContent(contributor, secondPlace, null);
-
-        var result = tools.getPlaceDistances(scope, List.of(firstPlace, secondPlace, scope.triggerPlaceId()));
-
-        assertThat(result.error()).isNull();
-        assertThat(result.errors()).isEmpty();
-        assertThat(result.pairs()).hasSize(3);
-        assertThat(result.pairs()).extracting(pair -> List.of(pair.fromPlaceId(), pair.toPlaceId()))
-                .containsExactly(List.of(scope.triggerPlaceId(), firstPlace), List.of(scope.triggerPlaceId(), secondPlace),
-                        List.of(firstPlace, secondPlace));
-        assertThat(result.pairs().getFirst().straightLineMeters()).isCloseTo(111.1949, offset(0.001));
-        assertThat(result.pairs().get(1).straightLineMeters()).isCloseTo(222.3899, offset(0.001));
-        assertThat(result.pairs()).allSatisfy(pair -> {
-            assertThat(pair.walkingTimeEstimated()).isTrue();
-            assertThat(pair.estimatedWalkingMinutes()).isCloseTo(pair.straightLineMeters() * 1.5 / 100, offset(0.000001));
-        });
-    }
-
-    @Test
-    void inaccessibleAndMissingPlacesGetErrorsWhileAccessiblePairsRemain() {
-        UUID accessible = place(37.001, 127.0);
-        UUID inaccessible = place(37.002, 127.0);
-        UUID missing = UUID.randomUUID();
-        savedContent(memberId, accessible, null);
-        savedContent(member(), inaccessible, null);
-
-        var result = tools.getPlaceDistances(scope, List.of(accessible, inaccessible, missing));
-
-        assertThat(result.pairs()).hasSize(1);
-        assertThat(result.pairs().getFirst().toPlaceId()).isEqualTo(accessible);
-        assertThat(result.errors()).extracting(RecallToolResults.TargetError::id).containsExactly(inaccessible, missing);
-        assertThat(result.errors()).extracting(RecallToolResults.TargetError::error)
-                .containsExactly("대상을 찾을 수 없습니다.", "대상을 찾을 수 없습니다.");
-    }
-
-    @ParameterizedTest
-    @CsvSource({"FAILED, AVAILABLE", "SUCCESS, UNAVAILABLE"})
-    void badContentStatusIsExcludedFromEveryTool(String analysisStatus, String sourceStatus) {
-        UUID personalPlace = place(37.001, 127.0);
-        UUID publicPlace = place(37.002, 127.0);
-        UUID personal = savedContent(memberId, personalPlace, vector(1, 0));
-        UUID publicContent = savedContent(contributor, publicPlace, vector(1, 0));
-        savedContent(memberId, null, vector(1, 0));
-        savedContent(contributor, null, vector(1, 0));
-        jdbc.update("UPDATE content SET analysis_status = ?, source_status = ?", analysisStatus, sourceStatus);
-
-        var search = tools.searchCandidates(scope, "카페", null);
-        assertThat(search.places()).isEmpty();
-        assertThat(search.contents()).isEmpty();
-        var details = tools.getContentDetails(scope, List.of(personal, publicContent));
-        assertThat(details.contents()).isEmpty();
-        assertThat(details.errors()).hasSize(2);
-        var distances = tools.getPlaceDistances(scope, List.of(personalPlace, publicPlace));
-        assertThat(distances.pairs()).isEmpty();
-        assertThat(distances.errors()).hasSize(2);
-    }
-
-    @Test
-    void invalidArgumentsAndLimitsReturnErrorsWithoutThrowing() {
-        var oversized = IntStream.range(0, 4).mapToObj(index -> UUID.randomUUID()).toList();
-        assertThat(tools.getContentDetails(scope, oversized).error()).isNotBlank();
-        assertThat(tools.getPlaceDistances(scope, oversized).error()).isNotBlank();
-        assertThat(tools.getContentDetails(scope, null).error()).isNotBlank();
-        assertThat(tools.getPlaceDistances(scope, Arrays.asList((UUID) null)).error()).isNotBlank();
+    void malformedInputsAndEmbeddingFailureStayErrorResults() {
+        assertThat(tools.checkVisitConditions(scope, IntStream.range(0, 4).mapToObj(i -> UUID.randomUUID()).toList()).error()).isNotBlank();
+        assertThat(tools.checkVisitConditions(scope, null).error()).isNotBlank();
+        assertThat(tools.checkVisitConditions(scope, Arrays.asList((UUID) null)).error()).isNotBlank();
+        assertThat(tools.checkVisitConditions(null, List.of()).error()).isNotBlank();
+        assertThat(tools.checkVisitConditions(scope, List.of()).places()).isEmpty();
         assertThat(tools.searchCandidates(scope, "카페", -1.0).error()).isNotBlank();
         assertThat(tools.searchCandidates(scope, "카페", Double.NaN).error()).isNotBlank();
-        assertThat(tools.searchCandidates(scope, "카페", null).error()).isNull();
-        assertThat(tools.getContentDetails(null, List.of()).error()).isNotBlank();
-        assertThat(tools.getPlaceDistances(null, List.of()).error()).isNotBlank();
-        assertThat(tools.searchCandidates(null, "카페", null).error()).isNotBlank();
-        assertThat(tools.getContentDetails(scope, List.of()).contents()).isEmpty();
-        assertThat(tools.getPlaceDistances(scope, List.of()).pairs()).isEmpty();
+        when(embeddings.embed(anyString(), any())).thenThrow(new IllegalStateException("secret"));
+        assertThat(tools.searchCandidates(scope, "카페", null).error()).isEqualTo("검색 임베딩을 만들 수 없습니다.");
     }
 
     @Test
-    void embeddingRunsOutsideCallerTransactionAndSearchQueriesRunReadOnly() {
-        when(embeddings.embed(anyString(), any())).thenAnswer(invocation -> {
+    void embeddingAndWeatherRunOutsideTransactionsAndDatabaseReadsAreReadOnly() {
+        when(embeddings.embed(anyString(), any())).thenAnswer(call -> {
             assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
             return new EmbeddingClient.Result(vector(1, 0), "model");
         });
-        doAnswer(invocation -> {
-            assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isTrue();
+        doAnswer(call -> {
             assertThat(TransactionSynchronizationManager.isCurrentTransactionReadOnly()).isTrue();
             assertThat(jdbc.queryForObject("SHOW transaction_read_only", String.class)).isEqualTo("on");
-            return invocation.callRealMethod();
-        }).when(repository).searchPlaces(any(), anyString(), anyDouble(), anyInt());
-        var transactions = new TransactionTemplate(transactionManager);
-
-        transactions.executeWithoutResult(status -> {
+            return call.callRealMethod();
+        }).when(repository).searchPlaces(any(), anyString(), anyDouble(), anyInt(), any(), anySet(), anySet());
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
             assertThat(tools.searchCandidates(scope, "카페", null).error()).isNull();
-            assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isTrue();
             status.setRollbackOnly();
         });
+        UUID place = place(37.001, 127);
+        savedContent(memberId, place, null);
+        doAnswer(call -> {
+            assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+            return new FakeWeatherClient().read(call.getArgument(0), call.getArgument(1), call.getArgument(2));
+        }).when(weather).read(anyDouble(), anyDouble(), any());
+        tools.checkVisitConditions(scope, List.of(place));
+    }
+
+    private void notification(UUID member, UUID place, UUID content, String status, Instant sentAt, boolean opened) {
+        UUID trigger = UUID.randomUUID();
+        jdbc.update("INSERT INTO trigger(id, member_id, place_id) VALUES (?, ?, ?) ON CONFLICT DO NOTHING", trigger, member, place);
+        trigger = jdbc.queryForObject("SELECT id FROM trigger WHERE member_id = ? AND place_id = ?", UUID.class, member, place);
+        UUID execution = UUID.randomUUID();
+        String payload = "{\"items\":[{\"contentId\":\"" + content + "\",\"placeId\":\"" + place + "\",\"source\":\"PERSONAL\"}]}";
+        jdbc.update("INSERT INTO recall_execution(id,trigger_id,trigger_event_id,status,result,proposal_type,proposal_payload,agent_version,event_occurred_at) VALUES(?,?,?,'COMPLETED','PROPOSE','PLACE',CAST(? AS jsonb),'test',?)",
+                execution, trigger, UUID.randomUUID(), payload, Timestamp.from(sentAt));
+        jdbc.update("INSERT INTO notification(id,execution_id,member_id,title,body,status,sent_at,opened_at,failure_code) VALUES(?,?,?,'title','body',?,?,?,?)",
+                UUID.randomUUID(), execution, member, status, status.equals("SENT") ? Timestamp.from(sentAt) : null,
+                opened ? Timestamp.from(sentAt) : null, status.equals("FAILED") ? "PUSH_FAILED" : null);
     }
 
     private UUID member() {
@@ -401,7 +352,10 @@ class RecallToolIntegrationTest {
         return result;
     }
 
+
     @TestConfiguration(proxyBeanMethods = false)
-    @EnableConfigurationProperties({RecallCandidateProperties.class, RecallToolProperties.class})
-    static class PropertiesConfiguration {}
+    @EnableConfigurationProperties({RecallCandidateProperties.class, RecallToolProperties.class, RecallProperties.class})
+    static class PropertiesConfiguration {
+        @Bean Clock clock() { return Clock.fixed(NOW, ZoneOffset.UTC); }
+    }
 }

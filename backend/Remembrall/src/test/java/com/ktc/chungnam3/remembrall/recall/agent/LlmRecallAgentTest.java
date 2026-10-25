@@ -27,6 +27,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
 
 class LlmRecallAgentTest {
     private final JsonMapper mapper = JsonMapper.builder().build();
@@ -81,6 +83,40 @@ class LlmRecallAgentTest {
             assertThat(result.result()).isEqualTo(RecallExecutionResult.NO_ACTION);
             assertThat(result.proposalType()).isNull();
             assertThat(result.decisionSummary()).isEqualTo("출근 시간");
+        }
+    }
+
+    @Test
+    void executionStatisticsPreserveResultUsageAndModelNameWithoutCallingTheModelTwice() throws Exception {
+        when(model.call(any(Prompt.class))).thenReturn(response("""
+                {"result":"NO_ACTION","proposalType":null,"items":[],"decisionSummary":"쉼","title":null,"body":null}
+                """));
+        try (var agent = agent()) {
+            var result = agent.executeWithStatistics(UUID.randomUUID(), scene().input());
+            assertThat(result.result().result()).isEqualTo(RecallExecutionResult.NO_ACTION);
+            assertThat(result.result().decisionSummary()).isEqualTo("쉼");
+            assertThat(result.inputTokens()).isEqualTo(123);
+            assertThat(result.outputTokens()).isEqualTo(45);
+            assertThat(result.responseTimeMillis()).isGreaterThanOrEqualTo(0);
+            assertThat(agent.modelName()).isEqualTo("gemini-3.6-flash");
+            verify(model, times(1)).call(any(Prompt.class));
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"`%s`", "```json\n%s\n```", "판단 결과입니다.\n%s\n이상입니다."})
+    void extractsJsonObjectFromWrappedFinalResponseAndPreservesOriginal(String wrapper) throws Exception {
+        String json = """
+                {"result":"NO_ACTION","proposalType":null,"items":[],"decisionSummary":"쉼","title":null,"body":null}
+                """.strip();
+        String raw = wrapper.formatted(json);
+        when(model.call(any(Prompt.class))).thenReturn(response(raw));
+        try (var agent = agent()) {
+            var invocation = agent.invoke(scene().input());
+            assertThat(invocation.rawResponse()).isEqualTo(raw);
+            assertThat(invocation.result().result()).isEqualTo(RecallExecutionResult.NO_ACTION);
+            assertThat(invocation.result().decisionSummary()).isEqualTo("쉼");
+            verify(model, times(1)).call(any(Prompt.class));
         }
     }
 

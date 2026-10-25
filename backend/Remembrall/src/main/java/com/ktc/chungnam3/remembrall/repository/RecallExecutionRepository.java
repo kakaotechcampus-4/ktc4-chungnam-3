@@ -62,6 +62,15 @@ public interface RecallExecutionRepository extends JpaRepository<RecallExecution
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
             UPDATE recall_execution
+               SET status = 'COMPLETED', result = 'NO_ACTION', decision_summary = :summary,
+                   finished_at = :now, updated_at = :now
+             WHERE id = :id AND status = 'RUNNING'
+            """, nativeQuery = true)
+    int completeNoActionWithSummary(@Param("id") UUID id, @Param("summary") String summary, @Param("now") Instant now);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            UPDATE recall_execution
                SET status = 'COMPLETED', result = 'PROPOSE', proposal_type = :proposalType,
                    proposal_payload = CAST(:payload AS jsonb), decision_summary = :summary,
                    finished_at = :now, updated_at = :now

@@ -48,6 +48,10 @@ personal-save:
   analysis-queue-capacity: 100
 
 recall:
+  trace:
+    max-detail-bytes: 65536
+    max-error-length: 1000
+    include-agent-input: false
   max-event-age: 30m
   member-cooldown: 2h
   max-course-walking-minutes: 30
@@ -56,6 +60,10 @@ recall:
     provider: ${RECALL_AGENT_PROVIDER:google-genai}
     model: ${RECALL_AGENT_MODEL:gemini-3.6-flash}
     timeout: ${RECALL_AGENT_TIMEOUT:30s}
+    tools-enabled: ${RECALL_AGENT_TOOLS_ENABLED:true}
+    max-tool-calls: ${RECALL_AGENT_MAX_TOOL_CALLS:6}
+    execution-timeout: ${RECALL_AGENT_EXECUTION_TIMEOUT:90s}
+    max-tool-response-bytes: ${RECALL_AGENT_MAX_TOOL_RESPONSE_BYTES:24000}
     openai-base-url: ${RECALL_OPENAI_BASE_URL:https://api.openai.com/v1}
     openai-api-key: ${RECALL_OPENAI_API_KEY:}
   candidates:
@@ -66,13 +74,20 @@ recall:
     max-summary-length: 200
   tools:
     max-radius-meters: 5000
-    search-place-limit: 20
-    search-content-limit: 20
-    max-content-details: 20
-    details-summary-length: 2000
-    max-place-distances: 10
+    search-place-limit: 5
+    search-content-limit: 5
+    max-visit-places: 3
+    visit-summary-length: 2000
+    recent-proposal-window: 7d
     walking-detour-factor: 1.3
     walking-speed-meters-per-minute: 80
+  weather:
+    service-key: ${kma.api.key:}
+    base-url: https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0
+    connect-timeout: 2s
+    read-timeout: 3s
+    forecast-hours: 6
+    max-cache-entries: 512
 
 notification:
   max-title-length: 120

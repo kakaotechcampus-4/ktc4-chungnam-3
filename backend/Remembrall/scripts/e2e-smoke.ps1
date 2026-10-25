@@ -1,8 +1,10 @@
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName = 'Video')]
 param(
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $true, ParameterSetName = 'Video')]
     [ValidateNotNullOrEmpty()]
     [string]$VideoUrl,
+    [Parameter(Mandatory = $true, ParameterSetName = 'Seed')]
+    [switch]$Seed,
     [ValidateNotNullOrEmpty()]
     [string]$BaseUrl = 'http://localhost:8080',
     [string]$DatabaseContainer,
@@ -75,7 +77,11 @@ function Invoke-Api([string]$Name, [string]$Method, [string]$Path, [int[]]$Expec
         $timer.Stop()
         $step.Seconds = [math]::Round($timer.Elapsed.TotalSeconds, 3)
         Write-Host "[$Name] $Method $Path -> HTTP $($step.Status), $($step.Seconds)s"
-        $content = [string]$response.Content
+        $content = if ($response.Content -is [byte[]]) {
+            [Text.Encoding]::UTF8.GetString($response.Content)
+        } else {
+            [string]$response.Content
+        }
         if ($Expected -notcontains $step.Status) {
             Show-Json @{ response = $content }
             throw "Expected HTTP $($Expected -join '/'), received $($step.Status)."
@@ -115,7 +121,7 @@ SELECT json_build_object(
     'memberId', $script:memberFilter,
     'contents', COALESCE((
         SELECT json_agg(row_to_json(c)) FROM (
-            SELECT c.id AS content_id, c.analysis_status,
+            SELECT c.id AS content_id, c.video_id, c.analysis_status, ps.saved_at,
                    c.embedding IS NOT NULL AS embedding_filled, c.embedding_model,
                    c.last_analysis_error_code, c.analysis_started_at, c.analyzed_at,
                    EXTRACT(EPOCH FROM (c.analyzed_at - c.analysis_started_at)) AS analysis_seconds
@@ -137,7 +143,7 @@ SELECT json_build_object(
     ),
     'notification', (
         SELECT row_to_json(n) FROM (
-            SELECT id, execution_id, status, failure_code
+            SELECT id, execution_id, title, body, status, failure_code
             FROM notification WHERE member_id = $script:memberFilter
             ORDER BY created_at DESC, id DESC LIMIT 1
         ) n
@@ -148,7 +154,9 @@ SELECT json_build_object(
 }
 
 try {
-    Assert-Result ([uri]::IsWellFormedUriString($VideoUrl, [UriKind]::Absolute)) 'VideoUrl must be an absolute URL.'
+    if (-not $Seed) {
+        Assert-Result ([uri]::IsWellFormedUriString($VideoUrl, [UriKind]::Absolute)) 'VideoUrl must be an absolute URL.'
+    }
     Assert-Result ($BaseUrl -match '^https?://') 'BaseUrl must use HTTP or HTTPS.'
     if ([string]::IsNullOrWhiteSpace($DatabaseContainer)) {
         $containers = @(& docker ps --filter 'ancestor=pgvector/pgvector:pg16' --format '{{.ID}}')
@@ -176,37 +184,59 @@ try {
     Show-Json $consent
     Assert-Result ($consent.agreed -and $consent.termsVersion -eq $version) 'Location service consent was not applied.'
 
-    $analysisTimer = [System.Diagnostics.Stopwatch]::StartNew()
-    $saved = Invoke-Api 'save-video' POST '/api/personal-saves' @(201) @{ url = $VideoUrl }
-    Show-Json $saved
-    $personalSaveId = [guid]::Parse($saved.personalSaveId).ToString()
-    Assert-Result (@('PENDING', 'ANALYZING', 'SUCCESS', 'PARTIAL', 'FAILED') -contains $saved.analysisStatus) 'Unknown analysisStatus.'
-    Write-Host "saveResponseSeconds=$($steps[$steps.Count - 1].Seconds); initialAnalysisStatus=$($saved.analysisStatus)"
+    if ($Seed) {
+        $seeded = Invoke-Api 'seed' POST '/dev/e2e/seed' @(200)
+        Show-Json $seeded
+        Assert-Result (@($seeded.contents).Count -eq 6) 'Expected six seed contents.'
+        Assert-Result (@($seeded.contents | Where-Object { $_.analysisStatus -ne 'SUCCESS' -or -not $_.embeddingFilled }).Count -eq 0) 'Seed analysis or embedding is incomplete.'
+        $ownContents = @($seeded.contents | Where-Object { $_.memberId -eq $seeded.memberId })
+        Assert-Result ($ownContents.Count -eq 5) 'Expected five session-member saves.'
+        $ownPlaces = @($ownContents.places)
+        Assert-Result ($ownPlaces.Count -eq 4) 'Expected four session-member places.'
+        $publicContent = @($seeded.contents | Where-Object { $_.publicContribution })
+        Assert-Result ($publicContent.Count -eq 1 -and $publicContent[0].memberId -ne $seeded.memberId) 'Expected a separate public contributor.'
+        $cookingContent = @($ownContents | Where-Object { @($_.places).Count -eq 0 })
+        Assert-Result ($cookingContent.Count -eq 1) 'Expected one cooking content without a place.'
+        $place = $seeded.origin
+        $departureContent = @($ownContents | Where-Object { @($_.places | Where-Object { $_.placeId -eq $place.placeId }).Count -gt 0 })
+        Assert-Result ($departureContent.Count -eq 1) 'Departure content is missing.'
+        $expectedSavedAt = [DateTimeOffset]::UtcNow.AddMonths(-3)
+        $savedAtDifference = ([DateTimeOffset]$departureContent[0].savedAt - $expectedSavedAt).TotalSeconds
+        Assert-Result ([math]::Abs($savedAtDifference) -lt 120) 'Departure PersonalSave.saved_at is not three months ago.'
+        Write-Host 'seedChecks: six embeddings present; departure saved_at is three months ago; video analysis skipped.'
+    } else {
+        $analysisTimer = [System.Diagnostics.Stopwatch]::StartNew()
+        $saved = Invoke-Api 'save-video' POST '/api/personal-saves' @(201) @{ url = $VideoUrl }
+        Show-Json $saved
+        $personalSaveId = [guid]::Parse($saved.personalSaveId).ToString()
+        Assert-Result (@('PENDING', 'ANALYZING', 'SUCCESS', 'PARTIAL', 'FAILED') -contains $saved.analysisStatus) 'Unknown analysisStatus.'
+        Write-Host "saveResponseSeconds=$($steps[$steps.Count - 1].Seconds); initialAnalysisStatus=$($saved.analysisStatus)"
 
-    $pollTimer = [System.Diagnostics.Stopwatch]::StartNew()
-    $attempt = 0
-    while ($true) {
-        $remaining = 300 - $pollTimer.Elapsed.TotalSeconds
-        Assert-Result ($remaining -gt 0) 'Analysis did not finish within the 5-minute polling limit.'
-        $attempt++
-        $timeout = [math]::Max(1, [math]::Min(120, [math]::Floor($remaining)))
-        $detail = Invoke-Api "analysis-poll-$attempt" GET "/api/personal-saves/$personalSaveId" @(200) -TimeoutSeconds $timeout
-        Show-Json @{ personalSaveId = $detail.personalSaveId; analysisStatus = $detail.analysisStatus; analysisFailureCode = $detail.analysisFailureCode }
-        Assert-Result (@('PENDING', 'ANALYZING', 'SUCCESS', 'PARTIAL', 'FAILED') -contains $detail.analysisStatus) 'Unknown analysisStatus.'
-        if (@('SUCCESS', 'PARTIAL', 'FAILED') -contains $detail.analysisStatus) {
-            break
+        $pollTimer = [System.Diagnostics.Stopwatch]::StartNew()
+        $attempt = 0
+        while ($true) {
+            $remaining = 300 - $pollTimer.Elapsed.TotalSeconds
+            Assert-Result ($remaining -gt 0) 'Analysis did not finish within the 5-minute polling limit.'
+            $attempt++
+            $timeout = [math]::Max(1, [math]::Min(120, [math]::Floor($remaining)))
+            $detail = Invoke-Api "analysis-poll-$attempt" GET "/api/personal-saves/$personalSaveId" @(200) -TimeoutSeconds $timeout
+            Show-Json @{ personalSaveId = $detail.personalSaveId; analysisStatus = $detail.analysisStatus; analysisFailureCode = $detail.analysisFailureCode }
+            Assert-Result (@('PENDING', 'ANALYZING', 'SUCCESS', 'PARTIAL', 'FAILED') -contains $detail.analysisStatus) 'Unknown analysisStatus.'
+            if (@('SUCCESS', 'PARTIAL', 'FAILED') -contains $detail.analysisStatus) {
+                break
+            }
+            $remaining = 300 - $pollTimer.Elapsed.TotalSeconds
+            Assert-Result ($remaining -gt 0) 'Analysis did not finish within the 5-minute polling limit.'
+            Start-Sleep -Milliseconds ([int][math]::Min(10000, [math]::Ceiling($remaining * 1000)))
         }
-        $remaining = 300 - $pollTimer.Elapsed.TotalSeconds
-        Assert-Result ($remaining -gt 0) 'Analysis did not finish within the 5-minute polling limit.'
-        Start-Sleep -Milliseconds ([int][math]::Min(10000, [math]::Ceiling($remaining * 1000)))
+        $pollTimer.Stop()
+        $analysisTimer.Stop()
+        Write-Host "analysisObservedSeconds=$([math]::Round($analysisTimer.Elapsed.TotalSeconds, 3)); pollingSeconds=$([math]::Round($pollTimer.Elapsed.TotalSeconds, 3))"
+        Show-Json @{ places = $detail.places }
+        Assert-Result ($detail.analysisStatus -ne 'FAILED') "Analysis failed: $($detail.analysisFailureCode)"
+        Assert-Result ($null -ne $detail.places -and @($detail.places).Count -gt 0) 'Analysis returned no places; stopping before geofences.'
+        $place = $detail.places[0]
     }
-    $pollTimer.Stop()
-    $analysisTimer.Stop()
-    Write-Host "analysisObservedSeconds=$([math]::Round($analysisTimer.Elapsed.TotalSeconds, 3)); pollingSeconds=$([math]::Round($pollTimer.Elapsed.TotalSeconds, 3))"
-    Show-Json @{ places = $detail.places }
-    Assert-Result ($detail.analysisStatus -ne 'FAILED') "Analysis failed: $($detail.analysisFailureCode)"
-    Assert-Result ($null -ne $detail.places -and @($detail.places).Count -gt 0) 'Analysis returned no places; stopping before geofences.'
-    $place = $detail.places[0]
     $placeId = [guid]::Parse($place.placeId).ToString()
     $latitude = ([double]$place.latitude).ToString('R', [Globalization.CultureInfo]::InvariantCulture)
     $longitude = ([double]$place.longitude).ToString('R', [Globalization.CultureInfo]::InvariantCulture)
@@ -214,6 +244,12 @@ try {
     $geofences = Invoke-Api 'geofences' GET "/api/geofences?latitude=$latitude&longitude=$longitude&platform=ANDROID" @(200)
     Show-Json $geofences
     Assert-Result (@($geofences.places | Where-Object { $_.placeId -eq $placeId }).Count -gt 0) 'The first analyzed place is missing from geofence places.'
+    if ($Seed) {
+        $actualPlaceIds = @($geofences.places.placeId | Sort-Object)
+        $expectedPlaceIds = @($ownPlaces.placeId | Sort-Object)
+        Assert-Result ($actualPlaceIds.Count -eq 4 -and ($actualPlaceIds -join ',') -eq ($expectedPlaceIds -join ',')) 'Geofences must contain exactly the four session-member places, not the public restaurant or cooking content.'
+        Write-Host 'geofenceChecks: exactly four own places; public restaurant and cooking content excluded.'
+    }
 
     $triggerEventId = [guid]::NewGuid().ToString()
     $event = @{
@@ -241,6 +277,13 @@ try {
     $recallTimer.Stop()
     Show-Json $execution
     Assert-Result ($execution.agent_version -like 'llm*') 'agent_version does not start with llm.'
+    if ($Seed) {
+        $agentInput = Invoke-Api 'agent-input' GET "/dev/e2e/executions/$($execution.id)/input" @(200)
+        Show-Json $agentInput
+        Assert-Result (@($agentInput.nearbyPublicCandidates | Where-Object { $_.placeId -eq $publicContent[0].places[0].placeId }).Count -eq 1) 'The public restaurant is missing from actual agent input.'
+        Assert-Result (@($agentInput.semanticCandidates | Where-Object { $_.contentId -eq $cookingContent[0].contentId }).Count -eq 1) 'The cooking content is missing from actual semantic candidates.'
+        Write-Host 'agentInputChecks: public restaurant in nearbyPublicCandidates; cooking content in semanticCandidates.'
+    }
     Assert-Result ($execution.status -eq 'COMPLETED') "Recall failed: $($execution.failure_code)"
     if ($execution.result -eq 'NO_ACTION') {
         Write-Host 'NO_ACTION decision_summary:'
@@ -286,6 +329,7 @@ try {
         }
     }
     Write-Host "totalSeconds=$([math]::Round($totalTimer.Elapsed.TotalSeconds, 3)); failed=$failed"
+    Write-Host 'Server-side verification only; actual push reception has not been tested.'
 }
 
 if ($failed) {

@@ -30,7 +30,7 @@ class RecallAgentVersionTest {
         String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                 .digest(prompt.text().getBytes(StandardCharsets.UTF_8))).substring(0, 6);
         try (var agent = agent("google-genai", "gemini-3.6-flash", prompt)) {
-            assertThat(agent.version()).isEqualTo("llm|google-genai|gemini-3.6-flash|prompt-v1-" + hash);
+            assertThat(agent.version()).isEqualTo("llm|google-genai|gemini-3.6-flash|prompt-" + prompt.version() + "-" + hash + "|tools-off");
         }
     }
 
@@ -38,7 +38,7 @@ class RecallAgentVersionTest {
     void hashesExactBodyWithoutTrimmingWhitespace() throws Exception {
         try (var original = agent("google-genai", "model", new RecallPrompt("v1", "abc"));
              var withNewline = agent("google-genai", "model", new RecallPrompt("v1", "abc\n"))) {
-            assertThat(original.version()).isEqualTo("llm|google-genai|model|prompt-v1-ba7816");
+            assertThat(original.version()).isEqualTo("llm|google-genai|model|prompt-v1-ba7816|tools-off");
             assertThat(withNewline.version()).isNotEqualTo(original.version());
         }
     }

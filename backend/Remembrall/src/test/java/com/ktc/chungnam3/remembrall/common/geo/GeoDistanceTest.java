@@ -15,7 +15,7 @@ class GeoDistanceTest {
 
     @Test
     void matchesExistingHaversineAndWalkingCalculation() {
-        var walking = new WalkingTimeCalculator(new RecallToolProperties(5000, 20, 20, 20, 2000, 10, 1.3, 80));
+        var walking = new WalkingTimeCalculator(new RecallToolProperties(5000, 20, 20, 3, 2000, java.time.Duration.ofDays(7), 1.3, 80));
         double distance = GeoDistance.meters(37, 127, 37.001, 127);
 
         assertThat(distance).isCloseTo(111.194926644, offset(0.000001));

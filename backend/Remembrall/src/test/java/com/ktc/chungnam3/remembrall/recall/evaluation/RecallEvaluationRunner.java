@@ -3,20 +3,18 @@ package com.ktc.chungnam3.remembrall.recall.evaluation;
 import com.ktc.chungnam3.remembrall.recall.agent.LlmRecallAgent;
 import com.ktc.chungnam3.remembrall.recall.agent.RecallAgentInput;
 import com.ktc.chungnam3.remembrall.recall.agent.RecallAgentResult;
-import tools.jackson.databind.json.JsonMapper;
+import com.ktc.chungnam3.remembrall.recall.trace.RecallTraceCollector;
 
 import java.io.IOException;
 import java.io.PrintStream;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.function.ToDoubleFunction;
 
 public class RecallEvaluationRunner {
-    private final JsonMapper mapper = JsonMapper.builder().build();
     private final RecallEvaluationChecker checker = new RecallEvaluationChecker();
 
     public List<Line> run(List<EvaluationScene> scenes, int repetitions, String provider, String model,
@@ -24,38 +22,42 @@ public class RecallEvaluationRunner {
         if (repetitions < 1) {
             throw new IllegalArgumentException("Evaluation repetitions must be positive");
         }
-        Path target = output.toAbsolutePath().normalize();
-        Files.createDirectories(target.getParent());
+        try (var run = EvaluationRun.start(output)) {
+            return run(scenes, repetitions, provider, model, agent, run);
+        }
+    }
+
+    public List<Line> run(List<EvaluationScene> scenes, int repetitions, String provider, String model,
+                          EvaluationAgent agent, EvaluationRun run) throws IOException {
+        if (repetitions < 1) {
+            throw new IllegalArgumentException("Evaluation repetitions must be positive");
+        }
         var lines = new ArrayList<Line>();
         String agentVersion = agent.version();
-        try (var writer = Files.newBufferedWriter(target, StandardCharsets.UTF_8,
-                StandardOpenOption.CREATE, StandardOpenOption.APPEND)) {
-            for (var scene : scenes) {
-                for (int repetition = 1; repetition <= repetitions; repetition++) {
-                    long started = System.nanoTime();
-                    LlmRecallAgent.Invocation invocation;
-                    String failure = null;
-                    try {
-                        invocation = agent.invoke(scene.input());
-                        if (invocation == null) {
-                            throw new IllegalStateException("Missing evaluation invocation");
-                        }
-                    } catch (LlmRecallAgent.CallException exception) {
-                        invocation = exception.invocation();
-                        failure = exception.getCause().getClass().getSimpleName();
-                    } catch (Exception exception) {
-                        invocation = new LlmRecallAgent.Invocation(null, null,
-                                (System.nanoTime() - started) / 1_000_000.0, null, null);
-                        failure = exception.getClass().getSimpleName();
+        for (var scene : scenes) {
+            for (int repetition = 1; repetition <= repetitions; repetition++) {
+                long started = System.nanoTime();
+                LlmRecallAgent.Invocation invocation;
+                String failure = null;
+                try {
+                    invocation = agent.invoke(scene.input());
+                    if (invocation == null) {
+                        throw new IllegalStateException("Missing evaluation invocation");
                     }
-                    var line = new Line(scene.id(), repetition, provider, model, agentVersion, invocation.rawResponse(),
-                            invocation.result(), checker.check(scene, invocation.result()), invocation.responseTimeMillis(),
-                            invocation.inputTokens(), invocation.outputTokens(), failure);
-                    writer.write(mapper.writeValueAsString(line));
-                    writer.newLine();
-                    writer.flush();
-                    lines.add(line);
+                } catch (LlmRecallAgent.CallException exception) {
+                    invocation = exception.invocation();
+                    failure = exception.getCause().getClass().getSimpleName();
+                } catch (Exception exception) {
+                    invocation = new LlmRecallAgent.Invocation(null, null,
+                            (System.nanoTime() - started) / 1_000_000.0, null, null);
+                    failure = exception.getClass().getSimpleName();
                 }
+                var line = new Line(run.runId(), run.startedAt(), scene.id(), repetition, provider, model,
+                        agentVersion, invocation.rawResponse(),
+                        invocation.result(), checker.check(scene, invocation.result()), invocation.responseTimeMillis(),
+                        invocation.inputTokens(), invocation.outputTokens(), failure);
+                run.write(line);
+                lines.add(line);
             }
         }
         return List.copyOf(lines);
@@ -88,8 +90,22 @@ public class RecallEvaluationRunner {
 
         LlmRecallAgent.Invocation invoke(RecallAgentInput input) throws Exception;
 
+        default boolean recordsModelCalls() { return false; }
+
+        default LlmRecallAgent.Invocation invoke(UUID executionId, RecallAgentInput input, RecallTraceCollector trace) throws Exception {
+            return invoke(input);
+        }
+
         static EvaluationAgent from(LlmRecallAgent agent) {
             return new EvaluationAgent() {
+                @Override
+                public boolean recordsModelCalls() { return true; }
+
+                @Override
+                public LlmRecallAgent.Invocation invoke(UUID executionId, RecallAgentInput input, RecallTraceCollector trace) {
+                    return agent.invoke(executionId, input, trace);
+                }
+
                 @Override
                 public String version() {
                     return agent.version();
@@ -103,7 +119,8 @@ public class RecallEvaluationRunner {
         }
     }
 
-    public record Line(String sceneId, int repetition, String provider, String model, String agentVersion, String rawResponse,
+    public record Line(UUID runId, Instant runStartedAt, String sceneId, int repetition, String provider,
+                       String model, String agentVersion, String rawResponse,
                        RecallAgentResult result, RecallEvaluationChecker.Checks checks, double responseTimeMillis,
                        Integer inputTokens, Integer outputTokens, String failure) {}
 }

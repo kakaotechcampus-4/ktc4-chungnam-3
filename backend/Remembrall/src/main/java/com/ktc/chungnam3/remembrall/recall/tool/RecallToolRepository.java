@@ -11,7 +11,10 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
+import java.util.Set;
 import java.util.UUID;
+import com.ktc.chungnam3.remembrall.recall.tool.RecallToolResults.SearchSource;
 
 @Repository
 public class RecallToolRepository {
@@ -31,7 +34,8 @@ public class RecallToolRepository {
         this.jdbc = new NamedParameterJdbcTemplate(jdbc);
     }
 
-    public List<SearchPlaceRow> searchPlaces(RecallToolScope scope, String embedding, double radiusMeters, int limit) {
+    public List<SearchPlaceRow> searchPlaces(RecallToolScope scope, String embedding, double radiusMeters, int limit,
+                                            SearchSource source, Set<UUID> seenContents, Set<UUID> seenPlaces) {
         return jdbc.query("""
                 WITH accessible AS (%s), distances AS (
                     SELECT p.id AS place_id, p.name,
@@ -47,52 +51,81 @@ public class RecallToolRepository {
                     JOIN content_place cp ON cp.place_id = d.place_id
                     JOIN accessible c ON c.content_id = cp.content_id
                     WHERE d.distance_meters <= :radiusMeters AND c.embedding IS NOT NULL
+                        AND (:source = 'ALL' OR c.source = :source)
+                        AND c.content_id NOT IN (:seenContents) AND d.place_id NOT IN (:seenPlaces)
                 ), selected_places AS (
                     SELECT place_id, min(cosine_distance) AS best_distance
                     FROM eligible GROUP BY place_id ORDER BY best_distance, place_id LIMIT :limit
                 )
                 SELECT e.* FROM eligible e JOIN selected_places s ON s.place_id = e.place_id
                 ORDER BY s.best_distance, e.place_id, e.cosine_distance, e.content_id
-                """.formatted(ACCESSIBLE_CONTENTS), Map.of("memberId", scope.memberId(),
-                "latitude", scope.latitude(), "longitude", scope.longitude(), "embedding", embedding,
-                "radiusMeters", radiusMeters, "limit", limit), (rs, index) -> new SearchPlaceRow(
+                """.formatted(ACCESSIBLE_CONTENTS), searchParameters(scope, embedding, radiusMeters, limit,
+                source, seenContents, seenPlaces), (rs, index) -> new SearchPlaceRow(
                 uuid(rs, "place_id"), rs.getString("name"), rs.getDouble("distance_meters"), content(rs)));
     }
 
-    public List<ContentRow> searchContents(UUID memberId, String embedding, int limit) {
+    public List<ContentRow> searchContents(UUID memberId, String embedding, int limit,
+                                          SearchSource source, Set<UUID> seenContents) {
         return jdbc.query("""
                 WITH accessible AS (%s)
                 SELECT c.* FROM accessible c
                 WHERE c.embedding IS NOT NULL
+                    AND (:source = 'ALL' OR c.source = :source) AND c.content_id NOT IN (:seenContents)
                     AND NOT EXISTS (SELECT 1 FROM content_place cp WHERE cp.content_id = c.content_id)
                 ORDER BY c.embedding <=> CAST(:embedding AS vector), c.content_id LIMIT :limit
-                """.formatted(ACCESSIBLE_CONTENTS), Map.of("memberId", memberId, "embedding", embedding, "limit", limit),
+                """.formatted(ACCESSIBLE_CONTENTS), Map.of("memberId", memberId, "embedding", embedding, "limit", limit,
+                "source", source.name(), "seenContents", nonEmpty(seenContents)),
                 (rs, index) -> content(rs));
     }
 
-    public List<DetailRow> findContentDetails(UUID memberId, List<UUID> contentIds) {
+    public List<ConditionRow> findVisitConditions(UUID memberId, List<UUID> placeIds) {
         return jdbc.query("""
                 WITH accessible AS (%s)
-                SELECT c.*, p.id AS place_id, p.name, p.latitude, p.longitude, cp.description
+                SELECT c.*, p.id AS place_id, p.name, cp.description,
+                       COALESCE(c.saved_at, original.created_at) AS reference_at,
+                       CASE WHEN c.saved_at IS NULL THEN 'CONTENT_FIRST_STORED' ELSE 'PERSONAL_SAVE' END AS reference_basis
                 FROM accessible c
-                LEFT JOIN content_place cp ON cp.content_id = c.content_id
-                LEFT JOIN place p ON p.id = cp.place_id
-                WHERE c.content_id IN (:contentIds) ORDER BY c.content_id, p.id
-                """.formatted(ACCESSIBLE_CONTENTS), Map.of("memberId", memberId, "contentIds", contentIds),
-                (rs, index) -> new DetailRow(content(rs), uuid(rs, "place_id"), rs.getString("name"),
-                        rs.getString("description"), rs.getDouble("latitude"), rs.getDouble("longitude")));
+                JOIN content original ON original.id = c.content_id
+                JOIN content_place cp ON cp.content_id = c.content_id
+                JOIN place p ON p.id = cp.place_id
+                WHERE p.id IN (:placeIds) ORDER BY p.id, c.source, c.content_id
+                """.formatted(ACCESSIBLE_CONTENTS), Map.of("memberId", memberId, "placeIds", placeIds),
+                (rs, index) -> new ConditionRow(uuid(rs, "place_id"), rs.getString("name"), content(rs),
+                        rs.getString("description"), rs.getTimestamp("reference_at").toInstant(), rs.getString("reference_basis")));
     }
 
-    public List<PlaceRow> findAccessiblePlaces(UUID memberId, List<UUID> placeIds) {
+    public List<RecentRow> findRecentProposals(UUID memberId, List<UUID> placeIds, Instant since, Instant now) {
         return jdbc.query("""
-                WITH accessible AS (%s)
-                SELECT p.id AS place_id, p.latitude, p.longitude FROM place p
-                WHERE p.id IN (:placeIds) AND EXISTS (
-                    SELECT 1 FROM content_place cp JOIN accessible c ON c.content_id = cp.content_id
-                    WHERE cp.place_id = p.id
-                ) ORDER BY p.id
-                """.formatted(ACCESSIBLE_CONTENTS), Map.of("memberId", memberId, "placeIds", placeIds),
-                (rs, index) -> new PlaceRow(uuid(rs, "place_id"), rs.getDouble("latitude"), rs.getDouble("longitude")));
+                SELECT DISTINCT p.id AS place_id, n.id, n.sent_at, n.opened_at
+                FROM notification n JOIN recall_execution e ON e.id = n.execution_id
+                JOIN LATERAL jsonb_array_elements(COALESCE(e.proposal_payload -> 'items', '[]'::jsonb)) item ON TRUE
+                JOIN place p ON p.id::text = item ->> 'placeId'
+                WHERE n.member_id = :memberId AND n.status = 'SENT' AND p.id IN (:placeIds)
+                    AND n.sent_at >= :since AND n.sent_at <= :now
+                ORDER BY n.sent_at DESC, n.id
+                """, Map.of("memberId", memberId, "placeIds", placeIds,
+                "since", java.sql.Timestamp.from(since), "now", java.sql.Timestamp.from(now)),
+                (rs, index) -> new RecentRow(uuid(rs, "place_id"), rs.getTimestamp("sent_at").toInstant(),
+                        rs.getTimestamp("opened_at") == null ? null : rs.getTimestamp("opened_at").toInstant()));
+    }
+
+    private Map<String, Object> searchParameters(RecallToolScope scope, String embedding, double radius, int limit,
+                                                  SearchSource source, Set<UUID> contents, Set<UUID> places) {
+        var values = new HashMap<String, Object>();
+        values.put("memberId", scope.memberId());
+        values.put("latitude", scope.latitude());
+        values.put("longitude", scope.longitude());
+        values.put("embedding", embedding);
+        values.put("radiusMeters", radius);
+        values.put("limit", limit);
+        values.put("source", source.name());
+        values.put("seenContents", nonEmpty(contents));
+        values.put("seenPlaces", nonEmpty(places));
+        return values;
+    }
+
+    private Set<UUID> nonEmpty(Set<UUID> ids) {
+        return ids.isEmpty() ? Set.of(new UUID(0, 0)) : ids;
     }
 
     private ContentRow content(ResultSet rs) throws SQLException {
@@ -111,8 +144,8 @@ public class RecallToolRepository {
 
     public record SearchPlaceRow(UUID placeId, String name, double distanceMeters, ContentRow content) {}
 
-    public record DetailRow(ContentRow content, UUID placeId, String name, String description,
-                            double latitude, double longitude) {}
+    public record ConditionRow(UUID placeId, String name, ContentRow content, String description,
+                               Instant referenceAt, String referenceTimeBasis) {}
 
-    public record PlaceRow(UUID placeId, double latitude, double longitude) {}
+    public record RecentRow(UUID placeId, Instant sentAt, Instant openedAt) {}
 }

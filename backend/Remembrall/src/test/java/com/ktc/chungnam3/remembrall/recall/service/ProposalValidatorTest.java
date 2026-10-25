@@ -42,7 +42,7 @@ class ProposalValidatorTest {
     private final PersonalSaveRepository saves = mock(PersonalSaveRepository.class);
     private final PublicCandidateRepository publicCandidates = mock(PublicCandidateRepository.class);
     private final WalkingTimeCalculator walking = new WalkingTimeCalculator(
-            new RecallToolProperties(5000, 20, 20, 20, 2000, 10, 1.5, 100));
+            new RecallToolProperties(5000, 20, 20, 3, 2000, java.time.Duration.ofDays(7), 1.5, 100));
     private final Place origin = place(37.0);
     private final Place first = place(37.001);
     private final Place last = place(37.002);

@@ -3,19 +3,10 @@ package com.ktc.chungnam3.remembrall.recall.tool;
 import com.ktc.chungnam3.remembrall.content.embedding.EmbeddingClient;
 import com.ktc.chungnam3.remembrall.recall.config.RecallCandidateProperties;
 import com.ktc.chungnam3.remembrall.recall.config.RecallToolProperties;
-import com.ktc.chungnam3.remembrall.recall.service.WalkingTimeCalculator;
 import com.ktc.chungnam3.remembrall.recall.tool.RecallToolRepository.ContentRow;
-import com.ktc.chungnam3.remembrall.recall.tool.RecallToolRepository.PlaceRow;
 import com.ktc.chungnam3.remembrall.recall.tool.RecallToolRepository.SearchPlaceRow;
-import com.ktc.chungnam3.remembrall.recall.tool.RecallToolResults.ContentCandidate;
-import com.ktc.chungnam3.remembrall.recall.tool.RecallToolResults.ContentDetail;
-import com.ktc.chungnam3.remembrall.recall.tool.RecallToolResults.ContentPlace;
-import com.ktc.chungnam3.remembrall.recall.tool.RecallToolResults.DetailsResult;
-import com.ktc.chungnam3.remembrall.recall.tool.RecallToolResults.DistancePair;
-import com.ktc.chungnam3.remembrall.recall.tool.RecallToolResults.DistancesResult;
-import com.ktc.chungnam3.remembrall.recall.tool.RecallToolResults.PlaceCandidate;
-import com.ktc.chungnam3.remembrall.recall.tool.RecallToolResults.SearchResult;
-import com.ktc.chungnam3.remembrall.recall.tool.RecallToolResults.TargetError;
+import com.ktc.chungnam3.remembrall.recall.tool.RecallToolResults.*;
+import com.ktc.chungnam3.remembrall.recall.weather.WeatherClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
@@ -26,46 +17,49 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 public class RecallToolService {
-
     private static final Logger log = LoggerFactory.getLogger(RecallToolService.class);
     private static final String NOT_FOUND = "대상을 찾을 수 없습니다.";
     private final EmbeddingClient embeddings;
     private final RecallToolRepository repository;
     private final RecallCandidateProperties candidates;
     private final RecallToolProperties properties;
-    private final WalkingTimeCalculator walking;
+    private final WeatherClient weather;
+    private final Clock clock;
     private final TransactionTemplate reads;
 
     public RecallToolService(EmbeddingClient embeddings, RecallToolRepository repository,
                              RecallCandidateProperties candidates, RecallToolProperties properties,
-                             PlatformTransactionManager transactionManager, WalkingTimeCalculator walking) {
+                             PlatformTransactionManager transactionManager, WeatherClient weather, Clock clock) {
         this.embeddings = embeddings;
         this.repository = repository;
         this.candidates = candidates;
         this.properties = properties;
-        this.walking = walking;
+        this.weather = weather;
+        this.clock = clock;
         this.reads = new TransactionTemplate(transactionManager);
         this.reads.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.reads.setReadOnly(true);
     }
 
     public SearchResult searchCandidates(RecallToolScope scope, String condition, Double radiusMeters) {
-        if (!validScope(scope)) {
-            return new SearchResult(List.of(), List.of(), "실행 범위를 확인할 수 없습니다.");
-        }
-        if (condition == null || condition.isBlank()) {
-            return new SearchResult(List.of(), List.of(), "검색 조건이 필요합니다.");
-        }
+        return searchCandidates(scope, condition, radiusMeters, SearchSource.ALL, Set.of(), Set.of());
+    }
+
+    public SearchResult searchCandidates(RecallToolScope scope, String condition, Double radiusMeters,
+                                         SearchSource source, Set<UUID> seenContents, Set<UUID> seenPlaces) {
+        if (!validScope(scope)) return new SearchResult(List.of(), List.of(), "실행 범위를 확인할 수 없습니다.");
+        if (condition == null || condition.isBlank()) return new SearchResult(List.of(), List.of(), "검색 조건이 필요합니다.");
         if (radiusMeters != null && (!Double.isFinite(radiusMeters) || radiusMeters <= 0)) {
             return new SearchResult(List.of(), List.of(), "반경은 양수여야 합니다.");
         }
@@ -80,7 +74,8 @@ public class RecallToolService {
         }
         try {
             return reads.execute(status -> {
-                var rows = repository.searchPlaces(scope, vector, radius, properties.searchPlaceLimit());
+                var rows = repository.searchPlaces(scope, vector, radius, properties.searchPlaceLimit(),
+                        source == null ? SearchSource.ALL : source, seenContents, seenPlaces);
                 var placesById = new LinkedHashMap<UUID, SearchPlaceRow>();
                 var contentsByPlace = new LinkedHashMap<UUID, List<ContentCandidate>>();
                 rows.forEach(row -> {
@@ -89,8 +84,8 @@ public class RecallToolService {
                 });
                 var places = placesById.values().stream().map(row -> new PlaceCandidate(row.placeId(), row.name(),
                         row.distanceMeters(), List.copyOf(contentsByPlace.get(row.placeId())))).toList();
-                var contents = repository.searchContents(scope.memberId(), vector, properties.searchContentLimit())
-                        .stream().map(this::candidate).toList();
+                var contents = repository.searchContents(scope.memberId(), vector, properties.searchContentLimit(),
+                        source == null ? SearchSource.ALL : source, seenContents).stream().map(this::candidate).toList();
                 return new SearchResult(places, contents, null);
             });
         } catch (DataAccessException exception) {
@@ -99,99 +94,63 @@ public class RecallToolService {
         }
     }
 
-    public DetailsResult getContentDetails(RecallToolScope scope, List<UUID> contentIds) {
-        String error = validateIds(scope, contentIds, properties.maxContentDetails());
-        if (error != null) {
-            return new DetailsResult(List.of(), List.of(), error);
-        }
-        if (contentIds.isEmpty()) {
-            return new DetailsResult(List.of(), List.of(), null);
-        }
-        var ids = List.copyOf(new LinkedHashSet<>(contentIds));
+    public VisitConditionsResult checkVisitConditions(RecallToolScope scope, List<UUID> placeIds) {
+        String error = validateIds(scope, placeIds);
+        if (error != null) return new VisitConditionsResult(List.of(), null, List.of(), error);
+        if (placeIds.isEmpty()) return new VisitConditionsResult(List.of(), null, List.of(), null);
+        var ids = List.copyOf(new LinkedHashSet<>(placeIds));
+        var now = clock.instant();
+        var since = now.minus(properties.recentProposalWindow());
+        VisitConditionsResult stored;
         try {
-            return reads.execute(status -> {
-                var contentsById = new LinkedHashMap<UUID, ContentRow>();
-                var placesByContent = new LinkedHashMap<UUID, List<ContentPlace>>();
-                repository.findContentDetails(scope.memberId(), ids).forEach(row -> {
-                    contentsById.putIfAbsent(row.content().contentId(), row.content());
-                    var places = placesByContent.computeIfAbsent(row.content().contentId(), key -> new ArrayList<>());
-                    if (row.placeId() != null) {
-                        places.add(new ContentPlace(row.placeId(), row.name(), row.description(),
-                                walking.straightLineMeters(scope.latitude(), scope.longitude(), row.latitude(), row.longitude())));
-                    }
+            stored = reads.execute(status -> {
+                var conditions = new LinkedHashMap<UUID, List<OperatingCondition>>();
+                var names = new LinkedHashMap<UUID, String>();
+                repository.findVisitConditions(scope.memberId(), ids).forEach(row -> {
+                    names.putIfAbsent(row.placeId(), row.name());
+                    conditions.computeIfAbsent(row.placeId(), ignored -> new ArrayList<>()).add(
+                            new OperatingCondition(row.content().contentId(), row.content().source(), row.content().title(),
+                                    summarize(row.content().summary(), properties.visitSummaryLength()),
+                                    summarize(row.description(), properties.visitSummaryLength()), row.referenceAt(),
+                                    row.referenceTimeBasis()));
                 });
-                var contents = new ArrayList<ContentDetail>();
+                var recent = new LinkedHashMap<UUID, List<RecentProposal>>();
+                repository.findRecentProposals(scope.memberId(), ids, since, now).forEach(row ->
+                        recent.computeIfAbsent(row.placeId(), ignored -> new ArrayList<>())
+                                .add(new RecentProposal(row.sentAt(), row.openedAt() != null, row.openedAt())));
+                var places = new ArrayList<PlaceConditions>();
                 var errors = new ArrayList<TargetError>();
                 for (UUID id : ids) {
-                    var row = contentsById.get(id);
-                    if (row == null) {
+                    if (!conditions.containsKey(id)) {
                         errors.add(new TargetError(id, NOT_FOUND));
                     } else {
-                        contents.add(new ContentDetail(id, row.source(), row.title(),
-                                summarize(row.summary(), properties.detailsSummaryLength()), row.category(),
-                                List.copyOf(placesByContent.get(id)), row.savedAt()));
+                        var notifications = List.copyOf(recent.getOrDefault(id, List.of()));
+                        places.add(new PlaceConditions(id, names.get(id), List.copyOf(conditions.get(id)),
+                                new RecentProposals("NOTIFICATION_HISTORY", now, since,
+                                        !notifications.isEmpty(), notifications)));
                     }
                 }
-                return new DetailsResult(List.copyOf(contents), List.copyOf(errors), null);
+                return new VisitConditionsResult(List.copyOf(places), null, List.copyOf(errors), null);
             });
         } catch (DataAccessException exception) {
-            log.warn("Recall content details query failed", exception);
-            return new DetailsResult(List.of(), List.of(), "상세를 조회할 수 없습니다.");
+            log.warn("Recall visit condition query failed", exception);
+            return new VisitConditionsResult(List.of(), null, List.of(), "방문 조건을 조회할 수 없습니다.");
         }
-    }
-
-    public DistancesResult getPlaceDistances(RecallToolScope scope, List<UUID> placeIds) {
-        String error = validateIds(scope, placeIds, properties.maxPlaceDistances());
-        if (error != null) {
-            return new DistancesResult(List.of(), List.of(), error);
-        }
-        var ids = new LinkedHashSet<>(placeIds);
-        ids.remove(scope.triggerPlaceId());
+        WeatherClient.Weather forecast;
         try {
-            return reads.execute(status -> {
-                Map<UUID, PlaceRow> accessible = new LinkedHashMap<>();
-                if (!ids.isEmpty()) {
-                    repository.findAccessiblePlaces(scope.memberId(), List.copyOf(ids))
-                            .forEach(row -> accessible.put(row.placeId(), row));
-                }
-                var places = new ArrayList<PlaceRow>();
-                places.add(new PlaceRow(scope.triggerPlaceId(), scope.latitude(), scope.longitude()));
-                var errors = new ArrayList<TargetError>();
-                for (UUID id : ids) {
-                    var place = accessible.get(id);
-                    if (place == null) {
-                        errors.add(new TargetError(id, NOT_FOUND));
-                    } else {
-                        places.add(place);
-                    }
-                }
-                var pairs = new ArrayList<DistancePair>();
-                for (int from = 0; from < places.size(); from++) {
-                    for (int to = from + 1; to < places.size(); to++) {
-                        var first = places.get(from);
-                        var second = places.get(to);
-                        double meters = walking.straightLineMeters(first.latitude(), first.longitude(),
-                                second.latitude(), second.longitude());
-                        pairs.add(new DistancePair(first.placeId(), second.placeId(), meters,
-                                walking.estimatedMinutes(meters), true));
-                    }
-                }
-                return new DistancesResult(List.copyOf(pairs), List.copyOf(errors), null);
-            });
-        } catch (DataAccessException exception) {
-            log.warn("Recall place distances query failed", exception);
-            return new DistancesResult(List.of(), List.of(), "장소를 조회할 수 없습니다.");
+            forecast = weather.read(scope.latitude(), scope.longitude(), now);
+            if (forecast == null) forecast = WeatherClient.Weather.unavailable(now);
+        } catch (Exception exception) {
+            log.warn("Recall weather lookup failed: {}", exception.getClass().getSimpleName());
+            forecast = WeatherClient.Weather.unavailable(now);
         }
+        return new VisitConditionsResult(stored.places(), forecast, stored.errors(), stored.error());
     }
 
-    private String validateIds(RecallToolScope scope, List<UUID> ids, int maximum) {
-        if (!validScope(scope)) {
-            return "실행 범위를 확인할 수 없습니다.";
-        }
-        if (ids == null || ids.stream().anyMatch(java.util.Objects::isNull)) {
-            return "유효한 ID 목록이 필요합니다.";
-        }
-        return ids.size() > maximum ? "요청 개수가 최대 " + maximum + "개를 초과했습니다." : null;
+    private String validateIds(RecallToolScope scope, List<UUID> ids) {
+        if (!validScope(scope)) return "실행 범위를 확인할 수 없습니다.";
+        if (ids == null || ids.stream().anyMatch(java.util.Objects::isNull)) return "유효한 ID 목록이 필요합니다.";
+        return ids.size() > properties.maxVisitPlaces() ? "요청 개수가 최대 " + properties.maxVisitPlaces() + "개를 초과했습니다." : null;
     }
 
     private boolean validScope(RecallToolScope scope) {
@@ -217,18 +176,12 @@ public class RecallToolService {
         var vector = new StringBuilder("[");
         double squaredLength = 0;
         for (float value : result.vector()) {
-            if (!Float.isFinite(value)) {
-                throw new IllegalStateException("Invalid embedding value");
-            }
-            if (vector.length() > 1) {
-                vector.append(',');
-            }
+            if (!Float.isFinite(value)) throw new IllegalStateException("Invalid embedding value");
+            if (vector.length() > 1) vector.append(',');
             vector.append(value);
             squaredLength += (double) value * value;
         }
-        if (squaredLength == 0) {
-            throw new IllegalStateException("Empty embedding vector");
-        }
+        if (squaredLength == 0) throw new IllegalStateException("Empty embedding vector");
         return vector.append(']').toString();
     }
 }

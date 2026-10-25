@@ -43,7 +43,7 @@ class RecallEvaluationRunnerTest {
     private final RecallEvaluationChecker checker = new RecallEvaluationChecker();
 
     @Test
-    void fakeAgentWritesExpectedChecksAndMetadataAsOneJsonLinePerRepetitionAndAppends() throws Exception {
+    void fakeAgentWritesMetadataAndCreatesSeparateFilesWithoutChangingPreviousResults() throws Exception {
         var scene = scenes()[0];
         var restaurant = scene.input().nearbyPersonalCandidates().getFirst();
         var result = proposal(ProposalType.COURSE, originItem(scene), new ProposalPayload.Item(
@@ -56,6 +56,7 @@ class RecallEvaluationRunnerTest {
             return new LlmRecallAgent.Invocation(raw, result, 12.5, 200, 20);
         });
         Path output = directory.resolve("results.jsonl");
+        Files.writeString(output, "previous results\n");
         var lines = runner.run(List.of(scene), 2, "FAKE", "fake-model", agent, output);
         assertThat(calls.get()).isEqualTo(2);
         assertThat(lines).allSatisfy(line -> {
@@ -63,9 +64,14 @@ class RecallEvaluationRunnerTest {
             assertThat(line.checks().formatPassed()).isTrue();
             assertThat(line.checks().errors()).isEmpty();
         });
-        var jsonLines = Files.readAllLines(output);
+        Path firstOutput = outputFor(lines.getFirst().runId());
+        var jsonLines = Files.readAllLines(firstOutput);
         assertThat(jsonLines).hasSize(2);
         var json = mapper.readTree(jsonLines.getFirst());
+        assertThat(json.get("runId").asText()).isEqualTo(lines.getFirst().runId().toString());
+        assertThat(json.get("runStartedAt").asText()).isEqualTo(lines.getFirst().runStartedAt().toString());
+        assertThat(lines).extracting(RecallEvaluationRunner.Line::runId).containsOnly(lines.getFirst().runId());
+        assertThat(lines).extracting(RecallEvaluationRunner.Line::runStartedAt).containsOnly(lines.getFirst().runStartedAt());
         assertThat(json.get("sceneId").asText()).isEqualTo(scene.id());
         assertThat(json.get("repetition").asInt()).isEqualTo(1);
         assertThat(json.get("model").asText()).isEqualTo("fake-model");
@@ -76,8 +82,17 @@ class RecallEvaluationRunnerTest {
         assertThat(json.get("responseTimeMillis").asDouble()).isEqualTo(12.5);
         assertThat(json.get("inputTokens").asInt()).isEqualTo(200);
         assertThat(json.get("outputTokens").asInt()).isEqualTo(20);
-        runner.run(List.of(scene), 1, "FAKE", "fake-model", agent, output);
-        assertThat(Files.readAllLines(output)).hasSize(3);
+        var second = runner.run(List.of(scene), 1, "FAKE", "fake-model", agent, output);
+        assertThat(second.getFirst().runId()).isNotEqualTo(lines.getFirst().runId());
+        assertThat(second.getFirst().agentVersion()).isEqualTo(lines.getFirst().agentVersion());
+        Path secondOutput = outputFor(second.getFirst().runId());
+        assertThat(secondOutput).isNotEqualTo(firstOutput);
+        assertThat(secondOutput.getParent()).isNotEqualTo(firstOutput.getParent());
+        assertThat(firstOutput.getFileName().toString()).isEqualTo("results.jsonl");
+        assertThat(secondOutput.getFileName().toString()).isEqualTo("results.jsonl");
+        assertThat(Files.readAllLines(firstOutput)).containsExactlyElementsOf(jsonLines);
+        assertThat(Files.readAllLines(secondOutput)).hasSize(1);
+        assertThat(Files.readString(output)).isEqualTo("previous results\n");
         var console = new ByteArrayOutputStream();
         runner.printSummary(lines, new PrintStream(console, true, StandardCharsets.UTF_8));
         assertThat(console.toString(StandardCharsets.UTF_8))
@@ -104,7 +119,7 @@ class RecallEvaluationRunnerTest {
         var lines = runner.run(List.of(scene), 3, "FAKE", "fake-model", agent, output);
         assertThat(lines).hasSize(3);
         assertThat(lines).allSatisfy(line -> assertThat(line.agentVersion()).isEqualTo(agent.version()));
-        assertThat(Files.readAllLines(output)).allSatisfy(line ->
+        assertThat(Files.readAllLines(outputFor(lines.getFirst().runId()))).allSatisfy(line ->
                 assertThat(mapper.readTree(line).get("agentVersion").asText()).isEqualTo(agent.version()));
         assertThat(lines.getFirst().rawResponse()).isEqualTo("broken raw");
         assertThat(lines.getFirst().checks().formatPassed()).isFalse();
@@ -126,9 +141,30 @@ class RecallEvaluationRunnerTest {
             var lines = runner.run(List.of(scenes()[1]), 1, "GOOGLE_GENAI", "test-model",
                     RecallEvaluationRunner.EvaluationAgent.from(agent), output);
             assertThat(lines.getFirst().agentVersion()).isEqualTo(agent.version());
-            assertThat(mapper.readTree(Files.readString(output)).get("agentVersion").asText())
+            assertThat(mapper.readTree(Files.readString(outputFor(lines.getFirst().runId()))).get("agentVersion").asText())
                     .isEqualTo(agent.version());
         }
+    }
+
+    @Test
+    void multipleModelsInOneExecutionShareOneFileAndOneRunId() throws Exception {
+        var scene = scenes()[1];
+        var agent = fakeAgent(input -> new LlmRecallAgent.Invocation("ok", RecallAgentResult.noAction(), 1, 10, 5));
+        Path path;
+        UUID runId;
+        try (var run = EvaluationRun.start(directory.resolve("models.jsonl"))) {
+            path = run.output();
+            runId = run.runId();
+            var first = runner.run(List.of(scene), 1, "FAKE", "first-model", agent, run);
+            var second = runner.run(List.of(scene), 1, "FAKE", "second-model", agent, run);
+            assertThat(first.getFirst().runId()).isEqualTo(runId);
+            assertThat(second.getFirst().runId()).isEqualTo(runId);
+            assertThat(second.getFirst().runStartedAt()).isEqualTo(first.getFirst().runStartedAt());
+        }
+        var rows = Files.readAllLines(path).stream().map(mapper::readTree).toList();
+        assertThat(rows).hasSize(2);
+        assertThat(rows).extracting(row -> row.get("model").asText()).containsExactly("first-model", "second-model");
+        assertThat(rows).extracting(row -> row.get("runId").asText()).containsOnly(runId.toString());
     }
 
     @ParameterizedTest
@@ -199,6 +235,21 @@ class RecallEvaluationRunnerTest {
         try (var stream = new ClassPathResource("recall/evaluation/scenes.json").getInputStream()) {
             return mapper.readValue(stream, EvaluationScene[].class);
         }
+    }
+
+    private Path outputFor(UUID runId) throws Exception {
+        try (var paths = Files.walk(directory)) {
+            for (Path path : paths.filter(Files::isRegularFile)
+                    .filter(file -> !file.getParent().equals(directory) && file.toString().endsWith(".jsonl")).toList()) {
+                try (var reader = Files.newBufferedReader(path)) {
+                    String first = reader.readLine();
+                    if (first != null && runId.toString().equals(mapper.readTree(first).path("runId").asText())) {
+                        return path;
+                    }
+                }
+            }
+        }
+        throw new IllegalStateException("Evaluation output not found for " + runId);
     }
 
     private RecallEvaluationRunner.EvaluationAgent fakeAgent(InvocationProvider invocation) {

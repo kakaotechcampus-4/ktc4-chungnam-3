@@ -7,6 +7,8 @@ import com.openai.client.OpenAIClientImpl;
 import com.openai.core.ClientOptions;
 import com.ktc.chungnam3.remembrall.recall.agent.LlmRecallAgent;
 import com.ktc.chungnam3.remembrall.recall.agent.RecallPrompt;
+import com.ktc.chungnam3.remembrall.recall.tool.RecallToolBinding;
+import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.google.genai.GoogleGenAiChatModel;
 import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
@@ -25,6 +27,14 @@ public final class RecallLlmAgentFactory {
     private RecallLlmAgentFactory() {}
 
     public static LlmRecallAgent create(RecallAgentProperties properties, Environment environment) throws IOException {
+        return create(properties, environment, null);
+    }
+
+    public static LlmRecallAgent create(RecallAgentProperties properties, Environment environment, RecallToolBinding tools) throws IOException {
+        var execution = Binder.get(environment).bindOrCreate("recall.agent", RecallAgentExecutionProperties.class);
+        if (execution.toolsEnabled() && tools == null) {
+            throw new IllegalArgumentException("Tool-enabled recall requires the server tool binding");
+        }
         var prompt = RecallPrompt.load(new ClassPathResource("recall/prompts/decision.yaml"));
         String provider = properties.provider().name().toLowerCase(Locale.ROOT).replace('_', '-');
         if (properties.provider() == RecallAgentProperties.Provider.OPENAI) {
@@ -39,7 +49,7 @@ public final class RecallLlmAgentFactory {
                         .temperature(null).frequencyPenalty(null).n(null).store(null).parallelToolCalls(null).build();
                 var model = OpenAiChatModel.builder().openAiClient(sdk).openAiClientAsync(sdk.async())
                         .options(options).build();
-                return new LlmRecallAgent(ChatClient.builder(model).build(), provider, properties.model(), prompt, sdk::close);
+                return new LlmRecallAgent(ChatClient.builder(model).build(), provider, properties.model(), prompt, sdk::close, execution, tools);
             } catch (RuntimeException exception) {
                 sdk.close();
                 throw exception;
@@ -58,9 +68,10 @@ public final class RecallLlmAgentFactory {
         Client sdk = builder.build();
         try {
             var model = GoogleGenAiChatModel.builder().genAiClient(sdk)
-                    .options(GoogleGenAiChatOptions.builder().model(properties.model()).responseMimeType("application/json").build())
+                    .options(GoogleGenAiChatOptions.builder().model(properties.model())
+                            .responseMimeType(execution.toolsEnabled() ? null : "application/json").build())
                     .retryTemplate(new RetryTemplate(RetryPolicy.withMaxRetries(0))).build();
-            return new LlmRecallAgent(ChatClient.builder(model).build(), provider, properties.model(), prompt, model::destroy);
+            return new LlmRecallAgent(ChatClient.builder(model).build(), provider, properties.model(), prompt, model::destroy, execution, tools);
         } catch (RuntimeException exception) {
             sdk.close();
             throw exception;

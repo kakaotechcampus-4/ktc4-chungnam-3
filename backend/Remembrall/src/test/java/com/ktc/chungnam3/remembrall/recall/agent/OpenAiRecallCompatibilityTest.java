@@ -55,7 +55,8 @@ class OpenAiRecallCompatibilityTest {
             try (var stream = new ClassPathResource("recall/evaluation/scenes.json").getInputStream()) {
                 scene = mapper.readValue(stream, EvaluationScene[].class)[1];
             }
-            try (var agent = RecallLlmAgentFactory.create(properties, new MockEnvironment())) {
+            try (var agent = RecallLlmAgentFactory.create(properties,
+                    new MockEnvironment().withProperty("recall.agent.tools-enabled", "false"))) {
                 var result = agent.invoke(scene.input());
                 assertThat(result.result().result()).isEqualTo(com.ktc.chungnam3.remembrall.domain.recallexecution.RecallExecutionResult.NO_ACTION);
                 assertThat(result.inputTokens()).isEqualTo(100);

@@ -4,6 +4,8 @@ import com.ktc.chungnam3.remembrall.domain.trigger.Trigger;
 import com.ktc.chungnam3.remembrall.recall.agent.RecallAgent;
 import com.ktc.chungnam3.remembrall.recall.config.RecallProperties;
 import com.ktc.chungnam3.remembrall.recall.dto.LocationEventRequest;
+import com.ktc.chungnam3.remembrall.recall.trace.RecallTraceCollector;
+import com.ktc.chungnam3.remembrall.recall.trace.RecallTraceService;
 import com.ktc.chungnam3.remembrall.repository.RecallExecutionRepository;
 import com.ktc.chungnam3.remembrall.repository.TriggerRepository;
 import com.ktc.chungnam3.remembrall.repository.MemberRepository;
@@ -39,12 +41,13 @@ public class LocationEventService {
     private final NotificationDeliveryService delivery;
     private final MemberConsentRepository consents;
     private final RecallAgent agent;
+    private final RecallTraceService traces;
 
     public LocationEventService(TriggerRepository triggerRepository, RecallExecutionRepository executionRepository,
                                 RecallExecutionService executionService, RecallProperties properties,
                                 Clock clock, PlatformTransactionManager transactionManager,
                                 MemberRepository members, NotificationDeliveryService delivery,
-                                MemberConsentRepository consents, RecallAgent agent) {
+                                MemberConsentRepository consents, RecallAgent agent, RecallTraceService traces) {
         this.triggerRepository = triggerRepository;
         this.executionRepository = executionRepository;
         this.executionService = executionService;
@@ -54,6 +57,7 @@ public class LocationEventService {
         this.delivery = delivery;
         this.consents = consents;
         this.agent = agent;
+        this.traces = traces;
         this.transactions = new TransactionTemplate(transactionManager);
         this.transactions.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -65,17 +69,29 @@ public class LocationEventService {
             return;
         }
 
+        var trace = traces.start(executionId);
         try {
             if (!executionService.start(executionId)) {
                 return;
             }
-            UUID notificationId = executionService.execute(executionId);
+            UUID notificationId = executionService.execute(executionId, trace);
             if (notificationId != null) {
-                delivery.send(notificationId);
+                var sending = trace.begin(RecallTraceCollector.Step.NOTIFICATION_SEND, "fcm");
+                Throwable sendingError = null;
+                try {
+                    delivery.send(notificationId);
+                } catch (RuntimeException | Error exception) {
+                    sendingError = exception;
+                    throw exception;
+                } finally {
+                    traces.notificationFinished(trace, sending, notificationId, sendingError);
+                }
             }
         } catch (Exception exception) {
             log.warn("Recall agent failed for execution {}", executionId, exception);
             executionService.fail(executionId, AGENT_FAILURE_CODE);
+        } finally {
+            traces.save(trace);
         }
     }
 

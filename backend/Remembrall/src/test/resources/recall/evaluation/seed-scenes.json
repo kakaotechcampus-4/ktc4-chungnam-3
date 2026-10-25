@@ -1,0 +1,160 @@
+[
+  {
+    "id": "weekend-dinner-and-cafe-course",
+    "seed": {
+      "places": {
+        "cafe": {
+          "name": "둔산 골목 로스터리",
+          "address": "대전광역시 서구 둔산동 시청 인근 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.38
+        },
+        "restaurant": {
+          "name": "둔산 작은 식탁",
+          "address": "대전광역시 서구 둔산동 시청 동쪽 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.38335
+        }
+      },
+      "personalSaves": [
+        {
+          "videoId": "eval-seed-weekend-cafe",
+          "title": "둔산에서 찾은 조용한 핸드드립 카페",
+          "summary": "창가 좌석에서 천천히 커피를 마시기 좋은 곳. 흑임자 디저트와 드립 커피를 기억해 두려고 저장했다.",
+          "category": "FOOD",
+          "savedAt": "2026-07-10T12:00:00+09:00",
+          "places": [{ "placeKey": "cafe", "description": "영상에서 핸드드립 커피와 디저트, 카페 분위기를 소개한다." }]
+        },
+        {
+          "videoId": "eval-seed-weekend-meal",
+          "title": "둔산 골목의 따뜻한 저녁 한 끼",
+          "summary": "작은 식당에서 버섯 크림 리소토와 토마토 파스타를 소개한다. 식사 뒤 가까운 카페와 묶어 들러 보고 싶어 저장했다.",
+          "category": "FOOD",
+          "savedAt": "2026-07-12T13:00:00+09:00",
+          "places": [{ "placeKey": "restaurant", "description": "카페에서 약 300m 거리의 식당. 저녁 식사와 카페를 함께 방문하는 맥락이다." }]
+        }
+      ],
+      "contributors": []
+    },
+    "event": { "placeKey": "cafe", "occurredAt": "2026-10-10T18:10:00+09:00" }
+  },
+  {
+    "id": "weekday-eight-am-commute",
+    "seed": {
+      "places": {
+        "cafe": {
+          "name": "둔산 골목 로스터리",
+          "address": "대전광역시 서구 둔산동 시청 인근 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.38
+        },
+        "restaurant": {
+          "name": "둔산 작은 식탁",
+          "address": "대전광역시 서구 둔산동 시청 동쪽 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.38335
+        }
+      },
+      "personalSaves": [
+        {
+          "videoId": "eval-seed-morning-cafe",
+          "title": "둔산에서 찾은 조용한 핸드드립 카페",
+          "summary": "창가 좌석에서 천천히 커피를 마시기 좋은 곳. 흑임자 디저트와 드립 커피를 기억해 두려고 저장했다.",
+          "category": "FOOD",
+          "savedAt": "2026-07-10T12:00:00+09:00",
+          "places": [{ "placeKey": "cafe", "description": "영상에서 핸드드립 커피와 디저트, 카페 분위기를 소개한다." }]
+        },
+        {
+          "videoId": "eval-seed-morning-meal",
+          "title": "둔산 골목의 따뜻한 저녁 한 끼",
+          "summary": "작은 식당에서 버섯 크림 리소토와 토마토 파스타를 소개한다. 식사 뒤 가까운 카페와 묶어 들러 보고 싶어 저장했다.",
+          "category": "FOOD",
+          "savedAt": "2026-07-12T13:00:00+09:00",
+          "places": [{ "placeKey": "restaurant", "description": "카페에서 약 300m 거리의 식당. 저녁 식사와 카페를 함께 방문하는 맥락이다." }]
+        }
+      ],
+      "contributors": []
+    },
+    "event": { "placeKey": "cafe", "occurredAt": "2026-10-12T08:00:00+09:00" }
+  },
+  {
+    "id": "similar-placeless-recipe",
+    "seed": {
+      "places": {
+        "cafe": {
+          "name": "둔산 브런치 로스터리",
+          "address": "대전광역시 서구 둔산동 시청 인근 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.38
+        }
+      },
+      "personalSaves": [
+        {
+          "videoId": "eval-seed-recipe-cafe",
+          "title": "둔산 카페의 프렌치토스트 브런치",
+          "summary": "커피와 프렌치토스트를 함께 즐기는 브런치 카페. 집에서도 재현하고 싶은 메뉴와 분위기를 소개한다.",
+          "category": "FOOD",
+          "savedAt": "2026-07-10T12:00:00+09:00",
+          "places": [{ "placeKey": "cafe", "description": "프렌치토스트와 커피로 브런치를 즐기는 카페가 소개된다." }]
+        },
+        {
+          "videoId": "eval-seed-recipe-video",
+          "title": "집에서 만드는 카페 브런치 프렌치토스트",
+          "summary": "달걀과 우유에 식빵을 적셔 프렌치토스트를 만드는 요리 영상. 커피와 함께 먹는 카페 브런치를 집에서 재현한다. 특정 매장이나 방문 장소는 없다.",
+          "category": "COOKING",
+          "savedAt": "2026-07-15T15:00:00+09:00",
+          "places": []
+        }
+      ],
+      "contributors": []
+    },
+    "event": { "placeKey": "cafe", "occurredAt": "2026-10-11T15:00:00+09:00" },
+    "reference": null,
+    "judgeNotes": null
+  },
+  {
+    "id": "public-supplements-sparse-personal",
+    "seed": {
+      "places": {
+        "cafe": {
+          "name": "둔산 골목 로스터리",
+          "address": "대전광역시 서구 둔산동 시청 인근 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.38
+        },
+        "publicRestaurant": {
+          "name": "둔산 이웃식탁",
+          "address": "대전광역시 서구 둔산동 시청 서쪽 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.37553
+        }
+      },
+      "personalSaves": [
+        {
+          "videoId": "eval-seed-public-origin",
+          "title": "둔산에서 찾은 조용한 핸드드립 카페",
+          "summary": "창가 좌석에서 천천히 커피를 마시기 좋은 곳. 흑임자 디저트와 드립 커피를 기억해 두려고 저장했다.",
+          "category": "FOOD",
+          "savedAt": "2026-07-10T12:00:00+09:00",
+          "places": [{ "placeKey": "cafe", "description": "영상에서 핸드드립 커피와 디저트, 카페 분위기를 소개한다." }]
+        }
+      ],
+      "contributors": [
+        {
+          "agreed": true,
+          "saves": [
+            {
+              "videoId": "eval-seed-public-meal",
+              "title": "둔산 이웃식탁의 파스타 저녁",
+              "summary": "카페 근처에서 따뜻한 파스타와 리소토를 즐기는 식당. 카페와 함께 가볍게 방문하기 좋은 저녁 식사 장소다.",
+              "category": "FOOD",
+              "savedAt": "2026-07-20T18:00:00+09:00",
+              "places": [{ "placeKey": "publicRestaurant", "description": "개인 후보가 적을 때 식사 후보로 참고할 수 있는 약 400m 거리의 식당이다." }]
+            }
+          ]
+        }
+      ]
+    },
+    "event": { "placeKey": "cafe", "occurredAt": "2026-10-10T18:30:00+09:00" }
+  }
+]

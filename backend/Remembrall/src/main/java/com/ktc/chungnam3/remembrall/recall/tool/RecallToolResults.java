@@ -2,6 +2,7 @@ package com.ktc.chungnam3.remembrall.recall.tool;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.ktc.chungnam3.remembrall.recall.agent.ProposalSource;
+import com.ktc.chungnam3.remembrall.recall.weather.WeatherClient;
 
 import java.time.Instant;
 import java.util.List;
@@ -17,17 +18,21 @@ public final class RecallToolResults {
     public record ContentCandidate(UUID contentId, ProposalSource source, String title, String category,
                                    String summary, @JsonInclude(JsonInclude.Include.NON_NULL) Instant savedAt) {}
 
-    public record DetailsResult(List<ContentDetail> contents, List<TargetError> errors, String error) {}
+    public enum SearchSource { PERSONAL, PUBLIC, ALL }
 
-    public record ContentDetail(UUID contentId, ProposalSource source, String title, String summary, String category,
-                                List<ContentPlace> places, @JsonInclude(JsonInclude.Include.NON_NULL) Instant savedAt) {}
+    public record VisitConditionsResult(List<PlaceConditions> places, WeatherClient.Weather weather,
+                                        List<TargetError> errors, String error) {}
 
-    public record ContentPlace(UUID placeId, String name, String description, double distanceMeters) {}
+    public record PlaceConditions(UUID placeId, String name, List<OperatingCondition> operatingConditions,
+                                  RecentProposals recentProposals) {}
 
-    public record DistancesResult(List<DistancePair> pairs, List<TargetError> errors, String error) {}
+    public record OperatingCondition(UUID contentId, ProposalSource source, String title, String summary,
+                                     String description, Instant referenceAt, String referenceTimeBasis) {}
 
-    public record DistancePair(UUID fromPlaceId, UUID toPlaceId, double straightLineMeters,
-                               double estimatedWalkingMinutes, boolean walkingTimeEstimated) {}
+    public record RecentProposals(String source, Instant referenceAt, Instant since,
+                                   boolean hasRecentProposal, List<RecentProposal> notifications) {}
+
+    public record RecentProposal(Instant sentAt, boolean opened, Instant openedAt) {}
 
     public record TargetError(UUID id, String error) {}
 }
