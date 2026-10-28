@@ -1,0 +1,34 @@
+meta {
+  name: AUTH-05 재로그인 전 동의 상태 저장 - 200
+  type: http
+  seq: 23
+}
+
+get {
+  url: {{baseUrl}}/api/me/consents
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{sessionTokenA}}
+}
+
+script:pre-request {
+  if (!bru.getVar("sessionToken")) { throw new Error("컬렉션을 처음부터 실행하세요: sessionToken가 없습니다."); }
+  if (!bru.getVar("sessionTokenA")) { throw new Error("컬렉션을 처음부터 실행하세요: sessionTokenA가 없습니다."); }
+  if (!bru.getVar("sessionTokenB")) { throw new Error("컬렉션을 처음부터 실행하세요: sessionTokenB가 없습니다."); }
+}
+
+tests {
+  test("재로그인 전 조회", function () { expect(res.status).to.equal(200); });
+  function canonical(items) {
+    return items.map(function (item) {
+      return { consentType: item.consentType, agreed: item.agreed, termsVersion: item.termsVersion,
+        currentTermsVersion: item.currentTermsVersion,
+        agreedAt: item.agreedAt === null ? null : Date.parse(item.agreedAt),
+        withdrawnAt: item.withdrawnAt === null ? null : Date.parse(item.withdrawnAt) };
+    }).sort(function (a, b) { return a.consentType.localeCompare(b.consentType); });
+  }
+  bru.setVar("consentSnapshotA", JSON.stringify(canonical(res.body)));
+}

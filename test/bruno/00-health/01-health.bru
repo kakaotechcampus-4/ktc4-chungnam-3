@@ -1,0 +1,16 @@
+meta {
+  name: HEALTH-01 서버 상태 조회 - 200
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/actuator/health
+  body: none
+  auth: none
+}
+
+tests {
+  test("HTTP 200", function () { expect(res.status).to.equal(200); });
+  test("서버 상태 UP", function () { expect(res.body.status).to.equal("UP"); });
+}

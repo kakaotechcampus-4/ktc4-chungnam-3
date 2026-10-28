@@ -1,0 +1,36 @@
+meta {
+  name: CON-05 잘못된 약관 버전 - 400
+  type: http
+  seq: 8
+}
+
+put {
+  url: {{baseUrl}}/api/me/consents/LOCATION_BASED_SERVICE
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "agreed": true,
+    "termsVersion": "{{invalidTermsVersion}}"
+  }
+}
+
+script:pre-request {
+  if (!bru.getVar("sessionToken")) { throw new Error("먼저 02-auth-session의 게스트 로그인을 실행하세요."); }
+  if (!bru.getVar("locationTermsVersion")) { throw new Error("03-consent 폴더를 01번부터 실행하세요."); }
+  bru.setVar("invalidTermsVersion", bru.getVar("locationTermsVersion") + "-invalid");
+}
+
+tests {
+  test("잘못된 버전 거절", function () {
+    expect(res.status).to.equal(400);
+    expect(res.body.code).to.equal("INVALID_REQUEST");
+    expect(res.body.message).to.be.a("string").and.not.empty;
+  });
+}
