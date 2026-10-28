@@ -1,0 +1,41 @@
+meta {
+  name: CON-06 회원 A 동의 기준 상태 저장 - 200
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/me/consents
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{sessionTokenA}}
+}
+
+script:pre-request {
+  if (!bru.getVar("sessionToken")) { throw new Error("컬렉션을 처음부터 실행하세요: sessionToken가 없습니다."); }
+  if (!bru.getVar("sessionTokenA")) { throw new Error("컬렉션을 처음부터 실행하세요: sessionTokenA가 없습니다."); }
+  if (!bru.getVar("sessionTokenB")) { throw new Error("컬렉션을 처음부터 실행하세요: sessionTokenB가 없습니다."); }
+}
+
+tests {
+  test("회원 A는 위치만 동의한 상태", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body).to.be.an("array").with.lengthOf(2);
+    const location = res.body.find(function (item) { return item.consentType === "LOCATION_BASED_SERVICE"; });
+    const publicConsent = res.body.find(function (item) { return item.consentType === "PUBLIC_CANDIDATE_CONTRIBUTION"; });
+    expect(location.agreed).to.equal(true);
+    expect(publicConsent.agreed).to.equal(false);
+    function canonical(items) {
+    return items.map(function (item) {
+      return { consentType: item.consentType, agreed: item.agreed, termsVersion: item.termsVersion,
+        currentTermsVersion: item.currentTermsVersion,
+        agreedAt: item.agreedAt === null ? null : Date.parse(item.agreedAt),
+        withdrawnAt: item.withdrawnAt === null ? null : Date.parse(item.withdrawnAt) };
+    }).sort(function (a, b) { return a.consentType.localeCompare(b.consentType); });
+  }
+    bru.setVar("consentSnapshotA", JSON.stringify(canonical(res.body)));
+  });
+}

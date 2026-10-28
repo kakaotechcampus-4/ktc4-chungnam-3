@@ -1,0 +1,29 @@
+meta {
+  name: CON-03 철회 후 재조회 - 200
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/me/consents
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("sessionToken")) { throw new Error("먼저 02-auth-session의 게스트 로그인을 실행하세요."); }
+  if (!bru.getVar("locationTermsVersion")) { throw new Error("03-consent 폴더를 01번부터 실행하세요."); }
+}
+
+tests {
+  test("HTTP 200", function () { expect(res.status).to.equal(200); });
+  test("철회 상태가 DB에 유지됨", function () {
+    const location = res.body.find(function (item) { return item.consentType === "LOCATION_BASED_SERVICE"; });
+    expect(location.agreed).to.equal(false);
+    expect(location.agreedAt).to.equal(bru.getVar("firstAgreedAt"));
+    expect(Number.isFinite(Date.parse(location.withdrawnAt))).to.equal(true);
+    const publicConsent = res.body.find(function (item) { return item.consentType === "PUBLIC_CANDIDATE_CONTRIBUTION"; });
+  expect(publicConsent.agreed).to.equal(false);
+  expect(publicConsent.agreedAt).to.equal(null);
+  });
+}

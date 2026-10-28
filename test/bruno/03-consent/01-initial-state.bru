@@ -1,0 +1,32 @@
+meta {
+  name: CON-01 신규 회원 동의 조회 - 200
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/me/consents
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("sessionToken")) { throw new Error("먼저 02-auth-session의 게스트 로그인을 실행하세요."); }
+}
+
+tests {
+  test("HTTP 200", function () { expect(res.status).to.equal(200); });
+  test("두 유형 모두 미동의이며 이력 없음", function () {
+    expect(res.body).to.be.an("array").with.lengthOf(2);
+    expect(res.body.map(function (item) { return item.consentType; })).to.have.members(["PUBLIC_CANDIDATE_CONTRIBUTION", "LOCATION_BASED_SERVICE"]);
+    res.body.forEach(function (item) {
+      expect(item.agreed).to.equal(false);
+      expect(item.termsVersion).to.equal(null);
+      expect(item.agreedAt).to.equal(null);
+      expect(item.withdrawnAt).to.equal(null);
+      expect(item.currentTermsVersion).to.be.a("string").and.not.empty;
+    });
+    const location = res.body.find(function (item) { return item.consentType === "LOCATION_BASED_SERVICE"; });
+    bru.setVar("locationTermsVersion", location.currentTermsVersion);
+  });
+}
