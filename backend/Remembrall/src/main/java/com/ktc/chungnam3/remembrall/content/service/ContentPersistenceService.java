@@ -142,6 +142,34 @@ public class ContentPersistenceService {
         }));
     }
 
+    /**
+     * 되묻기 답변으로 확정된 장소 하나를 반영한다 - {@link #applyOutcome}과 달리 content의
+     * analysis_status/summary 등은 건드리지 않는다(이미 SUCCESS/PARTIAL로 끝난 분석에 뒤늦게 장소
+     * 하나만 추가하는 것이라 재사용하면 안 됨 - {@code ContentRepository.applyOutcome}이
+     * analysis_status='ANALYZING'로 게이트돼 있어 재호출해도 no-op될 뿐이라 애초에 재사용이 불가능하다).
+     * Place/ContentPlace/Trigger 생성은 {@link #applyOutcome}과 같은 {@link #savePlaceAndLink}/
+     * {@link #createTriggers}를 그대로 재사용한다.
+     */
+    public boolean addConfirmedPlace(UUID contentId, AnalysisOutcome.PlaceResult placeResult) {
+        Objects.requireNonNull(contentId, "contentId");
+        Objects.requireNonNull(placeResult, "placeResult");
+
+        return Boolean.TRUE.equals(transactionTemplate.execute(transaction -> {
+            if (contentRepository.findIdForUpdate(contentId).isEmpty()) {
+                return false;
+            }
+            Instant now = clock.instant();
+            List<UUID> memberIds = personalSaveRepository.findMemberIdsByContentId(contentId)
+                    .stream().sorted().toList();
+            memberIds.forEach(this::lockMember);
+
+            savePlaceAndLink(contentId, placeResult, now);
+            List<UUID> placeIds = contentPlaceRepository.findPlaceIdsByContentId(contentId);
+            memberIds.forEach(memberId -> createTriggers(memberId, placeIds, now));
+            return true;
+        }));
+    }
+
     private static String vectorLiteral(float[] vector) {
         StringBuilder literal = new StringBuilder("[");
         for (int i = 0; i < vector.length; i++) {

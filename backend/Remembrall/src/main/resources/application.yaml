@@ -129,3 +129,12 @@ vworld:
     key: ${vworld.api.key:}
   connect-timeout-ms: 2000
   read-timeout-ms: 3000
+
+# 한국관광공사 TourAPI(국문관광정보 서비스_GW) - 지점명 없는 일반 장소(공원·관광지 등) 되묻기 완화
+# (TourApiClient, 2026-10-28). serviceKey는 dataportal.api.key가 계정 단위로 공용이라 그대로 통함
+# (실측 확인) - tourapi.api.key는 비워둬도 됨.
+tourapi:
+  api:
+    key: ${tourapi.api.key:${dataportal.api.key:}}
+  connect-timeout-ms: 2000
+  read-timeout-ms: 3000
