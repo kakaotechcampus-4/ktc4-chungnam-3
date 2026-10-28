@@ -4,6 +4,8 @@ import com.ktc.chungnam3.remembrall.domain.trigger.Trigger;
 import com.ktc.chungnam3.remembrall.recall.agent.RecallAgent;
 import com.ktc.chungnam3.remembrall.recall.config.RecallProperties;
 import com.ktc.chungnam3.remembrall.recall.dto.LocationEventRequest;
+import com.ktc.chungnam3.remembrall.recall.trace.RecallTraceCollector;
+import com.ktc.chungnam3.remembrall.recall.trace.RecallTraceService;
 import com.ktc.chungnam3.remembrall.repository.RecallExecutionRepository;
 import com.ktc.chungnam3.remembrall.repository.TriggerRepository;
 import com.ktc.chungnam3.remembrall.repository.MemberRepository;
@@ -32,28 +34,30 @@ public class LocationEventService {
     private final TriggerRepository triggerRepository;
     private final RecallExecutionRepository executionRepository;
     private final RecallExecutionService executionService;
-    private final RecallAgent agent;
     private final RecallProperties properties;
     private final Clock clock;
     private final TransactionTemplate transactions;
     private final MemberRepository members;
     private final NotificationDeliveryService delivery;
     private final MemberConsentRepository consents;
+    private final RecallAgent agent;
+    private final RecallTraceService traces;
 
     public LocationEventService(TriggerRepository triggerRepository, RecallExecutionRepository executionRepository,
-                                RecallExecutionService executionService, RecallAgent agent, RecallProperties properties,
+                                RecallExecutionService executionService, RecallProperties properties,
                                 Clock clock, PlatformTransactionManager transactionManager,
                                 MemberRepository members, NotificationDeliveryService delivery,
-                                MemberConsentRepository consents) {
+                                MemberConsentRepository consents, RecallAgent agent, RecallTraceService traces) {
         this.triggerRepository = triggerRepository;
         this.executionRepository = executionRepository;
         this.executionService = executionService;
-        this.agent = agent;
         this.properties = properties;
         this.clock = clock;
         this.members = members;
         this.delivery = delivery;
         this.consents = consents;
+        this.agent = agent;
+        this.traces = traces;
         this.transactions = new TransactionTemplate(transactionManager);
         this.transactions.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -65,17 +69,29 @@ public class LocationEventService {
             return;
         }
 
+        var trace = traces.start(executionId);
         try {
             if (!executionService.start(executionId)) {
                 return;
             }
-            UUID notificationId = executionService.complete(executionId, agent.execute(executionId, event));
+            UUID notificationId = executionService.execute(executionId, trace);
             if (notificationId != null) {
-                delivery.send(notificationId);
+                var sending = trace.begin(RecallTraceCollector.Step.NOTIFICATION_SEND, "fcm");
+                Throwable sendingError = null;
+                try {
+                    delivery.send(notificationId);
+                } catch (RuntimeException | Error exception) {
+                    sendingError = exception;
+                    throw exception;
+                } finally {
+                    traces.notificationFinished(trace, sending, notificationId, sendingError);
+                }
             }
         } catch (Exception exception) {
             log.warn("Recall agent failed for execution {}", executionId, exception);
             executionService.fail(executionId, AGENT_FAILURE_CODE);
+        } finally {
+            traces.save(trace);
         }
     }
 
@@ -105,7 +121,7 @@ public class LocationEventService {
 
         UUID executionId = UUID.randomUUID();
         int inserted = executionRepository.insertPendingIfAbsent(
-                executionId, trigger.getId(), event.triggerEventId(), properties.agentVersion(), event.eventOccurredAt(), now);
+                executionId, trigger.getId(), event.triggerEventId(), agent.version(), event.eventOccurredAt(), now);
         return inserted == 1 ? executionId : null;
     }
 }

@@ -1,7 +1,5 @@
 package com.ktc.chungnam3.remembrall.recall.agent;
 
-import com.ktc.chungnam3.remembrall.recall.dto.LocationEventRequest;
-
 import java.util.UUID;
 
 public class StubRecallAgent implements RecallAgent {
@@ -12,15 +10,16 @@ public class StubRecallAgent implements RecallAgent {
     }
 
     public StubRecallAgent(RecallAgentResult result) {
-        if (result.proposalPayload() != null && result.proposalPayload().items().stream()
-                .anyMatch(item -> item.source() != ProposalSource.PERSONAL)) {
-            throw new IllegalArgumentException("Stub proposals must only contain PERSONAL items");
-        }
         this.result = result;
     }
 
     @Override
-    public RecallAgentResult execute(UUID executionId, LocationEventRequest event) {
+    public String version() {
+        return "stub-v1";
+    }
+
+    @Override
+    public RecallAgentResult execute(UUID executionId, RecallAgentInput input) {
         return result;
     }
 }

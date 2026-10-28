@@ -1,7 +1,6 @@
 package com.ktc.chungnam3.remembrall.recall.config;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Positive;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.validation.annotation.Validated;
@@ -13,8 +12,8 @@ import java.util.Objects;
 @ConfigurationProperties(prefix = "recall")
 public record RecallProperties(
         @DefaultValue("30m") Duration maxEventAge,
-        @DefaultValue("10m") Duration memberCooldown,
-        @DefaultValue("stub-v1") @NotBlank @Size(max = 50) String agentVersion
+        @DefaultValue("2h") Duration memberCooldown,
+        @DefaultValue("30") @Positive double maxCourseWalkingMinutes
 ) {
     public RecallProperties {
         Objects.requireNonNull(maxEventAge, "maxEventAge");
@@ -24,6 +23,9 @@ public record RecallProperties(
         }
         if (memberCooldown.isNegative()) {
             throw new IllegalArgumentException("memberCooldown must not be negative");
+        }
+        if (!Double.isFinite(maxCourseWalkingMinutes) || maxCourseWalkingMinutes <= 0) {
+            throw new IllegalArgumentException("maxCourseWalkingMinutes must be finite and positive");
         }
     }
 }

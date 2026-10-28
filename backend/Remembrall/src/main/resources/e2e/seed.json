@@ -1,0 +1,92 @@
+[
+  {
+    "videoId": "e2e-seed-start-cafe",
+    "title": "둔산 느린아침 카페의 프렌치토스트 브런치",
+    "summary": "대전 둔산동의 조용한 카페에서 커피와 프렌치토스트 브런치를 즐긴다. 주변 식당에서 점심을 먹고 산책하기 좋은 출발점이다.",
+    "category": "카페",
+    "savedAgo": "P3M",
+    "departure": true,
+    "publicContribution": false,
+    "place": {
+      "name": "[E2E] 둔산 느린아침 카페",
+      "address": "대전광역시 서구 둔산동 시청 인근 (가상 시드)",
+      "latitude": 36.351,
+      "longitude": 127.38,
+      "description": "커피와 프렌치토스트를 즐기는 브런치 카페. 세 달 전에 저장해 두었던 장소다."
+    }
+  },
+  {
+    "videoId": "e2e-seed-personal-restaurant",
+    "title": "둔산 한그릇 식당의 따뜻한 점심",
+    "summary": "브런치 카페에서 동쪽으로 약 300m 거리에 있는 한식 식당. 점심으로 제육 정식과 된장찌개를 먹고 주변을 걸어보기 좋다.",
+    "category": "식당",
+    "savedAgo": "P14D",
+    "departure": false,
+    "publicContribution": false,
+    "place": {
+      "name": "[E2E] 둔산 한그릇 식당",
+      "address": "대전광역시 서구 둔산동 시청 동쪽 (가상 시드)",
+      "latitude": 36.351,
+      "longitude": 127.38335,
+      "description": "출발 카페에서 약 300m 떨어진 점심 식당. 든든한 한식 정식이 소개된다."
+    }
+  },
+  {
+    "videoId": "e2e-seed-second-cafe",
+    "title": "둔산 오후빛 카페의 핸드드립",
+    "summary": "출발 카페 북쪽 약 500m의 카페에서 핸드드립 커피와 작은 디저트를 즐긴다. 식사 후 잠깐 쉬어가기 좋은 곳이다.",
+    "category": "카페",
+    "savedAgo": "P7D",
+    "departure": false,
+    "publicContribution": false,
+    "place": {
+      "name": "[E2E] 둔산 오후빛 카페",
+      "address": "대전광역시 서구 둔산동 시청 북쪽 (가상 시드)",
+      "latitude": 36.3555,
+      "longitude": 127.38,
+      "description": "출발점에서 약 500m. 식사 뒤 핸드드립 커피를 마시며 쉬는 맥락으로 소개된다."
+    }
+  },
+  {
+    "videoId": "e2e-seed-walking-trail",
+    "title": "둔산 나무그늘 산책로 한 바퀴",
+    "summary": "카페에서 남쪽 약 900m 떨어진 녹지 산책로. 커피와 식사를 즐긴 뒤 나무 그늘 아래에서 천천히 걸을 수 있는 코스다.",
+    "category": "산책",
+    "savedAgo": "P21D",
+    "departure": false,
+    "publicContribution": false,
+    "place": {
+      "name": "[E2E] 둔산 나무그늘 산책로",
+      "address": "대전광역시 서구 둔산동 남쪽 녹지 인근 (가상 시드)",
+      "latitude": 36.3429,
+      "longitude": 127.38,
+      "description": "출발점에서 약 900m의 산책 코스. 카페와 식사를 마치고 걷는 맥락이다."
+    }
+  },
+  {
+    "videoId": "e2e-seed-cooking-video",
+    "title": "집에서 만드는 카페 브런치 프렌치토스트",
+    "summary": "달걀과 우유에 식빵을 적셔 프렌치토스트를 만드는 요리 영상. 커피와 함께 먹는 카페 브런치를 집에서 재현한다. 특정 매장이나 방문 장소는 없다.",
+    "category": "요리",
+    "savedAgo": "P5D",
+    "departure": false,
+    "publicContribution": false,
+    "place": null
+  },
+  {
+    "videoId": "e2e-seed-public-restaurant",
+    "title": "둔산 이웃식탁의 작은 파스타 점심",
+    "summary": "출발 카페에서 서쪽 약 400m의 파스타 식당. 카페를 방문한 뒤 가볍게 점심을 즐기기 좋은 주변 맛집이다.",
+    "category": "식당",
+    "savedAgo": "P10D",
+    "departure": false,
+    "publicContribution": true,
+    "place": {
+      "name": "[E2E] 둔산 이웃식탁",
+      "address": "대전광역시 서구 둔산동 시청 서쪽 (가상 시드)",
+      "latitude": 36.351,
+      "longitude": 127.37553,
+      "description": "공용 후보 제공에 동의한 별도 회원이 저장한 약 400m 거리의 파스타 식당이다."
+    }
+  }
+]
