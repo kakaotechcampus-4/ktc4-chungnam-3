@@ -6,10 +6,10 @@ import com.ktc.chungnam3.remembrall.domain.memberconsent.MemberConsent;
 import java.time.Instant;
 
 public record ConsentResponse(ConsentType consentType, boolean agreed, String termsVersion,
-                              Instant agreedAt, Instant withdrawnAt) {
-    public static ConsentResponse from(ConsentType type, MemberConsent consent) {
-        return consent == null ? new ConsentResponse(type, false, null, null, null)
+                              String currentTermsVersion, Instant agreedAt, Instant withdrawnAt) {
+    public static ConsentResponse from(ConsentType type, MemberConsent consent, String currentTermsVersion) {
+        return consent == null ? new ConsentResponse(type, false, null, currentTermsVersion, null, null)
                 : new ConsentResponse(type, consent.getWithdrawnAt() == null, consent.getTermsVersion(),
-                        consent.getAgreedAt(), consent.getWithdrawnAt());
+                        currentTermsVersion, consent.getAgreedAt(), consent.getWithdrawnAt());
     }
 }
