@@ -1,3 +1,11 @@
+spring:
+  ai:
+    google:
+      genai:
+        api-key: ${gemini.api.key:}
+  config:
+    import: optional:file:./secrets.properties
+
 kakao:
   app-id: 1
 
