@@ -17,7 +17,6 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.content.Media;
-import org.springframework.ai.google.genai.GoogleGenAiChatModel;
 import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
 import org.springframework.stereotype.Component;
 import org.springframework.util.MimeType;
@@ -45,9 +44,11 @@ import java.util.Map;
 public class VideoContentAnalyzer {
 
     // TODO: 협의 필요 - 실제 사용할 모델. GEMINI_3_6_FLASH는 Vertex AI(us-central1)에서 404로 확인돼
-    //  아직 Vertex엔 안 풀린 것으로 보임(2026-10-06 실측). 3.x 계열이 전반적으로 preview라 안 될 가능성이
-    //  있어, 안정적으로 되는 2.5 Flash로 우선 내림.
-    private static final GoogleGenAiChatModel.ChatModel MODEL = GoogleGenAiChatModel.ChatModel.GEMINI_3_6_FLASH;
+    //  안정적으로 되는 2.5 Flash로 한 번 내렸었는데(01a4061), 2026-10-07 재확인 결과 2.5-flash가 신규
+    //  키/프로젝트에는 "no longer available to new users"로 또 막혀있어 gemini-3.8-flash로 다시 올림.
+    //  SDK(spring-ai-google-genai 2.0.1)의 ChatModel enum에 3.8 상수가 아직 없어 문자열로 직접 지정 -
+    //  ChatOptions.Builder가 상속하는 model(String) 오버로드로 지원됨.
+    private static final String MODEL = "gemini-3.8-flash";
 
     private static final String ANALYSIS_VERSION = "v1";
     private static final String PROMPT_VERSION = "v5";
@@ -179,7 +180,7 @@ public class VideoContentAnalyzer {
                 .orElseThrow(() -> new IllegalArgumentException(
                         "유튜브 URL에서 videoId를 찾을 수 없음: " + youtubeUrl));
 
-        AnalysisMetadataDto metadata = new AnalysisMetadataDto(ANALYSIS_VERSION, MODEL.getValue(), PROMPT_VERSION);
+        AnalysisMetadataDto metadata = new AnalysisMetadataDto(ANALYSIS_VERSION, MODEL, PROMPT_VERSION);
 
         YoutubeMetadataClient.VideoInfo videoInfo;
         List<String> authorComments;
