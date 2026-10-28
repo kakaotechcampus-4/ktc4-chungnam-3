@@ -53,6 +53,7 @@ class SavePipelineServiceTest {
                 (lon, lat, radiusMeters) -> List.of(),
                 (name, branch, region) -> List.of(),
                 query -> Optional.empty(),
+                name -> List.of(),
                 1000);
     }
 
