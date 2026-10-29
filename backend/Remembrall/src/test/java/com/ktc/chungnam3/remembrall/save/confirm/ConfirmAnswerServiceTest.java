@@ -85,14 +85,17 @@ class ConfirmAnswerServiceTest {
 
     private ConfirmAnswerService serviceWithKakao(KakaoPlaceLookup kakaoPlaceLookup) {
         return new ConfirmAnswerService(confirmCandidateRepository, contentPersistenceService,
-                kakaoPlaceLookup, objectMapper, Clock.fixed(NOW, java.time.ZoneOffset.UTC));
+                personalSaveRepository, kakaoPlaceLookup, objectMapper, Clock.fixed(NOW, java.time.ZoneOffset.UTC));
     }
 
-    private UUID createMemberAndContent(String videoId) {
+    private record Saved(UUID memberId, UUID contentId, UUID personalSaveId) {
+    }
+
+    private Saved createMemberAndContent(String videoId) {
         UUID memberId = memberRepository.save(Member.create(
                 AuthProvider.KAKAO, UUID.randomUUID().toString(), Instant.now())).getId();
         ContentSaveClaim claim = contentPersistenceService.saveAndClaim(memberId, videoId);
-        return claim.contentId();
+        return new Saved(memberId, claim.contentId(), claim.personalSaveId());
     }
 
     private void insertPendingCandidate(UUID contentId, String candidateId) throws Exception {
@@ -115,7 +118,7 @@ class ConfirmAnswerServiceTest {
         ConfirmAnswerService service = serviceWithKakao(
                 (name, branch, lat, lon) -> Optional.of("kakao-place-id"));
 
-        service.answer(claim.contentId(), "p1", "p1-2");
+        service.answer(memberId, claim.personalSaveId(), "p1", "p1-2");
 
         assertThat(contentPlaceRepository.findAllByContent_Id(claim.contentId())).hasSize(1);
         var place = placeRepository.findByVerificationProviderAndVerificationPlaceId(
@@ -130,23 +133,23 @@ class ConfirmAnswerServiceTest {
 
     @Test
     void selectedOptionId가_null이면_장소를_만들지_않고_ANSWERED로만_닫는다() throws Exception {
-        UUID contentId = createMemberAndContent("video-2");
-        insertPendingCandidate(contentId, "p1");
+        Saved saved = createMemberAndContent("video-2");
+        insertPendingCandidate(saved.contentId(), "p1");
         ConfirmAnswerService service = serviceWithKakao((name, branch, lat, lon) -> Optional.of("unused"));
 
-        service.answer(contentId, "p1", null);
+        service.answer(saved.memberId(), saved.personalSaveId(), "p1", null);
 
-        assertThat(contentPlaceRepository.findAllByContent_Id(contentId)).isEmpty();
-        assertThat(confirmCandidateRepository.findByContent_IdAndCandidateId(contentId, "p1")
+        assertThat(contentPlaceRepository.findAllByContent_Id(saved.contentId())).isEmpty();
+        assertThat(confirmCandidateRepository.findByContent_IdAndCandidateId(saved.contentId(), "p1")
                 .orElseThrow().getStatus()).isEqualTo(ConfirmCandidateStatus.ANSWERED);
     }
 
     @Test
     void 존재하지_않는_candidateId면_NOT_FOUND다() {
-        UUID contentId = createMemberAndContent("video-3");
+        Saved saved = createMemberAndContent("video-3");
         ConfirmAnswerService service = serviceWithKakao((name, branch, lat, lon) -> Optional.of("unused"));
 
-        assertThatThrownBy(() -> service.answer(contentId, "no-such-candidate", null))
+        assertThatThrownBy(() -> service.answer(saved.memberId(), saved.personalSaveId(), "no-such-candidate", null))
                 .isInstanceOf(ApiException.class)
                 .extracting(e -> ((ApiException) e).getErrorCode())
                 .isEqualTo(ErrorCode.NOT_FOUND);
@@ -154,11 +157,11 @@ class ConfirmAnswerServiceTest {
 
     @Test
     void 잘못된_selectedOptionId면_INVALID_REQUEST다() throws Exception {
-        UUID contentId = createMemberAndContent("video-4");
-        insertPendingCandidate(contentId, "p1");
+        Saved saved = createMemberAndContent("video-4");
+        insertPendingCandidate(saved.contentId(), "p1");
         ConfirmAnswerService service = serviceWithKakao((name, branch, lat, lon) -> Optional.of("unused"));
 
-        assertThatThrownBy(() -> service.answer(contentId, "p1", "p1-999"))
+        assertThatThrownBy(() -> service.answer(saved.memberId(), saved.personalSaveId(), "p1", "p1-999"))
                 .isInstanceOf(ApiException.class)
                 .extracting(e -> ((ApiException) e).getErrorCode())
                 .isEqualTo(ErrorCode.INVALID_REQUEST);
@@ -166,27 +169,42 @@ class ConfirmAnswerServiceTest {
 
     @Test
     void 카카오가_장소를_못_찾으면_NOT_FOUND다() throws Exception {
-        UUID contentId = createMemberAndContent("video-5");
-        insertPendingCandidate(contentId, "p1");
+        Saved saved = createMemberAndContent("video-5");
+        insertPendingCandidate(saved.contentId(), "p1");
         ConfirmAnswerService service = serviceWithKakao((name, branch, lat, lon) -> Optional.empty());
 
-        assertThatThrownBy(() -> service.answer(contentId, "p1", "p1-1"))
+        assertThatThrownBy(() -> service.answer(saved.memberId(), saved.personalSaveId(), "p1", "p1-1"))
                 .isInstanceOf(ApiException.class)
                 .extracting(e -> ((ApiException) e).getErrorCode())
                 .isEqualTo(ErrorCode.NOT_FOUND);
-        assertThat(confirmCandidateRepository.findPendingByContentId(contentId)).hasSize(1);
+        assertThat(confirmCandidateRepository.findPendingByContentId(saved.contentId())).hasSize(1);
     }
 
     @Test
     void 이미_ANSWERED인_후보를_다시_답하면_NOT_FOUND다() throws Exception {
-        UUID contentId = createMemberAndContent("video-6");
-        insertPendingCandidate(contentId, "p1");
+        Saved saved = createMemberAndContent("video-6");
+        insertPendingCandidate(saved.contentId(), "p1");
         ConfirmAnswerService service = serviceWithKakao((name, branch, lat, lon) -> Optional.of("kakao-id"));
-        service.answer(contentId, "p1", null);
+        service.answer(saved.memberId(), saved.personalSaveId(), "p1", null);
 
-        assertThatThrownBy(() -> service.answer(contentId, "p1", null))
+        assertThatThrownBy(() -> service.answer(saved.memberId(), saved.personalSaveId(), "p1", null))
                 .isInstanceOf(ApiException.class)
                 .extracting(e -> ((ApiException) e).getErrorCode())
                 .isEqualTo(ErrorCode.NOT_FOUND);
+    }
+
+    @Test
+    void 남의_personalSaveId로는_답변할_수_없다() throws Exception {
+        Saved owner = createMemberAndContent("video-7");
+        insertPendingCandidate(owner.contentId(), "p1");
+        UUID stranger = memberRepository.save(Member.create(
+                AuthProvider.KAKAO, UUID.randomUUID().toString(), Instant.now())).getId();
+        ConfirmAnswerService service = serviceWithKakao((name, branch, lat, lon) -> Optional.of("kakao-id"));
+
+        assertThatThrownBy(() -> service.answer(stranger, owner.personalSaveId(), "p1", "p1-1"))
+                .isInstanceOf(ApiException.class)
+                .extracting(e -> ((ApiException) e).getErrorCode())
+                .isEqualTo(ErrorCode.NOT_FOUND);
+        assertThat(confirmCandidateRepository.findPendingByContentId(owner.contentId())).hasSize(1);
     }
 }
