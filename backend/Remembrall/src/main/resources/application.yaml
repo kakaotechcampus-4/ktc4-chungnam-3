@@ -135,6 +135,8 @@ vworld:
 # (실측 확인) - tourapi.api.key는 비워둬도 됨.
 tourapi:
   api:
-    key: ${tourapi.api.key:${dataportal.api.key:}}
+    # tourapi.api.key 자기참조는 순환 플레이스홀더라 secrets.properties에 그 키가 없으면 그대로 터짐
+    # (실측 확인, 2026-10-29) - dataportal.api.key만 직접 참조하도록 수정.
+    key: ${dataportal.api.key:}
   connect-timeout-ms: 2000
   read-timeout-ms: 3000

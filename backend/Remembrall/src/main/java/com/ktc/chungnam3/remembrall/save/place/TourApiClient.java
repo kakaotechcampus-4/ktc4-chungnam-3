@@ -42,7 +42,10 @@ public class TourApiClient implements GeneralPlaceAnchorLookup {
     private final String serviceKey;
 
     public TourApiClient(
-            @Value("${tourapi.api.key}") String serviceKey,
+            // src/test/resources/application.yaml가 메인 yaml을 완전히 섀도잉해서(tourapi: 섹션 자체가
+            // 없음) 테스트 컨텍스트에선 tourapi.api.key가 아예 존재하지 않는다 - 기본값을 yaml이 아니라
+            // 여기 @Value 표현식에 직접 둬서 어느 yaml이 로드되든 일관되게 동작하게 한다(실측 확인, 2026-10-29).
+            @Value("${tourapi.api.key:${dataportal.api.key:}}") String serviceKey,
             @Value("${tourapi.connect-timeout-ms:2000}") int connectTimeoutMs,
             @Value("${tourapi.read-timeout-ms:3000}") int readTimeoutMs,
             ObjectMapper objectMapper) {

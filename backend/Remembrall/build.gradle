@@ -63,6 +63,11 @@ dependencyManagement {
 }
 
 tasks.named('test') {
+	// Vertex AI 임베딩(spring.ai.google.genai.embedding.*)이 project-id/location만으론 안 되고
+	// GCP ADC 인증까지 필요하다 - secrets.properties와 같은 패턴으로, 레포에 커밋 안 되는 로컬
+	// serviceAccount.json을 상대경로로 연결한다(실측 확인, 2026-10-29). 파일이 없는 개발자는
+	// 기존과 동일하게 실패하므로 회귀 없음.
+	environment 'GOOGLE_APPLICATION_CREDENTIALS', "${projectDir}/serviceAccount.json"
 	useJUnitPlatform {
 		excludeTags 'live'
 	}

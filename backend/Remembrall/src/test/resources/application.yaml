@@ -3,6 +3,19 @@ spring:
     google:
       genai:
         api-key: ${gemini.api.key:}
+        # GoogleGenAiEmbeddingConnectionAutoConfiguration이 project-id를 무조건 요구해서
+        # (Assert.hasText) 비어있으면 컨텍스트 기동 자체가 깨진다 - secrets.properties의
+        # gemini.vertex-ai.project-id가 "존재하지만 빈 문자열"이라 ${a:b} 기본값 문법이 발동을
+        # 안 해서(키가 아예 없을 때만 기본값 적용) 폴백이 안 먹혔다(실측 확인, 2026-10-29). 테스트에서
+        # 실제 임베딩 API를 호출하진 않으니 고정 더미값을 직접 박는다.
+        project-id: test-project
+        # 임베딩 전용 설정은 채팅 모델(위 genai.*)과 완전히 별도 네임스페이스다
+        # (GoogleGenAiEmbeddingConnectionProperties.CONFIG_PREFIX = spring.ai.google.genai.embedding,
+        # 바이트코드로 직접 확인함, 2026-10-29) - api-key가 없으면 project-id/location을 둘 다
+        # 필수로 요구해서 같이 더미값을 채운다. 운영 쪽은 Vertex 모드를 쓰는 의도라 api-key는 안 건드림.
+        embedding:
+          project-id: test-project
+          location: us-central1
   config:
     import: optional:file:./secrets.properties
 
