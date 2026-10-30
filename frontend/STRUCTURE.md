@@ -48,6 +48,7 @@ frontend/
 └── src/
     ├── app/                  앱 셸
     │   ├── App.tsx
+    │   ├── usePendingSaveSender.ts  저장 대기열 다시 보내기 시점(signedIn 직후 · 앞으로 돌아올 때)
     │   └── navigation/       RootNavigator, linking, routes
     │
     ├── domain/
@@ -64,7 +65,7 @@ frontend/
     │   └── executionTrace.ts 에이전트 궤적
     │
     ├── runtime/              React 밖
-    │   ├── background/       headlessTask, pendingQueue(콜드스타트 큐)
+    │   ├── background/       headlessTask(자리표시), pendingQueue(저장 보내기 대기열)
     │   ├── geofence/         OS 펜스 등록 + ENTER 서버 보고만
     │   ├── notifications/    channels, listener(발생원 은닉), router
     │   ├── permissions/      권한 상시 감시 (자동 회수 대응)
@@ -239,6 +240,20 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
     - 클라이언트는 다시 받는 함수를 `setSessionRefresher` 로 주입받는다(App 시작 때 `login.ts` 가 등록). `client.ts` 는 `login.ts` 를 import 하지 않는다.
 - UI 단계의 화면들은 지금처럼 mock 에서 받는다. 클라이언트를 거치는 것은 인증 API 부터다.
 
+## 저장 보내기 대기열
+
+- 공유받은 링크는 바로 `savePersonalSave` 로 보낸다. 보내지 못하면 `runtime/background/pendingQueue.ts` 에 남겨 두고 나중에 다시 보낸다.
+  세션이 없거나 온보딩 중에 들어온 공유도 대기열에만 넣는다(공유 수신은 다음 작업).
+- 항목은 정규화된 url · videoId · 넣은 시각이다. 같은 videoId 는 한 번만 두고, 최대 20개(넘치면 가장 오래된 것부터 버린다).
+- 저장 수단은 `expo-file-system` 파일 하나(`Paths.document/pending-saves.json`)다. 링크는 비밀이 아니라 안전한 저장소를 쓰지 않는다.
+  모듈은 처음 쓸 때 불러오고, 없거나 읽기 · 쓰기에 실패하면 이번 실행 동안 메모리에만 둔다.
+- drain: 동시에 두 번 돌지 않는다. 앞에서부터 하나씩 보내고,
+  성공(201 · 200)과 401 을 뺀 4xx 는 지운다. 응답 없음(네트워크 · 시간 초과) · 401 · 5xx · 그 밖의 예외는 남기고 이번 drain 을 멈춘다.
+  결과(보낸 수 · 남은 수 · 버린 수)는 아직 화면에 보이지 않는다. 재시도 횟수 제한 · 백오프는 없다.
+- 다시 보내는 시점은 `app/usePendingSaveSender.ts` 다. RootNavigator 가 `signedIn` 을 넘긴다.
+  signedIn 이 된 직후 한 번, 그 뒤 AppState `active` 마다 보낸다. 세션이 없거나 온보딩 중에는 보내지 않는다.
+- 목 모드도 같은 규칙이다. `MOCK_SCENARIO.saveResult` 가 networkError 면 남고, invalid 면 버린다.
+
 ## 로그인 제공자 확장
 
 - 제공자 목록은 `shared/auth/providers.ts` 한 곳에 둔다. 항목: id · 켜짐(`enabled`) · 버튼(선택) · 로그인 함수(자격 증명 credential 을 돌려준다) · 백엔드 엔드포인트 · 요청 바디.
@@ -322,8 +337,12 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 ```
 features/ ──┐
             ├──> domain/  <──── runtime/
-shared/  ───┘
+shared/  ───┘                     │
+   ^                              │
+   └──────────────────────────────┘
 ```
+
+- `runtime/` 은 `shared/`(API · 저장소)를 쓴다. `shared/` 는 `runtime/` 을 import 하지 않는다.
 
 - `runtime/` 은 `features/` 와 `app/navigation` 을 **import 하지 않는다.**
   백그라운드 이벤트는 앱 프로세스가 죽은 상태에서도 들어오기 때문이다.
