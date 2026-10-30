@@ -18,7 +18,6 @@ import com.ktc.chungnam3.remembrall.repository.MemberRepository;
 import com.ktc.chungnam3.remembrall.repository.PersonalSaveRepository;
 import com.ktc.chungnam3.remembrall.repository.PlaceRepository;
 import com.ktc.chungnam3.remembrall.repository.TriggerRepository;
-import com.ktc.chungnam3.remembrall.save.confirm.ConfirmPolicy;
 import com.ktc.chungnam3.remembrall.save.dto.ConfirmRequestDto;
 import com.ktc.chungnam3.remembrall.save.dto.SavePipelineRequestDto;
 import com.ktc.chungnam3.remembrall.save.place.PlaceLookup;
@@ -111,7 +110,7 @@ class SavePipelineConfirmPersistenceIntegrationTest {
                 query -> Optional.empty(), name -> List.of(), 1000);
 
         SavePipelineService savePipelineService = new SavePipelineService(
-                videoAnalyzer, placeLookup, placeResolver, new ConfirmPolicy(),
+                videoAnalyzer, placeLookup, placeResolver,
                 (name, branch, lat, lon) -> Optional.of("kakao-place-id"),
                 contentAnalysisResultService, confirmCandidateRepository,
                 new ObjectMapper(), Clock.fixed(NOW, ZoneOffset.UTC));
@@ -120,7 +119,7 @@ class SavePipelineConfirmPersistenceIntegrationTest {
                 AuthProvider.KAKAO, UUID.randomUUID().toString(), Instant.now())).getId();
         ContentSaveClaim claim = contentPersistenceService.saveAndClaim(memberId, "video-confirm-persist");
 
-        savePipelineService.saveAndPersist(claim.contentId(), new SavePipelineRequestDto("https://youtu.be/x", false));
+        savePipelineService.saveAndPersist(claim.contentId(), new SavePipelineRequestDto("https://youtu.be/x"));
 
         assertThat(contentPlaceRepository.findAllByContent_Id(claim.contentId())).hasSize(1);
 

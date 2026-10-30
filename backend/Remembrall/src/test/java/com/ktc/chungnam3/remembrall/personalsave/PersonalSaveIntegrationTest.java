@@ -317,7 +317,6 @@ class PersonalSaveIntegrationTest {
         doAnswer(call -> {
             UUID id = call.getArgument(0);
             var request = call.getArgument(1, SavePipelineRequestDto.class);
-            assertThat(request.alreadyAsked()).isFalse();
             if (calls.incrementAndGet() == 1) {
                 started.countDown();
                 assertThat(release.await(20, TimeUnit.SECONDS)).isTrue();

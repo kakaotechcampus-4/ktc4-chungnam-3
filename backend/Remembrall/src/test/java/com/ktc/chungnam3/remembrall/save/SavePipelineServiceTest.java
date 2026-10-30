@@ -10,7 +10,6 @@ import com.ktc.chungnam3.remembrall.extraction.dto.PlaceCandidateDto;
 import com.ktc.chungnam3.remembrall.extraction.dto.YouTubeContentExtractionResultDto;
 import com.ktc.chungnam3.remembrall.extraction.type.ExtractionFailureCode;
 import com.ktc.chungnam3.remembrall.extraction.type.ExtractionStatus;
-import com.ktc.chungnam3.remembrall.save.confirm.ConfirmPolicy;
 import com.ktc.chungnam3.remembrall.save.dto.PlaceOutcomeDto;
 import com.ktc.chungnam3.remembrall.save.dto.ResolvedPlaceDto;
 import com.ktc.chungnam3.remembrall.save.dto.SavePipelineRequestDto;
@@ -66,9 +65,9 @@ class SavePipelineServiceTest {
     void 장소후보가_없으면_SUCCESS와_빈_리스트를_반환한다() {
         VideoAnalyzer analyzer = url -> extraction(List.of());
         SavePipelineService service = new SavePipelineService(analyzer, lookupOf(java.util.Map.of()),
-                realResolver(), new ConfirmPolicy(), kakaoAlwaysFound());
+                realResolver(), kakaoAlwaysFound());
 
-        SavePipelineResultDto resolved = service.save(new SavePipelineRequestDto("https://youtu.be/x", false));
+        SavePipelineResultDto resolved = service.save(new SavePipelineRequestDto("https://youtu.be/x"));
 
         assertThat(resolved.status()).isEqualTo(ExtractionStatus.SUCCESS);
         assertThat(resolved.places()).isEmpty();
@@ -79,9 +78,9 @@ class SavePipelineServiceTest {
         var place = candidate("p1", "성심당", "본점", null);
         VideoAnalyzer analyzer = url -> extraction(List.of(place));
         PlaceLookup lookup = lookupOf(java.util.Map.of("성심당", List.of(result("성심당 본점, 대전", 36.32, 127.42))));
-        SavePipelineService service = new SavePipelineService(analyzer, lookup, realResolver(), new ConfirmPolicy(), kakaoAlwaysFound());
+        SavePipelineService service = new SavePipelineService(analyzer, lookup, realResolver(), kakaoAlwaysFound());
 
-        SavePipelineResultDto resolved = service.save(new SavePipelineRequestDto("https://youtu.be/x", false));
+        SavePipelineResultDto resolved = service.save(new SavePipelineRequestDto("https://youtu.be/x"));
 
         assertThat(resolved.status()).isEqualTo(ExtractionStatus.SUCCESS);
         assertThat(resolved.places()).hasSize(1);
@@ -100,9 +99,9 @@ class SavePipelineServiceTest {
                 "경복궁", List.of(result("경복궁, 서울", 37.57, 126.97), result("경복궁역, 서울", 37.58, 126.98)),
                 "존재안하는가게", List.of()
         ));
-        SavePipelineService service = new SavePipelineService(analyzer, lookup, realResolver(), new ConfirmPolicy(), kakaoAlwaysFound());
+        SavePipelineService service = new SavePipelineService(analyzer, lookup, realResolver(), kakaoAlwaysFound());
 
-        SavePipelineResultDto resolved = service.save(new SavePipelineRequestDto("https://youtu.be/x", false));
+        SavePipelineResultDto resolved = service.save(new SavePipelineRequestDto("https://youtu.be/x"));
 
         assertThat(resolved.places()).hasSize(3);
         assertThat(resolved.places().get(0).decision()).isEqualTo(PlaceOutcomeDto.Decision.RESOLVED);
@@ -118,9 +117,9 @@ class SavePipelineServiceTest {
         PlaceLookup lookup = (name, branch, region) -> {
             throw new AssertionError("장소 검색이 호출되면 안 됨");
         };
-        SavePipelineService service = new SavePipelineService(analyzer, lookup, realResolver(), new ConfirmPolicy(), kakaoAlwaysFound());
+        SavePipelineService service = new SavePipelineService(analyzer, lookup, realResolver(), kakaoAlwaysFound());
 
-        SavePipelineResultDto resolved = service.save(new SavePipelineRequestDto("not-a-url", false));
+        SavePipelineResultDto resolved = service.save(new SavePipelineRequestDto("not-a-url"));
 
         assertThat(resolved.status()).isEqualTo(ExtractionStatus.FAILED);
         assertThat(resolved.places()).isEmpty();
@@ -132,9 +131,9 @@ class SavePipelineServiceTest {
             throw new IllegalStateException("Gemini 응답 파싱 실패");
         };
         SavePipelineService service = new SavePipelineService(analyzer, lookupOf(java.util.Map.of()),
-                realResolver(), new ConfirmPolicy(), kakaoAlwaysFound());
+                realResolver(), kakaoAlwaysFound());
 
-        SavePipelineResultDto resolved = service.save(new SavePipelineRequestDto("https://youtu.be/x", false));
+        SavePipelineResultDto resolved = service.save(new SavePipelineRequestDto("https://youtu.be/x"));
 
         assertThat(resolved.status()).isEqualTo(ExtractionStatus.FAILED);
         assertThat(resolved.failureMessage()).contains("Gemini");
@@ -147,9 +146,9 @@ class SavePipelineServiceTest {
                 null, null, null, List.of(), List.of(), ExtractionFailureCode.VIDEO_UNAVAILABLE);
         VideoAnalyzer analyzer = url -> partial;
         SavePipelineService service = new SavePipelineService(analyzer, lookupOf(java.util.Map.of()),
-                realResolver(), new ConfirmPolicy(), kakaoAlwaysFound());
+                realResolver(), kakaoAlwaysFound());
 
-        SavePipelineResultDto resolved = service.save(new SavePipelineRequestDto("https://youtu.be/x", false));
+        SavePipelineResultDto resolved = service.save(new SavePipelineRequestDto("https://youtu.be/x"));
 
         assertThat(resolved.status()).isEqualTo(ExtractionStatus.FAILED);
         assertThat(resolved.failureMessage()).contains("VIDEO_UNAVAILABLE");
@@ -166,9 +165,9 @@ class SavePipelineServiceTest {
             }
             return List.of(result("성심당 본점, 대전", 36.32, 127.42));
         };
-        SavePipelineService service = new SavePipelineService(analyzer, lookup, realResolver(), new ConfirmPolicy(), kakaoAlwaysFound());
+        SavePipelineService service = new SavePipelineService(analyzer, lookup, realResolver(), kakaoAlwaysFound());
 
-        SavePipelineResultDto resolved = service.save(new SavePipelineRequestDto("https://youtu.be/x", false));
+        SavePipelineResultDto resolved = service.save(new SavePipelineRequestDto("https://youtu.be/x"));
 
         assertThat(resolved.places().get(0).decision()).isEqualTo(PlaceOutcomeDto.Decision.PLACE_SEARCH_FAILED);
         assertThat(resolved.places().get(1).decision()).isEqualTo(PlaceOutcomeDto.Decision.RESOLVED);
@@ -181,53 +180,25 @@ class SavePipelineServiceTest {
         PlaceLookup lookup = (name, branch, region) -> {
             throw new RuntimeException("LocationIQ 타임아웃");
         };
-        SavePipelineService service = new SavePipelineService(analyzer, lookup, realResolver(), new ConfirmPolicy(), kakaoAlwaysFound());
+        SavePipelineService service = new SavePipelineService(analyzer, lookup, realResolver(), kakaoAlwaysFound());
 
-        SavePipelineResultDto resolved = service.save(new SavePipelineRequestDto("https://youtu.be/x", false));
+        SavePipelineResultDto resolved = service.save(new SavePipelineRequestDto("https://youtu.be/x"));
 
         assertThat(resolved.status()).isEqualTo(ExtractionStatus.PARTIAL);
     }
 
     @Test
-    void 아직_안_물어봤으면_NEEDS_CONFIRMATION으로_되묻는다() {
+    void 후보가_모호하면_NEEDS_CONFIRMATION으로_되묻는다() {
         var place = candidate("p1", "경복궁", null, null);
         VideoAnalyzer analyzer = url -> extraction(List.of(place));
         PlaceLookup lookup = lookupOf(java.util.Map.of(
                 "경복궁", List.of(result("경복궁, 서울", 37.57, 126.97), result("경복궁역, 서울", 37.58, 126.98))));
-        SavePipelineService service = new SavePipelineService(analyzer, lookup, realResolver(), new ConfirmPolicy(), kakaoAlwaysFound());
+        SavePipelineService service = new SavePipelineService(analyzer, lookup, realResolver(), kakaoAlwaysFound());
 
-        SavePipelineResultDto resolved = service.save(new SavePipelineRequestDto("https://youtu.be/x", false));
+        SavePipelineResultDto resolved = service.save(new SavePipelineRequestDto("https://youtu.be/x"));
 
         assertThat(resolved.places().get(0).decision()).isEqualTo(PlaceOutcomeDto.Decision.NEEDS_CONFIRMATION);
         assertThat(resolved.places().get(0).confirmRequest()).isNotNull();
-    }
-
-    @Test
-    void 이미_물어봤고_지역_검색이_성공하면_상위_지역_좌표로_RESOLVED된다() {
-        var place = candidate("p1", "경복궁", null, "서울 종로");
-        VideoAnalyzer analyzer = url -> extraction(List.of(place));
-        PlaceLookup lookup = lookupOf(java.util.Map.of(
-                "경복궁", List.of(result("경복궁, 서울", 37.57, 126.97), result("경복궁역, 서울", 37.58, 126.98)),
-                "서울 종로", List.of(result("종로구, 서울특별시", 37.57, 126.98))));
-        SavePipelineService service = new SavePipelineService(analyzer, lookup, realResolver(), new ConfirmPolicy(), kakaoAlwaysFound());
-
-        SavePipelineResultDto resolved = service.save(new SavePipelineRequestDto("https://youtu.be/x", true));
-
-        assertThat(resolved.places().get(0).decision()).isEqualTo(PlaceOutcomeDto.Decision.RESOLVED);
-        assertThat(resolved.places().get(0).resolvedPlace().address()).isEqualTo("종로구, 서울특별시");
-    }
-
-    @Test
-    void 이미_물어봤는데_regionHint가_없으면_NO_PLACE로_포기한다() {
-        var place = candidate("p1", "경복궁", null, null);
-        VideoAnalyzer analyzer = url -> extraction(List.of(place));
-        PlaceLookup lookup = lookupOf(java.util.Map.of(
-                "경복궁", List.of(result("경복궁, 서울", 37.57, 126.97), result("경복궁역, 서울", 37.58, 126.98))));
-        SavePipelineService service = new SavePipelineService(analyzer, lookup, realResolver(), new ConfirmPolicy(), kakaoAlwaysFound());
-
-        SavePipelineResultDto resolved = service.save(new SavePipelineRequestDto("https://youtu.be/x", true));
-
-        assertThat(resolved.places().get(0).decision()).isEqualTo(PlaceOutcomeDto.Decision.NO_PLACE);
     }
 
     @Test
@@ -239,9 +210,9 @@ class SavePipelineServiceTest {
         VideoAnalyzer analyzer = url -> extraction(List.of(place));
         PlaceLookup lookup = lookupOf(java.util.Map.of("성심당", List.of(result("성심당 본점, 대전", 36.32, 127.42))));
         KakaoPlaceLookup kakaoNotFound = (name, branch, lat, lon) -> Optional.empty();
-        SavePipelineService service = new SavePipelineService(analyzer, lookup, realResolver(), new ConfirmPolicy(), kakaoNotFound);
+        SavePipelineService service = new SavePipelineService(analyzer, lookup, realResolver(), kakaoNotFound);
 
-        SavePipelineResultDto resolved = service.save(new SavePipelineRequestDto("https://youtu.be/x", false));
+        SavePipelineResultDto resolved = service.save(new SavePipelineRequestDto("https://youtu.be/x"));
 
         assertThat(resolved.places().get(0).decision()).isEqualTo(PlaceOutcomeDto.Decision.NO_PLACE);
         assertThat(resolved.status()).isEqualTo(ExtractionStatus.SUCCESS);
@@ -255,9 +226,9 @@ class SavePipelineServiceTest {
         KakaoPlaceLookup kakaoFails = (name, branch, lat, lon) -> {
             throw new RuntimeException("401 Unauthorized");
         };
-        SavePipelineService service = new SavePipelineService(analyzer, lookup, realResolver(), new ConfirmPolicy(), kakaoFails);
+        SavePipelineService service = new SavePipelineService(analyzer, lookup, realResolver(), kakaoFails);
 
-        SavePipelineResultDto resolved = service.save(new SavePipelineRequestDto("https://youtu.be/x", false));
+        SavePipelineResultDto resolved = service.save(new SavePipelineRequestDto("https://youtu.be/x"));
         AnalysisOutcome outcome = service.toAnalysisOutcome(
                 new SavePipelineService.Analyzed(extraction(List.of(place)), null, resolved.places()));
 
@@ -268,7 +239,7 @@ class SavePipelineServiceTest {
 
     private static SavePipelineService serviceForMapping() {
         return new SavePipelineService(url -> extraction(List.of()), lookupOf(java.util.Map.of()),
-                realResolver(), new ConfirmPolicy(), kakaoAlwaysFound());
+                realResolver(), kakaoAlwaysFound());
     }
 
     @Test

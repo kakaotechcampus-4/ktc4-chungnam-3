@@ -53,7 +53,7 @@ public class SavePipelineController {
         }
 
         SavePipelineResultDto result = savePipelineService.saveAndPersist(
-                claim.contentId(), new SavePipelineRequestDto(request.youtubeUrl(), false));
+                claim.contentId(), new SavePipelineRequestDto(request.youtubeUrl()));
         return SaveContentResponseDto.from(claim.contentId(), result);
     }
 }
