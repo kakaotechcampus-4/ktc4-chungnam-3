@@ -13,16 +13,21 @@ import com.ktc.chungnam3.remembrall.personalsave.repository.PersonalSaveReadRepo
 import com.ktc.chungnam3.remembrall.repository.ConfirmCandidateRepository;
 import com.ktc.chungnam3.remembrall.save.dto.ConfirmRequestDto;
 import com.ktc.chungnam3.remembrall.save.youtube.YoutubeUrlParser;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
 public class PersonalSaveService {
+    private static final Logger log = LoggerFactory.getLogger(PersonalSaveService.class);
+
     private final ContentPersistenceService persistence;
     private final PersonalSaveAnalysisService analysis;
     private final PersonalSaveReadRepository reads;
@@ -87,17 +92,19 @@ public class PersonalSaveService {
     private List<PersonalSaveResponse.ConfirmCandidate> pendingConfirmCandidates(UUID contentId) {
         return confirmCandidates.findPendingByContentId(contentId).stream()
                 .map(this::toConfirmCandidate)
+                .flatMap(Optional::stream)
                 .toList();
     }
 
-    private PersonalSaveResponse.ConfirmCandidate toConfirmCandidate(ConfirmCandidate candidate) {
-        ConfirmRequestDto request;
+    private Optional<PersonalSaveResponse.ConfirmCandidate> toConfirmCandidate(ConfirmCandidate candidate) {
         try {
-            request = objectMapper.readValue(candidate.getConfirmRequest(), ConfirmRequestDto.class);
+            ConfirmRequestDto request = objectMapper.readValue(candidate.getConfirmRequest(), ConfirmRequestDto.class);
+            return Optional.of(new PersonalSaveResponse.ConfirmCandidate(
+                    candidate.getCandidateId(), request.question(), request.candidates()));
         } catch (JsonProcessingException e) {
-            throw new IllegalStateException(e);
+            log.warn("confirm_request 파싱 실패, 후보 {} 건너뜀", candidate.getCandidateId(), e);
+            return Optional.empty();
         }
-        return new PersonalSaveResponse.ConfirmCandidate(candidate.getCandidateId(), request.question(), request.candidates());
     }
 
     public void delete(UUID memberId, UUID personalSaveId) {
