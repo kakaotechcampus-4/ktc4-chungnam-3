@@ -1,6 +1,8 @@
 // 위치 정보 이용 동의 시트. Figma C/LocationConsentSheet 2201:963 (Default 2201:803 · Saving 2201:861 · Error 2201:911).
 // 00d · 06b · 설정에서 띄운다. 동의 저장은 띄운 화면이 하고 상태(status)만 넘긴다.
 // 틀(바깥 닫힘 · saving 중 차단 · 버튼 묶음)은 ModalSheet 가 맡는다.
+// termsChanged: 예전 약관에 동의한 사람(outdated)에게 띄울 때 제목만 "위치 정보 약관이 바뀌었어요"로 바꾼다(디자인 세션 결정).
+// 닫히는 동안 제목이 바뀌지 않게, 띄운 화면이 열 때의 값을 넘긴다.
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { TERMS_URLS } from "../api/consentTerms";
@@ -29,6 +31,7 @@ type Props = {
     onLater: () => void;
     // 시트가 다 닫히면 부른다. 바깥 닫힘뿐 아니라 visible 을 false 로 바꿔 닫은 때도 온다.
     onDismiss: () => void;
+    termsChanged?: boolean;
 };
 
 const FACTS: readonly { icon: IconName; title: string; caption: string }[] = [
@@ -55,13 +58,16 @@ export default function LocationConsentSheet({
     onAgree,
     onLater,
     onDismiss,
+    termsChanged = false,
 }: Props) {
     const saving = status === "saving";
     return (
         <ModalSheet visible={visible} locked={saving} onDismiss={onDismiss}>
             <View style={styles.body}>
                 <Text accessibilityRole="header" style={styles.heading}>
-                    위치는 이렇게만 써요
+                    {termsChanged
+                        ? "위치 정보 약관이 바뀌었어요"
+                        : "위치는 이렇게만 써요"}
                 </Text>
                 <View style={styles.facts}>
                     {FACTS.map((fact) => (

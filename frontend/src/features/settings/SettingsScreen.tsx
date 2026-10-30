@@ -4,6 +4,8 @@
 // 권한 모듈이 없는 개발 빌드에서는 위치를 목 값으로 보이고 알림 상태는 확인하지 않는다.
 // 위치 정보 이용 동의(11c 2202:915 · 11c-off 2202:986)는 화면에 포커스될 때 서버에서 읽는다.
 // 동의 안 함이면 동의 시트(LocationConsentSheet), 동의함이면 거두기 시트(11d)를 띄운다. 저장이 성공하면 PUT 응답으로 바로 갱신한다.
+// 예전 약관 동의(outdated)는 "약관이 바뀌어 다시 동의가 필요해요"이고 누르면 동의 시트(제목만 약관이 바뀌었다고 알림)다. 거두기는 없다.
+// 근처 알림 행은 outdated 도 동의 안 함과 같다. 동의할 때는 읽어 둔 서버 현재 약관 버전을 보낸다.
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import Constants from "expo-constants";
 import { useCallback, useRef, useState } from "react";
@@ -20,6 +22,7 @@ import { TERMS_URLS } from "../../shared/api/consentTerms";
 import {
     toConsentAgreedAt,
     toConsentState,
+    toCurrentTermsVersion,
 } from "../../shared/api/mappers/consentMapper";
 import {
     MOCK_SCENARIO,
@@ -46,18 +49,21 @@ const PERMISSION_LABEL: Record<MockLocationPermission, string> = {
 
 const LOCATION: ConsentType = "LOCATION_BASED_SERVICE";
 
-// notAgreed 는 한 번도 동의하지 않음 · 거둠을 함께 쓴다.
+// notAgreed 는 한 번도 동의하지 않음 · 거둠을 함께 쓴다. outdated 는 예전 약관에 동의 중이다.
 type LocationConsent =
     | { status: "loading" }
     | { status: "agreed"; agreedAt: Date }
+    | { status: "outdated" }
     | { status: "notAgreed" }
     | { status: "failed" };
 
 function toLocationConsent(
     consents: readonly ConsentResponse[],
 ): LocationConsent {
+    const state = toConsentState(consents, LOCATION);
     const agreedAt = toConsentAgreedAt(consents, LOCATION);
-    return toConsentState(consents, LOCATION) === "agreed" && agreedAt != null
+    if (state === "outdated") return { status: "outdated" };
+    return state === "agreed" && agreedAt != null
         ? { status: "agreed", agreedAt }
         : { status: "notAgreed" };
 }
@@ -69,6 +75,8 @@ function consentDescription(consent: LocationConsent): string {
             return "확인하고 있어요";
         case "agreed":
             return `${consent.agreedAt.getMonth() + 1}월 ${consent.agreedAt.getDate()}일에 동의했어요`;
+        case "outdated":
+            return "약관이 바뀌어 다시 동의가 필요해요";
         case "notAgreed":
             return "동의하지 않았어요";
         case "failed":
@@ -131,6 +139,8 @@ export default function SettingsScreen() {
     const [consent, setConsent] = useState<LocationConsent>({
         status: "loading",
     });
+    // 서버 현재 약관 버전. 동의할 때 보낸다. 모르면 null(저장 함수가 다시 읽는다).
+    const termsVersion = useRef<string | null>(null);
     // 늦게 온 응답이 새 결과를 덮지 않게 마지막 요청만 반영한다.
     const readId = useRef(0);
     const readConsent = useCallback(() => {
@@ -138,8 +148,12 @@ export default function SettingsScreen() {
         setConsent({ status: "loading" });
         fetchConsents()
             .then((consents) => {
-                if (id === readId.current)
-                    setConsent(toLocationConsent(consents));
+                if (id !== readId.current) return;
+                setConsent(toLocationConsent(consents));
+                termsVersion.current = toCurrentTermsVersion(
+                    consents,
+                    LOCATION,
+                );
             })
             .catch(() => {
                 if (id === readId.current) setConsent({ status: "failed" });
@@ -150,9 +164,10 @@ export default function SettingsScreen() {
     const applySaved = (response: ConsentResponse) => {
         readId.current++;
         setConsent(toLocationConsent([response]));
+        termsVersion.current = response.currentTermsVersion ?? null;
     };
     const agreeSheet = useConsentSheet(
-        () => setLocationConsent(true),
+        () => setLocationConsent(true, termsVersion.current),
         applySaved,
     );
     const withdrawSheet = useConsentSheet(
@@ -160,11 +175,20 @@ export default function SettingsScreen() {
         applySaved,
     );
 
+    // 동의 시트 제목은 열 때의 값을 닫힐 때까지 유지한다(저장이 성공하면 바로 agreed 가 된다).
+    const [termsChanged, setTermsChanged] = useState(false);
+    const openAgree = () => {
+        setTermsChanged(consent.status === "outdated");
+        agreeSheet.open();
+    };
+    const notAgreed =
+        consent.status === "notAgreed" || consent.status === "outdated";
+
     const openConsent =
         consent.status === "agreed"
             ? withdrawSheet.open
-            : consent.status === "notAgreed"
-              ? agreeSheet.open
+            : notAgreed
+              ? openAgree
               : consent.status === "failed"
                 ? readConsent
                 : undefined;
@@ -180,12 +204,12 @@ export default function SettingsScreen() {
                 }}
             >
                 <SettingsGroup title="알림">
-                    {consent.status === "notAgreed" ? (
+                    {notAgreed ? (
                         <SettingsRow
                             title="근처에 오면 알려주기"
                             description="위치 정보 이용 동의가 필요해요. 눌러서 켜주세요"
                             chevron
-                            onPress={agreeSheet.open}
+                            onPress={openAgree}
                         />
                     ) : notificationsOff ? (
                         <SettingsRow
@@ -255,6 +279,7 @@ export default function SettingsScreen() {
                 onAgree={agreeSheet.submit}
                 onLater={agreeSheet.close}
                 onDismiss={agreeSheet.onDismiss}
+                termsChanged={termsChanged}
             />
             <WithdrawConsentSheet
                 visible={withdrawSheet.visible}
