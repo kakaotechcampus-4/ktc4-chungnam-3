@@ -8,7 +8,8 @@ auth:bearer {
 
 docs {
   우분투 백엔드를 실행하고 PC의 SSH 터널(18080 → 서버 8080)을 연결한 뒤 local 환경을 선택한다.
-  컬렉션 전체를 00-health → 01-auth-public → 02-auth-session → 03-consent → 06-auth-consent → 99-auth-cleanup 순서로 실행한다.
+  컬렉션 전체를 00-health → 01-auth-public → 02-auth-session → 03-consent → 06-auth-consent → 07-save-confirm-flow → 99-auth-cleanup 순서로 실행한다.
+  07-save-confirm-flow는 저장 → 상세조회 → 되묻기 답변 흐름을 검증한다. 분석이 비동기라 02번(상세조회)은 confirmCandidates가 찰 때까지 수동으로 재실행해야 한다.
   컬렉션 실행마다 새 테스트 회원 A와 B를 생성한다. 재로그인은 같은 설치 ID를 사용한다. 회원 데이터는 테스트 DB에 남는다.
   동의 폴더만 재실행하면 신규 상태 검사가 실패할 수 있으므로 게스트 로그인부터 다시 실행한다.
   개별 요청 실행 시에도 로그인과 앞선 요청의 실행 중 변수가 필요하다.

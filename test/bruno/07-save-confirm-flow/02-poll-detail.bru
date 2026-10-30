@@ -1,0 +1,35 @@
+meta {
+  name: SAVE-02 상세 조회 (분석 완료까지 수동 재실행) - 200
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves/{{personalSaveId}}
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("personalSaveId")) {
+    throw new Error("personalSaveId 없음 - 01번을 먼저 실행하세요");
+  }
+}
+
+tests {
+  test("상세 조회", function () {
+    expect(res.status).to.equal(200);
+    if (res.body.confirmCandidates && res.body.confirmCandidates.length > 0) {
+      var candidate = res.body.confirmCandidates[0];
+      bru.setVar("confirmCandidateId", candidate.candidateId);
+      bru.setVar("selectedOptionId", candidate.options[0].candidateId);
+    }
+  });
+}
+
+docs {
+  분석은 비동기로 진행됨. `analysisStatus`가 PENDING/ANALYZING인 동안은 confirmCandidates가
+  비어있는 게 정상 — terminal 상태(SUCCESS/PARTIAL/FAILED)가 되고 confirmCandidates가 1개
+  이상 찰 때까지 이 요청을 몇 초 간격으로 수동 재실행하세요. 다음 스텝(03)은 confirmCandidateId/
+  selectedOptionId가 세팅된 이후에만 통과합니다.
+}

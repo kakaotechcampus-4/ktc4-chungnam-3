@@ -98,11 +98,12 @@
 
 ## 2. 아직 안 된 것 (TODO)
 
-- **되묻기 응답 제출 엔드포인트**: `places[].decision == NEEDS_CONFIRMATION`일 때 사용자가 후보를
-  선택해 반영하는 API가 아직 없다. 지금은 `ConfirmPolicy.shouldAsk(alreadyAsked)`가 `false`를
-  반환하면(이미 한 번 물어봤던 경우) 자동으로 상위 지역 좌표로 저장한다(`SavePipelineService.
-  resolveBroaderRegion`) - 즉 "다시 요청하면 되묻기 없이 넘어간다"는 동작은 있지만, 그 재요청
-  자체를 트리거하는 전용 API는 없음.
+- ~~**되묻기 응답 제출 엔드포인트**~~ — **구현 완료(2026-10-27~30)**. `places[].decision ==
+  NEEDS_CONFIRMATION`인 후보는 `ConfirmCandidateRepository`에 영속화되고,
+  `POST /api/personal-saves/{personalSaveId}/places/{candidateId}/confirm`(`ConfirmAnswerController`)
+  으로 답변을 제출받아 반영한다. 과거 있었던 "미응답 시 자동으로 상위 지역 좌표로 저장" 폴백
+  (`ConfirmPolicy`)은 호출부가 항상 `alreadyAsked=false`를 넘겨 한 번도 실행되지 않던 죽은 코드였음이
+  PR 리뷰로 드러나 삭제함 — 지금은 답이 올 때까지 `NEEDS_CONFIRMATION`으로 남아있는다.
 - **분석 상태 조회(polling) API**: `alreadyProcessed=true` 응답은 "이미 처리됐다"만 알려주고 그
   결과 자체를 돌려주지 않는다. 결과를 다시 보려면 별도 조회 API가 필요(미구현).
 

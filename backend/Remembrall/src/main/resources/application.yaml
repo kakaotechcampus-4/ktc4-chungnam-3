@@ -10,6 +10,10 @@ spring:
         vertex-ai: ${gemini.vertex-ai.enabled:false}
         project-id: ${gemini.vertex-ai.project-id:}
         location: ${gemini.vertex-ai.location:us-central1}
+        embedding:
+          # 채팅 모델과 동일 - 임베딩 전용 네임스페이스라 따로 안 채우면 project-id 필수인
+          # Vertex 모드로 떨어져서 로컬 ADC 설정이 필요해짐. API 키만으로 충분.
+          api-key: ${gemini.api.key:}
   config:
     import: optional:file:./secrets.properties
 

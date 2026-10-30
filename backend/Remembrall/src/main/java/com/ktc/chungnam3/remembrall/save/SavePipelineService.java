@@ -7,14 +7,12 @@ import com.ktc.chungnam3.remembrall.content.service.ContentAnalysisResultService
 import com.ktc.chungnam3.remembrall.domain.content.ContentAnalysisFailureCode;
 import com.ktc.chungnam3.remembrall.domain.content.ContentAnalysisStatus;
 import com.ktc.chungnam3.remembrall.domain.content.ContentSourceStatus;
-import com.ktc.chungnam3.remembrall.domain.place.GeocodingProvider;
 import com.ktc.chungnam3.remembrall.extraction.dto.PlaceCandidateDto;
 import com.ktc.chungnam3.remembrall.extraction.dto.YouTubeContentExtractionResultDto;
 import com.ktc.chungnam3.remembrall.extraction.type.ExtractionFailureCode;
 import com.ktc.chungnam3.remembrall.extraction.type.ExtractionStatus;
 import com.ktc.chungnam3.remembrall.repository.ConfirmCandidateRepository;
 import com.ktc.chungnam3.remembrall.save.analysis.VideoContentAnalyzer;
-import com.ktc.chungnam3.remembrall.save.confirm.ConfirmPolicy;
 import com.ktc.chungnam3.remembrall.save.dto.PlaceOutcomeDto;
 import com.ktc.chungnam3.remembrall.save.dto.ResolvedPlaceDto;
 import com.ktc.chungnam3.remembrall.save.dto.SavePipelineRequestDto;
@@ -61,7 +59,6 @@ public class SavePipelineService {
     private final VideoAnalyzer videoAnalyzer;
     private final PlaceLookup placeLookup;
     private final PlaceResolver placeResolver;
-    private final ConfirmPolicy confirmPolicy;
     private final KakaoPlaceLookup kakaoPlaceLookup;
     private final ContentAnalysisResultService contentAnalysisResultService;
     private final ConfirmCandidateRepository confirmCandidateRepository;
@@ -72,30 +69,30 @@ public class SavePipelineService {
      * {@link VideoAnalyzer}에 연결한다. */
     @Autowired
     public SavePipelineService(VideoContentAnalyzer videoContentAnalyzer, PlaceLookup placeLookup,
-                                PlaceResolver placeResolver, ConfirmPolicy confirmPolicy,
+                                PlaceResolver placeResolver,
                                 KakaoPlaceLookup kakaoPlaceLookup,
                                 ContentAnalysisResultService contentAnalysisResultService,
                                 ConfirmCandidateRepository confirmCandidateRepository,
                                 ObjectMapper objectMapper, Clock clock) {
-        this(videoContentAnalyzer::analyze, placeLookup, placeResolver, confirmPolicy, kakaoPlaceLookup,
+        this(videoContentAnalyzer::analyze, placeLookup, placeResolver, kakaoPlaceLookup,
                 contentAnalysisResultService, confirmCandidateRepository, objectMapper, clock);
     }
 
     /**
-     * 순수 로직만 검증하는 기존 테스트용 생성자(5-인자, 시그니처 그대로 유지) - {@code saveAndPersist}를
+     * 순수 로직만 검증하는 기존 테스트용 생성자(4-인자, 시그니처 그대로 유지) - {@code saveAndPersist}를
      * 쓰지 않는 테스트는 영속화 관련 의존성이 필요 없어서 이 생성자로 충분하다(team 관행: 람다 fake,
      * 모킹 프레임워크 안 씀).
      */
     SavePipelineService(VideoAnalyzer videoAnalyzer, PlaceLookup placeLookup,
-                         PlaceResolver placeResolver, ConfirmPolicy confirmPolicy,
+                         PlaceResolver placeResolver,
                          KakaoPlaceLookup kakaoPlaceLookup) {
-        this(videoAnalyzer, placeLookup, placeResolver, confirmPolicy, kakaoPlaceLookup,
+        this(videoAnalyzer, placeLookup, placeResolver, kakaoPlaceLookup,
                 null, null, new ObjectMapper(), Clock.systemUTC());
     }
 
     /** {@code saveAndPersist}까지 테스트하고 싶을 때 쓰는 전체 생성자. */
     SavePipelineService(VideoAnalyzer videoAnalyzer, PlaceLookup placeLookup,
-                         PlaceResolver placeResolver, ConfirmPolicy confirmPolicy,
+                         PlaceResolver placeResolver,
                          KakaoPlaceLookup kakaoPlaceLookup,
                          ContentAnalysisResultService contentAnalysisResultService,
                          ConfirmCandidateRepository confirmCandidateRepository,
@@ -103,7 +100,6 @@ public class SavePipelineService {
         this.videoAnalyzer = videoAnalyzer;
         this.placeLookup = placeLookup;
         this.placeResolver = placeResolver;
-        this.confirmPolicy = confirmPolicy;
         this.kakaoPlaceLookup = kakaoPlaceLookup;
         this.contentAnalysisResultService = contentAnalysisResultService;
         this.confirmCandidateRepository = confirmCandidateRepository;
@@ -144,7 +140,7 @@ public class SavePipelineService {
         }
 
         List<PlaceOutcomeDto> outcomes = extraction.placeCandidates().stream()
-                .map(candidate -> resolveCandidate(candidate, request.alreadyAsked()))
+                .map(this::resolveCandidate)
                 .toList();
         return new Analyzed(extraction, null, outcomes);
     }
@@ -287,7 +283,7 @@ public class SavePipelineService {
                 || outcome.decision() == PlaceOutcomeDto.Decision.PLACE_VERIFICATION_FAILED;
     }
 
-    private PlaceOutcomeDto resolveCandidate(PlaceCandidateDto candidate, boolean alreadyAsked) {
+    private PlaceOutcomeDto resolveCandidate(PlaceCandidateDto candidate) {
         List<PlaceSearchClient.PlaceSearchResult> searchResults;
         try {
             searchResults = placeLookup.search(candidate.name(), candidate.branchName(), candidate.regionHint());
@@ -312,21 +308,9 @@ public class SavePipelineService {
             case RESOLVED -> verifyWithKakao(candidate.candidateId(), result.resolvedPlace());
             case NO_PLACE -> new PlaceOutcomeDto(
                     candidate.candidateId(), PlaceOutcomeDto.Decision.NO_PLACE, null, null);
-            case NEEDS_CONFIRMATION -> resolveConfirmation(candidate, result, alreadyAsked);
-        };
-    }
-
-    private PlaceOutcomeDto resolveConfirmation(PlaceCandidateDto candidate, PlaceResolver.Result result,
-                                                 boolean alreadyAsked) {
-        if (confirmPolicy.shouldAsk(alreadyAsked)) {
-            return new PlaceOutcomeDto(
+            case NEEDS_CONFIRMATION -> new PlaceOutcomeDto(
                     candidate.candidateId(), PlaceOutcomeDto.Decision.NEEDS_CONFIRMATION, null, result.confirmRequest());
-        }
-        // 이미 물어봤는데도 못 좁혔으면 다시 묻지 않고 "상위 지역" 좌표로 저장한다
-        // (ConfirmPolicy 클래스 javadoc 참고).
-        return resolveBroaderRegion(candidate)
-                .map(place -> verifyWithKakao(candidate.candidateId(), place))
-                .orElseGet(() -> new PlaceOutcomeDto(candidate.candidateId(), PlaceOutcomeDto.Decision.NO_PLACE, null, null));
+        };
     }
 
     /**
@@ -351,31 +335,5 @@ public class SavePipelineService {
                 place.candidateId(), place.name(), place.branchName(), place.address(), place.lat(), place.lng(),
                 place.geocodingProvider(), place.geocodingPlaceId(), verificationPlaceId.get());
         return new PlaceOutcomeDto(candidateId, PlaceOutcomeDto.Decision.RESOLVED, verified, null);
-    }
-
-    /**
-     * PlaceResolver의 기준점 로직(resolveViaAnchor류)은 regionHint에서 시·도를 "제거"하고 남은 구·동
-     * 단어로 더 정밀한 기준점(프랜차이즈 지점 찾기용)을 구하는 방향이라, 여기서 원하는 것(시·도 단위의
-     * "상위 지역" 좌표, 오히려 더 거칠어도 됨)과 방향이 반대다 - 억지로 재사용하면 로직을 반전시켜야
-     * 해서 오히려 더 얽힌다. 그래서 regionHint 텍스트 그대로 PlaceSearchClient에 물어보고 1순위
-     * 결과를 쓴다 - class/지역 필터 없이 거친 최후 수단이다(이미 한 번 되묻기까지 갔는데도 응답이
-     * 없었던 경우에만 타는 경로라 PlaceResolver 수준의 정밀도는 필요 없다고 보고 단순하게 짰다. 너무
-     * 거칠다고 판명되면 그때 필터를 추가한다).
-     */
-    private Optional<ResolvedPlaceDto> resolveBroaderRegion(PlaceCandidateDto candidate) {
-        if (candidate.regionHint() == null || candidate.regionHint().isBlank()) {
-            return Optional.empty();
-        }
-        List<PlaceSearchClient.PlaceSearchResult> results;
-        try {
-            results = placeLookup.search(candidate.regionHint(), null, candidate.regionHint());
-        } catch (RuntimeException e) {
-            return Optional.empty();
-        }
-        return results.stream().findFirst()
-                .map(r -> new ResolvedPlaceDto(
-                        candidate.candidateId(), candidate.name(), candidate.branchName(),
-                        r.displayName(), r.lat(), r.lon(),
-                        GeocodingProvider.LOCATIONIQ, r.placeId(), null));
     }
 }

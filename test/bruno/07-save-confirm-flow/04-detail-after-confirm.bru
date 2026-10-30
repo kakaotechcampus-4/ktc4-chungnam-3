@@ -1,0 +1,20 @@
+meta {
+  name: SAVE-04 답변 반영 후 재조회 - 200
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves/{{personalSaveId}}
+  body: none
+  auth: inherit
+}
+
+tests {
+  test("후보 해소 및 장소 반영 확인", function () {
+    expect(res.status).to.equal(200);
+    var remaining = res.body.confirmCandidates.map(function (c) { return c.candidateId; });
+    expect(remaining).to.not.include(bru.getVar("confirmCandidateId"));
+    expect(res.body.places.length).to.be.above(0);
+  });
+}
