@@ -1,0 +1,33 @@
+meta {
+  name: SAVE-03 되묻기 답변 제출 - 204
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/personal-saves/{{personalSaveId}}/places/{{confirmCandidateId}}/confirm
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "selectedOptionId": "{{selectedOptionId}}"
+  }
+}
+
+script:pre-request {
+  if (!bru.getVar("confirmCandidateId") || !bru.getVar("selectedOptionId")) {
+    throw new Error("confirmCandidateId/selectedOptionId 없음 - 02번이 되묻기 후보를 찾을 때까지 재실행하세요");
+  }
+}
+
+tests {
+  test("답변 반영", function () {
+    expect(res.status).to.equal(204);
+  });
+}
