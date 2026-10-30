@@ -66,7 +66,7 @@ frontend/
     │
     ├── runtime/              React 밖
     │   ├── background/       headlessTask(자리표시), pendingQueue(저장 보내기 대기열)
-    │   ├── geofence/         OS 펜스 등록 + ENTER 서버 보고만
+    │   ├── geofence/         지오펜스 이벤트 처리 · 도착 보고 대기열 · 상태 파일(geofenceManager · geofenceState), 등록 계획(registrationPlan). OS 등록은 G3
     │   ├── notifications/    channels, listener(발생원 은닉), router
     │   ├── permissions/      권한 상시 감시 (자동 회수 대응)
     │   └── share/
@@ -115,6 +115,7 @@ frontend/
         │   │   └── personalSaveMapper.ts  저장물 상세 · 목록 항목 -> SaveState
         │   └── mock/         UI 개발용 목 데이터. 화면 props 모양. 서버 계약 아님
         ├── storage/
+        │   ├── storage.ts        로컬 JSON 파일 저장소(키 하나 = Paths.document/{key}.json). 비밀이 아닌 값. 지오펜스 상태
         │   └── secureStore.ts    안전한 저장소(expo-secure-store) 지연 로더. 세션 · 설치 id
         ├── geo/
         │   └── distanceMeters.ts  두 좌표 거리(m). 서버 GeoDistance 와 같은 haversine
@@ -270,6 +271,17 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
     - `POST /api/location-events` `{ placeId, triggerEventId, eventType: "ENTER", eventOccurredAt, location? }` → 본문 없는 202. 중복 triggerEventId · 30분 지난 이벤트 · 회원 쿨다운(2시간) · 동의 없음이어도 똑같이 202 다.
       서버가 요청 안에서 꺼내기 실행과 알림 발송까지 마친 뒤 응답하므로 이 요청에만 시간 제한 10초를 건다. `reportLocationEvent` 는 예외를 던지지 않고
       sent · timeout(서버는 받았을 수 있음) · networkError · serverError(5xx) · rejected(4xx, 401 포함)를 돌려준다. 다시 보낼지는 호출자가 정한다(같은 triggerEventId 로 보내면 서버가 중복을 거른다).
+- 지오펜스 판단 로직(`runtime/geofence`, ADR003 의 프론트 지침 기준). OS 등록 · 해제 · 태스크 · 권한 · 동의 게이트는 아직 없다(G3).
+    - 등록 계획(`planRegistration`, 순수): 장소 region 은 들어옴 · 나감을 모두, 재조회 region 은 나감만 받는다. identifier 는 서버 geofenceId 그대로다.
+      장소 상태는 이전 상태가 있으면 그대로 두고, 새로 목록에 들어온 장소만 현재 위치에서 반경 안이면 inside 다. 목록에서 빠진 장소의 상태는 지운다.
+    - **초기 트리거 거르기**: Android expo-location 은 초기 트리거(ENTER | EXIT)를 켜고 등록한다. inside 인 장소의 ENTER 는 무시하고,
+      이전 outside 인데 지금 안에 있는 장소(등록 직전에 들어옴)는 초기 ENTER 로 보고된다. 앱을 처음 쓸 때 이미 안에 있는 장소는 보고하지 않는다.
+    - 이벤트(`handleGeofenceEvent`): 장소 들어옴 → outside 였으면 inside 로 바꾸고 도착 보고(새 triggerEventId, eventOccurredAt = 처리 시각, location 없음)를 대기열에 넣고 바로 보낸다.
+      장소 나감 → outside. 재조회 나감 → `resyncNeeded`(재조회 · 재등록은 G3). 모르는 id 는 무시. 가상 도착(G4)도 같은 함수를 부른다(나감 → 들어옴이면 매번 보고된다).
+    - **대기열**(`flushLocationEvents`): 앞에서부터 하나씩 보낸다. sent 는 지우고 401 이 아닌 4xx 는 버린다. timeout · networkError · serverError · 401 은 남기고 이번 보내기를 멈춘다(다음에 같은 triggerEventId).
+      보내기 직전에 30분 넘은 이벤트는 버린다. 최대 20개. 시간 예산 12초(태스크 예산 15초에서 여유를 뺌): 첫 보내기는 늘 하고, 다음은 경과 + 10초 ≤ 12초일 때만.
+      동시에 부르면 하나로 합친다. `clearGeofenceState`(동의 철회 · 로그아웃, 부르는 곳은 G3)가 지우면 보내는 중이던 결과는 반영하지 않는다.
+    - 상태 파일 하나(`storage` 키 `geofence-state`): 장소 상태 · 재조회 id · 마지막 등록(시각 · 중심 · id 목록) · 대기열. 깨졌거나 모양이 다르면 빈 상태로 시작한다.
 - 00b 의 약관 문구는 지금 링크 없이 문구만 있다. 이용약관 · 개인정보 처리방침 페이지가 생기면 링크로 연결한다.
 - 의존 방향: `shared/api/client.ts` → `shared/auth/session.ts`, `shared/auth/login.ts` → `client.ts` · `session.ts` · `providers.ts`.
   `session.ts` 는 클라이언트를 import 하지 않는다(순환 방지). 둘이 같이 읽는 API 주소는 `shared/api/config.ts` 에 둔다.

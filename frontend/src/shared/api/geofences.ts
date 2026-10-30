@@ -10,7 +10,8 @@ import { mockFetchGeofences, mockReportLocationEvent } from "./geofencesMock";
 
 // 앱은 Android 전용이다(iOS 빌드 없음).
 const PLATFORM = "ANDROID";
-const LOCATION_EVENT_TIMEOUT_MS = 10_000;
+// 도착 보고 시간 제한. 대기열이 시간 예산을 나눌 때도 쓴다.
+export const LOCATION_EVENT_TIMEOUT_MS = 10_000;
 
 // 재조회용 지오펜스. 벗어나면 현재 위치로 목록을 다시 받는다. geofenceId 는 "resync".
 export type ResyncGeofence = {
