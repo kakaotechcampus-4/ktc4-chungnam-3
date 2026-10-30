@@ -107,6 +107,18 @@ adb shell am start -W -a android.intent.action.VIEW -d "exp://<Metro 주소>/--/
 `text` 에 Shorts 가 아닌 링크(watch 등)나 링크 없는 텍스트를 넣으면 NotShorts 가 뜬다.
 저장 · 대기열 결과는 `MOCK_SCENARIO.saveResult`(ok · networkError · invalid)로 바꿔 본다.
 
+### 실제 공유 받기
+
+공유 수신(expo-share-intent)은 네이티브 모듈이라 **이 모듈을 넣은 뒤 다시 만든 개발 빌드에서만** 동작한다.
+Expo Go 와 그 전에 만든 개발 빌드에서는 경고("expo-share-intent 네이티브 모듈이 없는 빌드입니다…")가 한 번 뜨고 공유 목록에 앱이 나오지 않는다. 위의 개발용 공유 진입은 계속 쓸 수 있다.
+
+1. 개발 빌드를 다시 만들어 설치한다(위 "개발 빌드").
+2. YouTube 앱에서 Shorts → 공유 → Remembrall 을 고른다. 앱이 앞으로 뜨고 지금 화면 위에 공유 받음 시트가 뜬다.
+3. YouTube 없이 같은 공유를 보내려면:
+    ```bash
+    adb shell am start -a android.intent.action.SEND -t text/plain --es android.intent.extra.TEXT "https://youtube.com/shorts/kbWy8_UC0Z8" com.remembrall.app
+    ```
+
 빈 상태(06 · 07b), 위치 권한, 깨진 썸네일은 `src/shared/api/mock/scenario.ts` 의 `MOCK_SCENARIO` 플래그를 바꾸고 reload 해서 본다.
 
 ## 로컬 백엔드 연결

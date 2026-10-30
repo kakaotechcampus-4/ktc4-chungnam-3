@@ -1,5 +1,6 @@
 // 공유 받은 텍스트의 처리 흐름과 공유 받음 시트(C/ShareReceivedSheet) 상태. 흐름 메모 2212:1256.
-// 실제 공유(다음 작업)와 개발용 딥링크가 모두 receiveSharedText 를 부른다. 시트는 ShareReceiverHost 가 띄운다.
+// 실제 공유(nativeShareIntent)와 개발용 딥링크가 모두 receiveSharedText 를 부른다. 시트는 ShareReceiverHost 가 띄운다.
+// 세션을 읽는 중(loading)이면 끝날 때까지 기다린 뒤 가른다.
 // signedIn 이 아니면(세션 없음 · 온보딩 중) 링크를 대기열에만 넣고 시트는 띄우지 않는다. 링크가 없으면 아무것도 하지 않는다.
 // signedIn 이면: 링크 없음 → notShorts. 있으면 saving → 저장. 201 saved, 200 alreadySaved, 400 notShorts,
 // 그 밖의 실패(응답 없음 · 401 · 5xx · ApiError 가 아닌 예외)는 대기열에 넣고 queued.
@@ -14,7 +15,7 @@ import {
 } from "../../runtime/share/supportedLinks";
 import { ApiError } from "../../shared/api/client";
 import { savePersonalSave } from "../../shared/api/personalSaves";
-import { getAuthState } from "../../shared/auth/session";
+import { waitForAuthResolved } from "../../shared/auth/session";
 
 // thumbnailUrl 은 링크를 찾은 상태에만 있다. 등록되지 않은 플랫폼이면 null(자리표시).
 export type ShareSheetState =
@@ -52,8 +53,9 @@ export function closeShareSheet(): void {
 
 export async function receiveSharedText(text: string): Promise<void> {
     const id = ++latest;
+    const auth = await waitForAuthResolved();
     const link = findSharedLink(text);
-    if (getAuthState().status !== "signedIn") {
+    if (auth.status !== "signedIn") {
         if (link != null) await enqueue(link);
         return;
     }

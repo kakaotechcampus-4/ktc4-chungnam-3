@@ -42,9 +42,8 @@ frontend/
 │   └── images/providers/     로그인 제공자 공식 심볼. 공식 에셋에서 심볼 경로만 남긴 파일(직접 그리지 않는다)
 ├── scripts/
 │   └── subset-fonts.py       폰트 서브셋 생성 (원본 출처 · 범위 · 실행 방법은 파일 상단)
-├── android/
-│   └── app/src/main/java/com/remembrall/share/
-│       └── ShareActivity.kt  투명 공유 수신 액티비티 (앱 UI 안 띄움)
+│                             android/ 는 커밋하지 않는다(EAS 가 prebuild 로 만든다). 공유 수신은 expo-share-intent 플러그인이
+│                             MainActivity 에 SEND(text/plain) intent-filter 를 붙여 앱을 앞으로 띄운다(흐름 메모 1). 별도 액티비티 없음
 └── src/
     ├── app/                  앱 셸
     │   ├── App.tsx
@@ -258,7 +257,13 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 
 ## 공유 받음 처리
 
-- 처리 함수는 `app/share/shareReceiver.ts` 의 `receiveSharedText(text)` 하나다. 실제 공유(다음 작업)와 개발용 딥링크가 이것을 부른다.
+- 처리 함수는 `app/share/shareReceiver.ts` 의 `receiveSharedText(text)` 하나다. 실제 공유와 개발용 딥링크가 이것을 부른다.
+  세션을 읽는 중(loading)이면 끝날 때까지 기다린다(`waitForAuthResolved`).
+- 실제 공유는 `app/share/nativeShareIntent.ts` 가 받는다. expo-share-intent(app.json 플러그인: `disableIOS`, `androidIntentFilters: ["text/plain"]`,
+  launchMode 는 플러그인 기본 singleTask)를 처음 쓸 때 불러오고, 네이티브 모듈이 없으면(Expo Go · 옛 개발 빌드) 경고 한 번 뒤 아무것도 하지 않는다.
+  리스너를 붙인 뒤 `getShareIntent` 를 한 번 불러 콜드 스타트 공유를 받고, 실행 중 공유는 네이티브가 바로 보낸다. 넘긴 뒤 `clearShareIntent`.
+  받는 값은 공유 텍스트(`text`), 없으면 `webUrl` 이다.
+- 알려진 한계: 프로세스가 죽은 뒤 최근 앱 목록에서 다시 열면 Android 가 원래 SEND intent 로 Activity 를 다시 만들어 같은 공유가 다시 처리될 수 있다.
 - signedIn 이 아니면 링크를 대기열에만 넣고 시트는 띄우지 않는다(온보딩을 마치고 Main 에 들어오면 대기열이 보내진다).
 - signedIn 이면 지금 화면 위에 공유 받음 시트를 띄운다. 링크 없음 → NotShorts. 있으면 Saving → 저장.
   201 Saved · 200 AlreadySaved · 400 NotShorts, 그 밖의 실패는 대기열에 넣고 Queued. 저장이 성공하면 대기열도 이어서 보낸다.
