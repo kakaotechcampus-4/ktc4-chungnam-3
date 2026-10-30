@@ -142,6 +142,24 @@ export async function mockDeletePersonalSave(
     saves.splice(saves.indexOf(save), 1);
 }
 
+// 지오펜스 목이 쓴다. 서버의 지오펜스 대상(분석 실패 · 볼 수 없는 영상이 아닌 저장물의 장소)과 같다.
+// 목에서는 볼 수 없는 영상도 FAILED 라 FAILED 만 뺀다. 분석 시간이 지난 저장물은 먼저 끝낸다. 지운 저장물은 이미 빠져 있다.
+export function mockGeofencePlaces(): {
+    placeId: string;
+    latitude: number;
+    longitude: number;
+}[] {
+    return saves.flatMap((save) => {
+        finishIfDue(save);
+        if (save.analysisStatus === "FAILED") return [];
+        return save.places.map(({ placeId, latitude, longitude }) => ({
+            placeId,
+            latitude,
+            longitude,
+        }));
+    });
+}
+
 function mockDelay() {
     return new Promise((resolve) => setTimeout(resolve, MOCK_DELAY_MS));
 }
