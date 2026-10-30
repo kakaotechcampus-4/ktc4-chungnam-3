@@ -108,15 +108,17 @@ frontend/
         │   ├── consentTerms.ts   약관 버전 · 약관 URL 상수
         │   ├── personalSaves.ts  저장물 API(저장 · 상세 · 목록 · 삭제)와 서버 응답 타입 · 목 분기
         │   ├── personalSavesMock.ts  저장물 목. 서버 규칙을 따르는 메모리 저장소(서버 계약 모양이라 mock/ 밖)
+        │   ├── usePersonalSaveDetail.ts  저장물 상세 hook. 포커스 · 앱 복귀 때 읽기, 분석 중 5초마다 다시 읽기
         │   ├── mappers/      ★ 서버 응답 -> 앱 모델 변환. 백엔드 변경 흡수 지점
         │   │   └── personalSaveMapper.ts  저장물 상세 · 목록 항목 -> SaveState
         │   └── mock/         UI 개발용 목 데이터. 화면 props 모양. 서버 계약 아님
         ├── storage/
         │   └── secureStore.ts    안전한 저장소(expo-secure-store) 지연 로더. 세션 · 설치 id
         ├── external-links/   지도 딥링크 (단순 URL 빌더)
-        │   ├── youtubeThumbnail.ts  YouTube 썸네일 주소(hqdefault). 공유 파서와 기억 탭이 같이 쓴다
+        │   ├── youtubeLinks.ts  YouTube Shorts 주소 · 썸네일 주소(hqdefault). 공유 파서와 화면들이 같이 쓴다
         │   └── openExternalUrl.ts  웹 페이지(약관) 열기. expo-web-browser 지연 로드, 실패하면 Linking
         └── ui/               두 개 이상 feature 가 쓰는 공통 컴포넌트
+            ├── savedAt.ts    저장 시각 → 바램(fadeFor) · 지난 시간(savedAgo). 순수 함수
             └── theme/        Figma 토큰 + metrics
 ```
 
@@ -199,8 +201,23 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   "확인 필요"는 목록 응답으로 알 수 없어 아직 나오지 않는다. 이름은 ready 면 영상 제목(따옴표 없음, 목록에 장소명이 없어 임시),
   미확정이면 “영상 제목”, 제목이 없으면 failed 는 "불러오지 못한 영상", 그 밖은 "제목 없는 영상".
 - 기억 탭에서 미확정 셀은 `SaveResult > Result { personalSaveId }`, ready 셀은 `ContentDetail { personalSaveId }` 로 연다.
-  결과 · 상세 화면이 상세 API 를 읽기 전까지는 `mockKey` 로 기존 화면 목을 고른다(analyzing · failed · no-place · 상세는 sungsimdang). 임시이며 다음 커밋에서 지운다.
-  `mockKey` 가 없으면 personalSaveId 로 목을 찾으므로 개발용 딥링크(`save-result/failed` 등)는 그대로 열린다. 지도 · 근처는 지금처럼 `ContentDetail { placeId }` 로 연다.
+  지도 · 근처는 지금처럼 `ContentDetail { placeId }`(장소 목)로 연다.
+- 저장 결과(03 · 04 · 05)는 저장물 상세 API(`usePersonalSaveDetail` → `toSaveState`)를 읽는다. 포커스될 때 · 포커스된 동안 앱이 앞으로 올 때 읽고,
+  분석 중이면 5초마다 다시 읽다가 끝나면 멈춘다. analyzing → 03, noPlace → 04, failed → 05, ready → 모달을 08(`ContentDetail { personalSaveId }`)로 바꾼다(뒤로 가면 기억 탭).
+  404 → 12. 처음 읽기 실패 → Figma 05 문구 + "다시 시도"(다시 읽기). 읽는 동안은 닫기 줄만 보인다.
+  03 본문은 "보통 1분쯤 걸려요. 이 화면을 닫아도 계속 찾아요."(실측 평균 59초). meta 는 "{지난 시간} 저장 · YouTube Shorts".
+- 05 문구는 실패 종류로 가른다(`failedMessage`, 디자인 세션 결정). retryable(EXTRACTION_API_ERROR) "영상을 불러오지 못했어요" /
+  "분석하는 중에 연결이 끊겼어요. 다시 시도하면 처음부터 찾아볼게요." + 다시 시도. videoUnavailable "볼 수 없는 영상이에요" /
+  "비공개로 바뀌었거나 삭제된 영상이라 다시 분석할 수 없어요." analysisError "장소를 알아내지 못했어요" / "이 영상은 다시 분석해도 같은 결과가 나와요. 링크는 그대로 보관해둘게요."
+  코드가 없으면(null) Figma 05 문구 + 다시 시도. 다시 시도는 상세의 sourceUrl 을 다시 저장하고 상세를 다시 읽는다(서버가 다시 분석하면 03, 아니면 05 에 머문다).
+- 저장물로 연 08 은 상세의 첫 장소를 그린다(`savedPlaceSheet`, 장소별 전환 전). 큰 글씨는 지난 시간, 바램은 저장 시각, 썸네일은 videoId.
+  응답에 없는 값은 08b 규칙대로 비운다: 도보 시간 없음, 메모는 장소 설명 → 영상 요약 → 숨김, 태그는 카테고리 1개 → 숨김, 주소 · 도보 시간이 모두 없으면 메타 줄을 숨긴다.
+  원본 영상 줄 둘째 줄은 "{영상 제목} · YouTube Shorts"(제목이 없으면 "YouTube Shorts"), 누르면 videoId 의 Shorts 주소를 연다(sourceUrl 은 watch 형식).
+  미니 핀은 그리지 않는다. ready 가 아니면 저장 결과로 바꾸고, 404 는 12. 읽는 동안은 바탕과 뒤로가기만, 실패하면 "확인하지 못했어요. 눌러서 다시 불러와요".
+  "이 장소가 아니에요"는 지금처럼 02c 바꾸기 모드(첫 장소 placeId)를 연다. 02c 의 실제 저장 · 바꾸기는 아직 목이다.
+- 02c 캡션의 영상 제목은 `sourceTitle` 파라미터로 받는다(04 · 저장물 08 에서). 넘겨받지 않으면(개발용 딥링크 · 목 08) 화면 목에서 찾는다.
+- 개발 모드(`__DEV__`)에서 저장 결과의 personalSaveId 가 화면 목(`saveResults`) 키면 API 대신 그 목을 그린다.
+  02 · 02b(확인 필요)는 아직 이 경로로만 본다(되묻기 연결 전). 서버 id 는 UUID 라 목 키와 겹치지 않는다.
 - 08 시트 멈춤 지점은 기본 · 펼침이다. 지도 탭에서만 요약(10b) 지점이 추가된다.
 - 08 지도에는 이 장소 핀(fade 와 관계없이 40×71 · 흰 테두리 3 · 그림자, 바램은 장소의 fade · 이름표) · 현재 위치 · 현재 위치에서 장소까지의 점선 경로만 그린다.
   현재 위치 · 경로는 위치 권한이 "denied" 일 때만 숨긴다. 경로는 경로 API 가 정해지기 전까지 직선 자리표시다.
@@ -285,7 +302,7 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 - 시트가 떠 있는 동안 새 공유가 오면 새 결과로 바꾼다. 앞선 공유의 늦은 결과는 버린다.
 - "돌아가기"는 시트를 닫고 앱을 뒤로 보낸다(`BackHandler.exitApp`). "기억 탭 보기"(Saved · AlreadySaved, Saving 에서는 비활성)는
   `navigationRef` 로 기억 탭에 간다. 바깥 닫힘은 시트만 닫고, Saving 중에는 버튼 · 끌기 · 배경 · 뒤로를 막는다.
-- 썸네일은 플랫폼 파서의 `thumbnailUrl`(YouTube 는 `shared/external-links/youtubeThumbnail.ts` 의 `hqdefault.jpg`)을 9:16 으로 가운데 잘라 보인다. 불러오지 못하면 자리표시.
+- 썸네일은 플랫폼 파서의 `thumbnailUrl`(YouTube 는 `shared/external-links/youtubeLinks.ts` 의 `hqdefault.jpg`)을 9:16 으로 가운데 잘라 보인다. 불러오지 못하면 자리표시.
 - 개발용 진입: `__DEV__` 에서만 `remembrall://dev/share?text=…`(Expo Go 는 `exp://<Metro 주소>/--/dev/share?text=…`)를 받아 처리 함수를 부른다.
   linking 설정은 이 주소를 화면 경로로 해석하지 않는다(`filter`).
 
@@ -354,7 +371,7 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 - `shared/api/mock/` 은 화면 props 모양 그대로 둔다. 서버 응답 계약처럼 만들지 않는다.
   서버 계약 모양의 목(API 함수의 목 분기)은 API 모듈 안이나 옆에 둔다(`consents.ts`, `personalSavesMock.ts`).
 - UI 단계 동안 features 는 mock 에서 직접 받는다. `client.ts` 와 `mappers/` 를 거치지 않는다.
-  예외: 기억 탭은 저장물 API(`personalSaves.ts`)와 `mappers/personalSaveMapper.ts` 를 쓴다. 목 모드에서는 API 의 목 분기(`personalSavesMock.ts`)가 답한다.
+  예외: 기억 탭 · 저장 결과 · 저장물로 연 08 은 저장물 API(`personalSaves.ts` · `usePersonalSaveDetail.ts`)와 `mappers/personalSaveMapper.ts` 를 쓴다. 목 모드에서는 API 의 목 분기(`personalSavesMock.ts`)가 답한다.
 - mock 은 features 의 타입을 import 하지 않는다(shared → features 금지). 구조적 타입으로 맞춘다.
 - 목 이미지 URL(picsum 고정 id)은 이 폴더 안에만 둔다.
 - 세션과 로그인은 2 · 3번 커밋 전까지 목 플래그다. `MOCK_SCENARIO.signedIn`(시작 시 세션 여부, 기본 true) · `loginResult`(success · cancelled · failed).
@@ -366,9 +383,10 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   (장소 있는 성공 2 · 분석 중 1 · 실패(EXTRACTION_API_ERROR) 1 · 볼 수 없는 영상 1 · 장소 없음 1, 저장 시각은 오늘 · 3주 전 · 2달 전).
   샘플 영상 id 는 가짜(`mockSave001`~`006`)라 썸네일은 자리표시다. 분석 중 샘플은 앱을 켜고 약 5초 뒤 `analysisResult` 로 끝난다.
   `MOCK_SCENARIO.saveResult`(저장 결과, ok · networkError · invalid, 기본 ok) ·
-  `analysisResult`(저장하고 약 5초 뒤 상세 · 목록에 보일 분석 결과, success · noPlace · failed · videoUnavailable, 기본 success).
+  `analysisResult`(저장하고 약 5초 뒤 상세 · 목록에 보일 분석 결과, success · noPlace · failed · videoUnavailable · analysisError, 기본 success).
   같은 영상을 다시 저장하면 `created: false` 다. 공유로 저장한 것도 같은 저장소라 기억 탭에 바로 보인다.
-  결과(02~05) · 상세(08) 화면은 아직 이 목이 아니라 기존 화면 목(`saveResults` · `placeDetails`)을 쓴다.
+  `analysisResult: "analysisError"` 는 EXTRACTION_RESULT_ERROR 로 끝난다(05 analysisError 문구 확인용).
+  저장 결과 · 저장물로 연 08 도 이 목을 읽는다. 개발용 딥링크의 목 키(`saveResults`)와 지도 · 근처의 08(`placeDetails`)은 화면 목이다.
 - 장소 확정 저장물(ready)은 상세(08)로, 미확정 저장물은 저장 결과(02~05)로 간다.
 - 거리 표시: 도보 30분 이내는 "도보 N분", 30분을 넘으면 직선거리 "N.Nkm". 목 데이터는 이 규칙대로 문자열을 넣는다.
 

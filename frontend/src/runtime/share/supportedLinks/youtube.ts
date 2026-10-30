@@ -2,7 +2,10 @@
 // 허용 규칙은 이 파일 위쪽 상수에만 둔다. youtu.be · /watch · /live · /embed 는 실제 공유 형식을 기기에서 확인한 뒤 넓힌다.
 // 전역 URL 은 RN · Expo 구현마다 동작이 달라 쓰지 않고 정규식으로 나눈다.
 
-import { youtubeThumbnailUrl } from "../../../shared/external-links/youtubeThumbnail";
+import {
+    youtubeShortsUrl,
+    youtubeThumbnailUrl,
+} from "../../../shared/external-links/youtubeLinks";
 import type { LinkParser, SharedLink } from "./index";
 
 // 정확히 일치해야 한다(접미사 일치 금지). 소문자로 비교한다.
@@ -32,9 +35,9 @@ export const youtubeParser: LinkParser = {
         return {
             platform: "YOUTUBE",
             videoId,
-            url: `https://www.youtube.com/shorts/${videoId}`,
+            url: youtubeShortsUrl(videoId),
         };
     },
-    // 주소 규칙은 기억 탭과 같이 쓰므로 shared 에 둔다.
+    // 주소 규칙은 화면들과 같이 쓰므로 shared 에 둔다.
     thumbnailUrl: youtubeThumbnailUrl,
 };

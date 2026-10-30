@@ -169,10 +169,9 @@ function finishIfDue(save: MockSave): void {
     if (save.analysisStatus !== "ANALYZING") return;
     if (Date.now() - save.analysisStartedAt < ANALYSIS_MS) return;
     const result = MOCK_SCENARIO.analysisResult;
-    if (result === "failed" || result === "videoUnavailable") {
+    if (result !== "success" && result !== "noPlace") {
         save.analysisStatus = "FAILED";
-        save.analysisFailureCode =
-            result === "failed" ? "EXTRACTION_API_ERROR" : "VIDEO_UNAVAILABLE";
+        save.analysisFailureCode = FAILURE_CODE[result];
         return;
     }
     save.analysisStatus = "SUCCESS";
@@ -183,6 +182,12 @@ function finishIfDue(save: MockSave): void {
     save.category = "맛집";
     save.places = result === "noPlace" ? [] : mockPlaces();
 }
+
+const FAILURE_CODE = {
+    failed: "EXTRACTION_API_ERROR",
+    videoUnavailable: "VIDEO_UNAVAILABLE",
+    analysisError: "EXTRACTION_RESULT_ERROR",
+} as const satisfies Record<string, AnalysisFailureCode>;
 
 function mockPlaces(): PersonalSavePlaceResponse[] {
     return [

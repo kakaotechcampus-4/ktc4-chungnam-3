@@ -27,15 +27,18 @@ export type MainTabParamList = {
     [ROUTES.Archive]: undefined;
 };
 
-// 저장물로 여는 화면의 파라미터. mockKey 는 결과 · 상세 화면이 상세 API 를 읽기 전까지
-// 기존 화면 목(saveResults · placeDetails)을 고르는 임시 키다. 없으면 personalSaveId 로 목을 찾는다(개발용 딥링크).
-export type PersonalSaveParams = { personalSaveId: string; mockKey?: string };
+// 저장물로 여는 화면의 파라미터. 화면은 저장물 상세 API 를 읽는다.
+// 개발 모드에서는 personalSaveId 가 화면 목(saveResults)의 키면 그 목을 그린다(개발용 딥링크).
+export type PersonalSaveParams = { personalSaveId: string };
 
 // SaveResult 모달 안의 중첩 스택. Result(02~05 · 02b) → PlaceSearch(02c · 02d).
 // PlaceSearch 는 personalSaveId 면 저장 모드, placeId 면 08 에서 여는 바꾸기 모드다.
+// sourceTitle 은 캡션에 쓰는 영상 제목이다(없으면 null). 넘기면 목에서 찾지 않는다.
 export type SaveResultStackParamList = {
     [ROUTES.Result]: PersonalSaveParams;
-    [ROUTES.PlaceSearch]: PersonalSaveParams | { placeId: string };
+    [ROUTES.PlaceSearch]:
+        | (PersonalSaveParams & { sourceTitle?: string | null })
+        | { placeId: string; sourceTitle?: string | null };
 };
 
 export type RootStackParamList = {

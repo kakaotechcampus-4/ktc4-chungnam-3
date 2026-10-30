@@ -1,15 +1,16 @@
 // 저장물 목록(최신 저장순)을 기억 탭 앨범 섹션으로 나눈다. 순수 함수.
-// 바램 · 섹션은 저장 시각에서 지난 시간으로 정한다. 7일 미만 recent "이번 주", 30일 미만 weeks "지난 몇 주",
+// 바램(shared/ui/savedAt 의 fadeFor) · 섹션은 저장 시각에서 지난 시간으로 정한다. 7일 미만 recent "이번 주", 30일 미만 weeks "지난 몇 주",
 // 30일 이상 months 이고 섹션은 계절로 나눈다(3~5 봄, 6~8 여름, 9~11 가을, 12~2 겨울. 12월은 다음 해 겨울).
 // 계절 섹션 제목의 해는 지금 해와 비교해 "올해" · "지난해" · "{YYYY}년" 이다. 날짜는 기기 시간대로 본다.
 // 셀 이름: ready 는 목록에 장소명이 없어 영상 제목을 따옴표 없이 쓴다(임시). 미확정은 “제목”.
 // 제목이 없으면 failed 는 "불러오지 못한 영상"(흐름 메모 2106:781), 그 밖은 "제목 없는 영상".
-// open.mockKey 는 결과 · 상세 화면이 상세 API 를 읽기 전까지 기존 화면 목을 고르는 임시 키다(다음 커밋에서 지운다).
+// 미확정은 저장 결과(02~05), ready 는 장소 상세(08)로 연다.
 import type { SaveState } from "../../domain/saveState";
 import { toSaveStateFromItem } from "../../shared/api/mappers/personalSaveMapper";
 import type { PersonalSaveItemResponse } from "../../shared/api/personalSaves";
-import { youtubeThumbnailUrl } from "../../shared/external-links/youtubeThumbnail";
+import { youtubeThumbnailUrl } from "../../shared/external-links/youtubeLinks";
 import type { BadgeStatus } from "../../shared/ui/Badge";
+import { fadeFor } from "../../shared/ui/savedAt";
 import type { ThumbFade } from "../../shared/ui/Thumb";
 
 export type AlbumItem = {
@@ -18,7 +19,7 @@ export type AlbumItem = {
     thumbUri: string;
     fade: ThumbFade;
     status?: BadgeStatus;
-    open: { screen: "result" | "detail"; mockKey: string };
+    opens: "result" | "detail";
 };
 
 export type AlbumSection = {
@@ -27,10 +28,6 @@ export type AlbumSection = {
     items: AlbumItem[];
 };
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-const RECENT_DAYS = 7;
-const WEEKS_DAYS = 30;
-
 const SEASONS = ["겨울", "봄", "여름", "가을"] as const;
 
 const BADGE: Record<SaveState["kind"], BadgeStatus | undefined> = {
@@ -38,13 +35,6 @@ const BADGE: Record<SaveState["kind"], BadgeStatus | undefined> = {
     failed: "failed",
     noPlace: "noPlace",
     ready: undefined,
-};
-
-const MOCK_KEY: Record<SaveState["kind"], AlbumItem["open"]> = {
-    analyzing: { screen: "result", mockKey: "analyzing" },
-    failed: { screen: "result", mockKey: "failed" },
-    noPlace: { screen: "result", mockKey: "no-place" },
-    ready: { screen: "detail", mockKey: "sungsimdang" },
 };
 
 export function toAlbumSections(
@@ -68,7 +58,7 @@ export function toAlbumSections(
             thumbUri: youtubeThumbnailUrl(item.videoId),
             fade,
             status: BADGE[state.kind],
-            open: MOCK_KEY[state.kind],
+            opens: state.kind === "ready" ? "detail" : "result",
         };
         // 최신 저장순이라 같은 섹션은 이어서 온다.
         const last = sections[sections.length - 1];
@@ -76,13 +66,6 @@ export function toAlbumSections(
         else sections.push({ key, title, items: [albumItem] });
     }
     return sections;
-}
-
-export function fadeFor(savedAt: Date, now: Date): ThumbFade {
-    const days = (now.getTime() - savedAt.getTime()) / DAY_MS;
-    if (days < RECENT_DAYS) return "recent";
-    if (days < WEEKS_DAYS) return "weeks";
-    return "months";
 }
 
 export function seasonSection(

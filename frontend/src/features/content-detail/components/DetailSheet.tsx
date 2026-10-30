@@ -1,5 +1,6 @@
 // 08 장소 상세 시트 본문. head · 메모 묶음 · 원본 영상 줄. 핸들과 하단 버튼은 시트가 따로 그린다.
 // 빈 필드(08b): 메모가 없으면 묶음 전체, 태그가 없으면 태그 줄을 숨긴다. 도보 시간은 showWalk 일 때만 붙인다.
+// 주소 · 도보 시간이 모두 없으면 메타 줄을 숨긴다. "원본 영상 다시 보기"는 onOpenSource 가 있을 때만 눌린다.
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import Icon from "../../../shared/ui/Icon";
@@ -17,7 +18,7 @@ import {
 export type DetailSheetProps = {
     time: string;
     place: string;
-    address: string;
+    address?: string;
     walk?: string;
     thumbUri?: string;
     fade: ThumbFade;
@@ -29,6 +30,7 @@ export type DetailSheetProps = {
 type Props = DetailSheetProps & {
     showWalk: boolean;
     noteExpanded: boolean;
+    onOpenSource?: () => void;
 };
 
 export default function DetailSheet({
@@ -43,8 +45,11 @@ export default function DetailSheet({
     sourceMeta,
     showWalk,
     noteExpanded,
+    onOpenSource,
 }: Props) {
-    const meta = showWalk && walk ? `${address} · ${walk}` : address;
+    const meta = [address, showWalk ? walk : undefined]
+        .filter((part) => part != null && part !== "")
+        .join(" · ");
     return (
         <View style={styles.body}>
             <View style={styles.head}>
@@ -56,9 +61,11 @@ export default function DetailSheet({
                     <Text numberOfLines={1} style={styles.place}>
                         {place}
                     </Text>
-                    <Text numberOfLines={1} style={styles.caption}>
-                        {meta}
-                    </Text>
+                    {meta !== "" && (
+                        <Text numberOfLines={1} style={styles.caption}>
+                            {meta}
+                        </Text>
+                    )}
                 </View>
             </View>
 
@@ -87,10 +94,11 @@ export default function DetailSheet({
                 </View>
             )}
 
-            {/* 동작이 연결되면 disabled 를 뺀다. */}
             <Pressable
                 accessibilityRole="link"
-                accessibilityState={{ disabled: true }}
+                accessibilityState={{ disabled: onOpenSource == null }}
+                disabled={onOpenSource == null}
+                onPress={onOpenSource}
                 style={styles.source}
             >
                 <View style={styles.sourceText}>

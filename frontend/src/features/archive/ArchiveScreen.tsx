@@ -3,7 +3,7 @@
 // 데이터는 저장물 목록 API(useArchivePages)다. 섹션 · 바램 · 이름은 albumSections 가 정한다.
 // 첫 로딩은 헤더만 보인다. 처음 읽기가 실패하면 캡션 자리에 다시 불러오기 문구를 보인다. 목록이 비면 07b.
 // 끝 근처(한 화면 이내)까지 내리면 다음 페이지를 읽는다. "모두 N곳"은 마지막 페이지까지 읽었을 때만 보인다.
-// 미확정 셀은 저장 결과(02~05), ready 셀은 장소 상세(08)를 personalSaveId 로 연다(mockKey 는 임시, albumSections).
+// 미확정 셀은 저장 결과(02~05), ready 셀은 장소 상세(08)를 personalSaveId 로 연다.
 import { useNavigation } from "@react-navigation/native";
 import {
     type NativeScrollEvent,
@@ -87,13 +87,13 @@ export default function ArchiveScreen() {
 
     const sections = toAlbumSections(items, new Date());
 
-    const open = ({ personalSaveId, open: { screen, mockKey } }: AlbumItem) =>
-        screen === "result"
+    const open = ({ personalSaveId, opens }: AlbumItem) =>
+        opens === "result"
             ? navigation.navigate("SaveResult", {
                   screen: "Result",
-                  params: { personalSaveId, mockKey },
+                  params: { personalSaveId },
               })
-            : navigation.navigate("ContentDetail", { personalSaveId, mockKey });
+            : navigation.navigate("ContentDetail", { personalSaveId });
 
     return (
         <View style={styles.screen}>
