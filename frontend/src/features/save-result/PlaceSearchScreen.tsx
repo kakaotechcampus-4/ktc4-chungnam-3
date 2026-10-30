@@ -34,8 +34,11 @@ type Place = { id: string; name: string; address: string };
 type Saved = { source: { meta: string; title?: string } };
 type Detail = { place: string; sourceTitle?: string };
 
-// resultId 로 들어오면 저장 모드(02 · 02b · 04 에서), placeId 로 들어오면 바꾸기 모드(08 에서).
-type Params = { resultId: string } | { placeId: string };
+// personalSaveId 로 들어오면 저장 모드(02 · 02b · 04 에서), placeId 로 들어오면 바꾸기 모드(08 에서).
+// 저장 모드는 상세 API 를 읽기 전까지 mockKey(없으면 personalSaveId)로 화면 목을 찾는다.
+type Params =
+    | { personalSaveId: string; mockKey?: string }
+    | { placeId: string };
 
 const places: readonly Place[] = placeSearchMock;
 const sources: Readonly<Record<string, Saved>> = saveResultsMock;
@@ -60,12 +63,13 @@ export default function PlaceSearchScreen() {
 
     const params = route.params;
     const replacing = "placeId" in params;
+    const key = replacing
+        ? params.placeId
+        : (params.mockKey ?? params.personalSaveId);
     const title = replacing
-        ? details[params.placeId]?.sourceTitle
-        : sources[params.resultId]?.source.title;
-    const found = replacing
-        ? details[params.placeId] != null
-        : sources[params.resultId] != null;
+        ? details[key]?.sourceTitle
+        : sources[key]?.source.title;
+    const found = replacing ? details[key] != null : sources[key] != null;
 
     if (!found) {
         return (

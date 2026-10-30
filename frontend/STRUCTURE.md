@@ -75,7 +75,7 @@ frontend/
     ├── features/             화면
     │   ├── onboarding/       첫 실행 흐름. 소개 · 로그인 · 권한(알림 · 위치 2단계) · 첫 저장 안내(00a~00f)
     │   │   └── components/
-    │   ├── archive/          기억 탭. 시간순 앨범
+    │   ├── archive/          기억 탭. 시간순 앨범. 저장물 목록 API(useArchivePages) · 섹션 · 바램 · 이름(albumSections)
     │   │   └── components/
     │   ├── proposal/         근처 탭. 지금 위치 근처의 저장물
     │   │   └── components/
@@ -114,6 +114,7 @@ frontend/
         ├── storage/
         │   └── secureStore.ts    안전한 저장소(expo-secure-store) 지연 로더. 세션 · 설치 id
         ├── external-links/   지도 딥링크 (단순 URL 빌더)
+        │   ├── youtubeThumbnail.ts  YouTube 썸네일 주소(hqdefault). 공유 파서와 기억 탭이 같이 쓴다
         │   └── openExternalUrl.ts  웹 페이지(약관) 열기. expo-web-browser 지연 로드, 실패하면 Linking
         └── ui/               두 개 이상 feature 가 쓰는 공통 컴포넌트
             └── theme/        Figma 토큰 + metrics
@@ -186,6 +187,20 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 - 08 "길 안내 시작"은 동작하지 않는다. 백엔드 협의 이슈 대기.
 - 하단 바의 선택 표시는 `bg/subtle` pill 이다. 브랜드 색을 쓰지 않는다.
 - 없는 저장 결과 id · 장소 id 로 들어오면 NotFound(12)를 보여준다. "기억 목록으로" → 기억 탭.
+- 기억 탭(07 · 07b)은 저장물 목록 API(`fetchPersonalSaves`)를 읽는다. 첫 페이지 20개, 끝 근처(한 화면 이내)까지 내리면 `nextCursor` 로 다음 페이지를 붙인다.
+  탭에 포커스될 때와 포커스된 동안 앱이 앞으로 올 때 다시 읽는다(백엔드 합의: 보관함 진입 · 앱 복귀 시 재조회).
+  다시 읽을 때는 이미 읽은 개수만큼(20~100) 한 번에 읽어 통째로 바꾸고, 응답이 올 때까지 보이던 목록을 둔다. 마지막 읽기만 반영한다.
+  첫 로딩은 헤더만, 처음 읽기 실패는 캡션 자리에 "확인하지 못했어요. 눌러서 다시 불러와요"(누르면 다시 읽기), 다시 읽기 · 다음 페이지 실패는 목록을 그대로 둔다.
+  목록이 비면 07b. "모두 N곳"(N 은 저장물 수)은 마지막 페이지까지 읽었을 때만, 그 전에는 "오래 잊은 것일수록 바래 있어요"만 보인다.
+- 기억 탭 바램 · 섹션은 저장 시각에서 지난 시간으로 정한다(`albumSections`). 7일 미만 recent "이번 주", 30일 미만 weeks "지난 몇 주",
+  30일 이상 months 이고 섹션은 계절(3~5 봄 · 6~8 여름 · 9~11 가을 · 12~2 겨울, 12월은 다음 해 겨울)에 "올해" · "지난해" · "{YYYY}년"을 붙인다.
+  근처에 왔을 때 바램이 되살아나는 것(Figma 2061:632)은 목록 응답에 그 정보가 없어 아직 하지 않는다.
+- 기억 탭 셀: 썸네일은 videoId 의 YouTube 썸네일, 배지는 SaveState(analyzing 분석 중 · failed 실패 · noPlace 장소 없음 · ready 없음).
+  "확인 필요"는 목록 응답으로 알 수 없어 아직 나오지 않는다. 이름은 ready 면 영상 제목(따옴표 없음, 목록에 장소명이 없어 임시),
+  미확정이면 “영상 제목”, 제목이 없으면 failed 는 "불러오지 못한 영상", 그 밖은 "제목 없는 영상".
+- 기억 탭에서 미확정 셀은 `SaveResult > Result { personalSaveId }`, ready 셀은 `ContentDetail { personalSaveId }` 로 연다.
+  결과 · 상세 화면이 상세 API 를 읽기 전까지는 `mockKey` 로 기존 화면 목을 고른다(analyzing · failed · no-place · 상세는 sungsimdang). 임시이며 다음 커밋에서 지운다.
+  `mockKey` 가 없으면 personalSaveId 로 목을 찾으므로 개발용 딥링크(`save-result/failed` 등)는 그대로 열린다. 지도 · 근처는 지금처럼 `ContentDetail { placeId }` 로 연다.
 - 08 시트 멈춤 지점은 기본 · 펼침이다. 지도 탭에서만 요약(10b) 지점이 추가된다.
 - 08 지도에는 이 장소 핀(fade 와 관계없이 40×71 · 흰 테두리 3 · 그림자, 바램은 장소의 fade · 이름표) · 현재 위치 · 현재 위치에서 장소까지의 점선 경로만 그린다.
   현재 위치 · 경로는 위치 권한이 "denied" 일 때만 숨긴다. 경로는 경로 API 가 정해지기 전까지 직선 자리표시다.
@@ -270,7 +285,7 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 - 시트가 떠 있는 동안 새 공유가 오면 새 결과로 바꾼다. 앞선 공유의 늦은 결과는 버린다.
 - "돌아가기"는 시트를 닫고 앱을 뒤로 보낸다(`BackHandler.exitApp`). "기억 탭 보기"(Saved · AlreadySaved, Saving 에서는 비활성)는
   `navigationRef` 로 기억 탭에 간다. 바깥 닫힘은 시트만 닫고, Saving 중에는 버튼 · 끌기 · 배경 · 뒤로를 막는다.
-- 썸네일은 플랫폼 파서의 `thumbnailUrl`(YouTube 는 `hqdefault.jpg`)을 9:16 으로 가운데 잘라 보인다. 불러오지 못하면 자리표시.
+- 썸네일은 플랫폼 파서의 `thumbnailUrl`(YouTube 는 `shared/external-links/youtubeThumbnail.ts` 의 `hqdefault.jpg`)을 9:16 으로 가운데 잘라 보인다. 불러오지 못하면 자리표시.
 - 개발용 진입: `__DEV__` 에서만 `remembrall://dev/share?text=…`(Expo Go 는 `exp://<Metro 주소>/--/dev/share?text=…`)를 받아 처리 함수를 부른다.
   linking 설정은 이 주소를 화면 경로로 해석하지 않는다(`filter`).
 
@@ -339,6 +354,7 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 - `shared/api/mock/` 은 화면 props 모양 그대로 둔다. 서버 응답 계약처럼 만들지 않는다.
   서버 계약 모양의 목(API 함수의 목 분기)은 API 모듈 안이나 옆에 둔다(`consents.ts`, `personalSavesMock.ts`).
 - UI 단계 동안 features 는 mock 에서 직접 받는다. `client.ts` 와 `mappers/` 를 거치지 않는다.
+  예외: 기억 탭은 저장물 API(`personalSaves.ts`)와 `mappers/personalSaveMapper.ts` 를 쓴다. 목 모드에서는 API 의 목 분기(`personalSavesMock.ts`)가 답한다.
 - mock 은 features 의 타입을 import 하지 않는다(shared → features 금지). 구조적 타입으로 맞춘다.
 - 목 이미지 URL(picsum 고정 id)은 이 폴더 안에만 둔다.
 - 세션과 로그인은 2 · 3번 커밋 전까지 목 플래그다. `MOCK_SCENARIO.signedIn`(시작 시 세션 여부, 기본 true) · `loginResult`(success · cancelled · failed).
@@ -346,10 +362,14 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 - 위치 권한과 현재 위치는 runtime 작업 전까지 목 플래그(`MOCK_SCENARIO`)와 목 좌표로 둔다.
   설정(11)의 권한 표시는 실제 권한 상태를 읽는다. 지도(10 · 08)의 현재 위치 · denied 분기는 runtime 작업 때 실제 권한으로 바꾼다.
 - 위치기반서비스 동의는 목 모드에서 목 플래그다. `MOCK_SCENARIO.locationConsent`(시작 시 동의 상태, never · agreed · withdrawn, 기본 never) · `consentSaveResult`(동의 저장 결과, ok · fail, 기본 ok).
-- 저장물 API 는 목 모드에서 빈 메모리 저장소로 시작한다. `MOCK_SCENARIO.saveResult`(저장 결과, ok · networkError · invalid, 기본 ok) ·
+- 저장물 API 는 목 모드에서 메모리 저장소다. `MOCK_SCENARIO.archiveEmpty` 면 빈 저장소, 아니면 샘플 6개로 시작한다
+  (장소 있는 성공 2 · 분석 중 1 · 실패(EXTRACTION_API_ERROR) 1 · 볼 수 없는 영상 1 · 장소 없음 1, 저장 시각은 오늘 · 3주 전 · 2달 전).
+  샘플 영상 id 는 가짜(`mockSave001`~`006`)라 썸네일은 자리표시다. 분석 중 샘플은 앱을 켜고 약 5초 뒤 `analysisResult` 로 끝난다.
+  `MOCK_SCENARIO.saveResult`(저장 결과, ok · networkError · invalid, 기본 ok) ·
   `analysisResult`(저장하고 약 5초 뒤 상세 · 목록에 보일 분석 결과, success · noPlace · failed · videoUnavailable, 기본 success).
-  같은 영상을 다시 저장하면 `created: false` 다. 지금 화면들은 이 목이 아니라 기존 화면 목(`saveResults` · `archive`)을 쓴다.
-- 장소 확정 저장물은 모두 상세(`detailId` → 08)를 가진다. 실제 데이터에서도 모든 저장물에 상세가 있다. 미확정 저장물은 저장 결과(02~05)로 간다.
+  같은 영상을 다시 저장하면 `created: false` 다. 공유로 저장한 것도 같은 저장소라 기억 탭에 바로 보인다.
+  결과(02~05) · 상세(08) 화면은 아직 이 목이 아니라 기존 화면 목(`saveResults` · `placeDetails`)을 쓴다.
+- 장소 확정 저장물(ready)은 상세(08)로, 미확정 저장물은 저장 결과(02~05)로 간다.
 - 거리 표시: 도보 30분 이내는 "도보 N분", 30분을 넘으면 직선거리 "N.Nkm". 목 데이터는 이 규칙대로 문자열을 넣는다.
 
 ## 의존 방향

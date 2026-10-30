@@ -73,11 +73,18 @@ function confirmCopy(count: number) {
 export default function SaveResultScreen() {
     const navigation = useNavigation();
     // SaveResult 모달 안 중첩 스택의 첫 화면(Result)이다.
+    // 상세 API 를 읽기 전까지 mockKey(없으면 personalSaveId)로 화면 목을 찾는다.
     const route =
-        useRoute<RouteProp<{ Result: { resultId: string } }, "Result">>();
+        useRoute<
+            RouteProp<
+                { Result: { personalSaveId: string; mockKey?: string } },
+                "Result"
+            >
+        >();
     const insets = useSafeAreaInsets();
 
-    const result = results[route.params.resultId];
+    const { personalSaveId, mockKey } = route.params;
+    const result = results[mockKey ?? personalSaveId];
     const candidates =
         result?.state === "needsConfirmation" ? result.candidates : [];
     const [selectedId, setSelectedId] = useState(candidates[0]?.id);
@@ -107,7 +114,7 @@ export default function SaveResultScreen() {
     const openSearch = () =>
         navigation.navigate("SaveResult", {
             screen: "PlaceSearch",
-            params: { resultId: route.params.resultId },
+            params: { personalSaveId, mockKey },
         });
     const selected = candidates.find(
         (candidate) => candidate.id === selectedId,

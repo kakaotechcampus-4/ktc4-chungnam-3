@@ -1,5 +1,6 @@
 // 저장물 API 의 목. 서버 계약 모양이라 화면 props 모양인 mock/ 폴더가 아니라 API 모듈 옆에 둔다(consents.ts 의 목과 같은 자리).
-// 서버(PersonalSaveService · ContentRepository)와 같은 규칙을 따른다. 시작 상태는 빈 저장소이고, 이번 실행 동안 메모리에 남는다.
+// 서버(PersonalSaveService · ContentRepository)와 같은 규칙을 따른다. 이번 실행 동안 메모리에 남는다.
+// 시작 상태: MOCK_SCENARIO.archiveEmpty 면 빈 저장소, 아니면 샘플 6개(seedSaves). 공유로 저장한 것도 같은 저장소에 쌓인다.
 // 저장 결과는 MOCK_SCENARIO.saveResult, 분석 결과는 analysisResult 로 바꾼다.
 // 새로 저장하면 ANALYZING 이고, 분석을 시작하고 ANALYSIS_MS 가 지난 뒤 상세 · 목록을 읽으면 그때의 analysisResult 로 끝난다.
 import { ApiError } from "./client";
@@ -35,7 +36,7 @@ type MockSave = {
     places: PersonalSavePlaceResponse[];
 };
 
-const saves: MockSave[] = [];
+const saves: MockSave[] = MOCK_SCENARIO.archiveEmpty ? [] : seedSaves();
 
 export async function mockSavePersonalSave(
     url: string,
@@ -201,6 +202,101 @@ function mockPlaces(): PersonalSavePlaceResponse[] {
             longitude: 127.4244,
             description: null,
         },
+    ];
+}
+
+// 기억 탭 샘플. 저장 시각을 오늘 · 3주 전 · 2달 전으로 나눠 바램 세 단계가 보이게 한다.
+// 영상 id 는 가짜(i.ytimg.com 404)라 썸네일은 자리표시다. 같은 id 를 공유하면 이미 저장한 영상이 된다.
+// 분석 중 샘플은 앱을 켜고 ANALYSIS_MS 뒤에 analysisResult 로 끝난다.
+function seedSaves(): MockSave[] {
+    // 같은 날 샘플도 순서가 정해지게 시간까지 나눈다.
+    const daysAgo = (days: number, hours = 0) =>
+        new Date(
+            Date.now() - (days * 24 + hours) * 60 * 60 * 1000,
+        ).toISOString();
+    const monthsAgo = (months: number) => {
+        const date = new Date();
+        date.setMonth(date.getMonth() - months);
+        return date.toISOString();
+    };
+    const seed = (
+        videoId: string,
+        savedAt: string,
+        analysisStatus: AnalysisStatus,
+        analysisFailureCode: AnalysisFailureCode | null,
+        title: string | null,
+        places: PersonalSavePlaceResponse[],
+    ): MockSave => ({
+        personalSaveId: mockUuid(),
+        contentId: mockUuid(),
+        videoId,
+        savedAt,
+        analysisStatus,
+        analysisFailureCode,
+        analysisStartedAt: Date.now(),
+        title,
+        summary: title == null ? null : `${title} 영상이에요.`,
+        category: title == null ? null : "여행",
+        places,
+    });
+    const place = (
+        name: string,
+        address: string,
+        latitude: number,
+        longitude: number,
+    ): PersonalSavePlaceResponse => ({
+        placeId: mockUuid(),
+        name,
+        address,
+        latitude,
+        longitude,
+        description: null,
+    });
+    return [
+        seed(
+            "mockSave001",
+            daysAgo(0, 2),
+            "SUCCESS",
+            null,
+            "대전 가면 꼭 들르는 빵집 3곳",
+            [
+                place("성심당 본점", "대전 중구 은행동", 36.3277, 127.4274),
+                place("소제동 카페거리", "대전 동구 소제동", 36.3326, 127.4381),
+            ],
+        ),
+        seed("mockSave002", daysAgo(0), "ANALYZING", null, null, []),
+        seed(
+            "mockSave003",
+            daysAgo(1),
+            "FAILED",
+            "EXTRACTION_API_ERROR",
+            null,
+            [],
+        ),
+        seed(
+            "mockSave004",
+            daysAgo(21),
+            "FAILED",
+            "VIDEO_UNAVAILABLE",
+            null,
+            [],
+        ),
+        seed(
+            "mockSave005",
+            daysAgo(21, 2),
+            "SUCCESS",
+            null,
+            "대전 사람만 아는 사투리 5가지",
+            [],
+        ),
+        seed(
+            "mockSave006",
+            monthsAgo(2),
+            "SUCCESS",
+            null,
+            "계족산 황톳길 맨발로 걷기",
+            [place("계족산 황톳길", "대전 대덕구 장동", 36.3925, 127.4447)],
+        ),
     ];
 }
 

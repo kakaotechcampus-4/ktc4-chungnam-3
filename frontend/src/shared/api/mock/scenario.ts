@@ -24,6 +24,7 @@ export const MOCK_SCENARIO: {
     signedIn: boolean;
     loginResult: MockLoginResult;
     nearbyEmpty: boolean;
+    // 저장물 목(personalSavesMock)의 시작 상태. true 면 빈 저장소(07b), false 면 샘플 6개.
     archiveEmpty: boolean;
     locationPermission: MockLocationPermission;
     // true 면 목 썸네일 URL 을 깨뜨려 로드 실패(bg/placeholder) 를 본다.

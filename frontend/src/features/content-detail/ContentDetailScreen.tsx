@@ -94,7 +94,13 @@ export default function ContentDetailScreen() {
         }, []),
     );
 
-    const detail = details[route.params.placeId];
+    // 기억 탭은 저장물로 연다. 상세 API 를 읽기 전까지 mockKey(없으면 personalSaveId)로 장소 목을 찾는다.
+    const params = route.params;
+    const placeKey =
+        "placeId" in params
+            ? params.placeId
+            : (params.mockKey ?? params.personalSaveId);
+    const detail = details[placeKey];
     // 삭제·만료된 장소. 12 를 재사용하고 push 화면이라 ← 를 쓴다.
     if (!detail) {
         return (
@@ -161,7 +167,7 @@ export default function ContentDetailScreen() {
     const openReplace = () =>
         navigation.navigate("SaveResult", {
             screen: "PlaceSearch",
-            params: { placeId: route.params.placeId },
+            params: { placeId: placeKey },
         });
     const renderFooter = (props: BottomSheetFooterProps) => (
         <DetailFooter
@@ -220,7 +226,7 @@ export default function ContentDetailScreen() {
                     {/* 08 핀은 흰 테두리 그대로 두고 이름표만 붙인다. */}
                     {/* 다른 저장 장소는 먼저 넣어 이 장소 핀 아래에 그려지게 한다(zIndex 는 쓰지 않는다). 누르는 동작은 없다. */}
                     {savedPlaces
-                        .filter(([placeId]) => placeId !== route.params.placeId)
+                        .filter(([placeId]) => placeId !== placeKey)
                         .map(([placeId, place]) => (
                             <PhotoMarker
                                 key={placeId}

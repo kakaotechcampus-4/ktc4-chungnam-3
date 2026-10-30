@@ -1,4 +1,4 @@
-// 저장 결과 목 데이터. resultId 로 찾는다. 화면 props 모양 그대로이며 서버 계약이 아니다.
+// 저장 결과 목 데이터. 라우트의 mockKey(없으면 personalSaveId)로 찾는다. 화면 props 모양 그대로이며 서버 계약이 아니다.
 // 문구는 Figma 02~05 그대로. 제목의 따옴표는 컴포넌트가 붙인다.
 import { img } from "./img";
 
