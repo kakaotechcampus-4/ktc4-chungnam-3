@@ -54,6 +54,11 @@ export function useAuthState(): AuthState {
     return useSyncExternalStore(subscribe, () => state);
 }
 
+// React 밖(공유 처리 등)에서 지금 인증 상태를 읽는다.
+export function getAuthState(): AuthState {
+    return state;
+}
+
 // API 클라이언트가 Bearer 헤더에 쓴다.
 export function getSessionToken(): string | undefined {
     return session?.sessionToken;

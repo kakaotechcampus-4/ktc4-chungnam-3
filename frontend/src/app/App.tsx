@@ -18,7 +18,9 @@ import { registerSessionRefresher } from "../shared/auth/login";
 import { restoreSession, useAuthState } from "../shared/auth/session";
 import { colors, fontFamily } from "../shared/ui/theme";
 import { buildLinkingConfig } from "./navigation/linking";
+import { navigationRef } from "./navigation/navigationRef";
 import RootNavigator from "./navigation/RootNavigator";
+import ShareReceiverHost from "./share/ShareReceiverHost";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -64,10 +66,15 @@ export default function App() {
         <GestureHandlerRootView style={styles.root}>
             <SafeAreaProvider>
                 <StatusBar style="dark" />
-                <NavigationContainer linking={linking} theme={navigationTheme}>
-                    {/* 모달 시트(동의 시트)는 화면 위 · 하단 바 위에 뜬다. */}
+                <NavigationContainer
+                    ref={navigationRef}
+                    linking={linking}
+                    theme={navigationTheme}
+                >
+                    {/* 모달 시트(동의 시트 · 공유 받음 시트)는 화면 위 · 하단 바 위에 뜬다. */}
                     <BottomSheetModalProvider>
                         <RootNavigator />
+                        <ShareReceiverHost />
                     </BottomSheetModalProvider>
                 </NavigationContainer>
             </SafeAreaProvider>

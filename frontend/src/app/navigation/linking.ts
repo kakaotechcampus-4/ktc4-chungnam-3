@@ -2,12 +2,15 @@
 import type { LinkingOptions } from "@react-navigation/native";
 import * as Linking from "expo-linking";
 
+import { parseDevShareUrl } from "../share/devShareLink";
 import { ROUTES, type RootStackParamList } from "./routes";
 
 // prefix 는 scheme 을 하드코딩하지 않는다. Expo Go 에서는 exp://…/--/ 가 된다.
 export function buildLinkingConfig(): LinkingOptions<RootStackParamList> {
     return {
         prefixes: [Linking.createURL("/")],
+        // 개발용 공유 주소는 화면 경로가 아니다. ShareReceiverHost 가 따로 받는다.
+        filter: (url) => parseDevShareUrl(url) == null,
         config: {
             // 딥링크로 콜드 스타트해도 Main 이 항상 아래에 깔리게 한다. 뒤로 가기 · popTo 의 목적지다.
             initialRouteName: ROUTES.Main,

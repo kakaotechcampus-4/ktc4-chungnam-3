@@ -93,6 +93,20 @@ Expo Go 에서는:
 빈 필드 장소 상세(08b)는 `detail/daeheung-cathedral` 이다.
 없는 id 로 열면 저장물 없음(12)이 뜬다. 예: `save-result/unknown`, `detail/unknown`.
 
+### 개발용 공유 진입
+
+실제 공유 인텐트 없이 공유 받음 시트를 본다. 개발 모드(`__DEV__`)에서만 동작한다. `text` 는 공유 텍스트를 URL 인코딩한 값이다.
+
+```bash
+# 개발 빌드
+adb shell am start -W -a android.intent.action.VIEW -d "remembrall://dev/share?text=https%3A%2F%2Fyoutube.com%2Fshorts%2FkbWy8_UC0Z8" com.remembrall.app
+# Expo Go
+adb shell am start -W -a android.intent.action.VIEW -d "exp://<Metro 주소>/--/dev/share?text=https%3A%2F%2Fyoutube.com%2Fshorts%2FkbWy8_UC0Z8" host.exp.exponent
+```
+
+`text` 에 Shorts 가 아닌 링크(watch 등)나 링크 없는 텍스트를 넣으면 NotShorts 가 뜬다.
+저장 · 대기열 결과는 `MOCK_SCENARIO.saveResult`(ok · networkError · invalid)로 바꿔 본다.
+
 빈 상태(06 · 07b), 위치 권한, 깨진 썸네일은 `src/shared/api/mock/scenario.ts` 의 `MOCK_SCENARIO` 플래그를 바꾸고 reload 해서 본다.
 
 ## 로컬 백엔드 연결

@@ -10,6 +10,8 @@ export interface LinkParser {
     platform: string;
     // URL 하나가 지원 링크면 정규화 결과, 아니면 null.
     parse(url: string): SharedLink | null;
+    // 영상 id 로 부르는 썸네일 주소.
+    thumbnailUrl(videoId: string): string;
 }
 
 export const parsers: readonly LinkParser[] = [youtubeParser];
@@ -25,4 +27,10 @@ export function findSharedLink(text: string): SharedLink | null {
         }
     }
     return null;
+}
+
+// 링크를 만든 플랫폼의 썸네일 주소. 등록되지 않은 플랫폼이면 null.
+export function getThumbnailUrl(link: SharedLink): string | null {
+    const parser = parsers.find((item) => item.platform === link.platform);
+    return parser?.thumbnailUrl(link.videoId) ?? null;
 }

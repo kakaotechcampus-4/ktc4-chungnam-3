@@ -49,7 +49,8 @@ frontend/
     ├── app/                  앱 셸
     │   ├── App.tsx
     │   ├── usePendingSaveSender.ts  저장 대기열 다시 보내기 시점(signedIn 직후 · 앞으로 돌아올 때)
-    │   └── navigation/       RootNavigator, linking, routes
+    │   ├── share/            공유 받음 처리 흐름(shareReceiver) · 시트 호스트 · 개발용 진입(devShareLink)
+    │   └── navigation/       RootNavigator, linking, routes, navigationRef(네비게이터 밖 이동)
     │
     ├── domain/
     │   ├── extraction/       ★ 백엔드에 실재하는 타입만 (확정)
@@ -85,6 +86,7 @@ frontend/
     │   │   └── components/
     │   ├── settings/         설정(11). 알림 · 위치 · 계정 · 앱 정보
     │   │   └── components/
+    │   ├── share-received/   공유 받음 시트(C/ShareReceivedSheet). 지금 화면 위에 뜬다
     │   ├── execution-trace/  "왜 에이전트인가" 증명 화면
     │   └── map-view/         지도 탭(10). 사진 핀 · 요약 시트
     │       └── components/
@@ -253,6 +255,19 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 - 다시 보내는 시점은 `app/usePendingSaveSender.ts` 다. RootNavigator 가 `signedIn` 을 넘긴다.
   signedIn 이 된 직후 한 번, 그 뒤 AppState `active` 마다 보낸다. 세션이 없거나 온보딩 중에는 보내지 않는다.
 - 목 모드도 같은 규칙이다. `MOCK_SCENARIO.saveResult` 가 networkError 면 남고, invalid 면 버린다.
+
+## 공유 받음 처리
+
+- 처리 함수는 `app/share/shareReceiver.ts` 의 `receiveSharedText(text)` 하나다. 실제 공유(다음 작업)와 개발용 딥링크가 이것을 부른다.
+- signedIn 이 아니면 링크를 대기열에만 넣고 시트는 띄우지 않는다(온보딩을 마치고 Main 에 들어오면 대기열이 보내진다).
+- signedIn 이면 지금 화면 위에 공유 받음 시트를 띄운다. 링크 없음 → NotShorts. 있으면 Saving → 저장.
+  201 Saved · 200 AlreadySaved · 400 NotShorts, 그 밖의 실패는 대기열에 넣고 Queued. 저장이 성공하면 대기열도 이어서 보낸다.
+- 시트가 떠 있는 동안 새 공유가 오면 새 결과로 바꾼다. 앞선 공유의 늦은 결과는 버린다.
+- "돌아가기"는 시트를 닫고 앱을 뒤로 보낸다(`BackHandler.exitApp`). "기억 탭 보기"(Saved · AlreadySaved, Saving 에서는 비활성)는
+  `navigationRef` 로 기억 탭에 간다. 바깥 닫힘은 시트만 닫고, Saving 중에는 버튼 · 끌기 · 배경 · 뒤로를 막는다.
+- 썸네일은 플랫폼 파서의 `thumbnailUrl`(YouTube 는 `hqdefault.jpg`)을 9:16 으로 가운데 잘라 보인다. 불러오지 못하면 자리표시.
+- 개발용 진입: `__DEV__` 에서만 `remembrall://dev/share?text=…`(Expo Go 는 `exp://<Metro 주소>/--/dev/share?text=…`)를 받아 처리 함수를 부른다.
+  linking 설정은 이 주소를 화면 경로로 해석하지 않는다(`filter`).
 
 ## 로그인 제공자 확장
 
@@ -424,12 +439,12 @@ type AnalysisFailureCode =
 
 ## 화면으로 만들 것 vs 상태로 표현할 것
 
-공유 시 앱은 뜨지 않는다. 저장 결과는 알림이나 전체 기억 항목에서 여는
-저장 결과 모달(02~05)로 본다.
+공유하면 앱이 앞으로 뜨고 지금 화면 위에 공유 받음 시트(저장 중 · 저장함 · 이미 저장함 · 대기열 · Shorts 아님)가 뜬다.
+분석 결과는 알림이 아니라 기억 탭에서 여는 저장 결과 모달(02~05)로 본다.
 
 | 경우                                         | 표현                                                                     |
 | -------------------------------------------- | ------------------------------------------------------------------------ |
-| 지원하지 않는 링크                           | 알림 문구. 저장하지 않음                                                 |
+| 지원하지 않는 링크                           | 공유 받음 시트 NotShorts. 저장하지 않음                                  |
 | 비공개·삭제 영상 (`FAILED` / `VIDEO_ACCESS`) | 알림 문구. 저장 여부 미확정 (미확정 표 참조)                             |
 | 분석 실패                                    | 05 저장 결과 모달 + 기억 탭 실패 셀 (제목을 모르면 "불러오지 못한 영상") |
 | 부분 성공 (`PARTIAL`)                        | 표현하지 않음 (배지 제거). 매핑은 미확정 표 참조                         |
