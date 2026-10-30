@@ -60,6 +60,7 @@ frontend/
     │   ├── proposal.ts       앱 모델. 꺼내기 결과
     │   ├── notification.ts   알림 페이로드 (발생원 무관)
     │   ├── consent.ts        앱 모델. 동의 상태(never · agreed · withdrawn)
+    │   ├── saveState.ts      앱 모델. 저장물 상태(analyzing · failed · noPlace · ready)
     │   └── executionTrace.ts 에이전트 궤적
     │
     ├── runtime/              React 밖
@@ -103,7 +104,10 @@ frontend/
         │   ├── client.ts     기본 주소 · Bearer 헤더 · ApiError · 401 처리
         │   ├── consents.ts   동의 API(조회 · 위치 동의 변경) · 목 분기
         │   ├── consentTerms.ts   약관 버전 · 약관 URL 상수
+        │   ├── personalSaves.ts  저장물 API(저장 · 상세 · 목록 · 삭제)와 서버 응답 타입 · 목 분기
+        │   ├── personalSavesMock.ts  저장물 목. 서버 규칙을 따르는 메모리 저장소(서버 계약 모양이라 mock/ 밖)
         │   ├── mappers/      ★ 서버 응답 -> 앱 모델 변환. 백엔드 변경 흡수 지점
+        │   │   └── personalSaveMapper.ts  저장물 상세 · 목록 항목 -> SaveState
         │   └── mock/         UI 개발용 목 데이터. 화면 props 모양. 서버 계약 아님
         ├── storage/
         │   └── secureStore.ts    안전한 저장소(expo-secure-store) 지연 로더. 세션 · 설치 id
@@ -223,7 +227,8 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 
 - 기본 주소는 `EXPO_PUBLIC_API_BASE_URL` 이다. 배포 주소가 정해질 때까지 로컬 백엔드(`http://<PC LAN IP>:8080`)를 쓴다.
 - **목 모드**: 주소가 비어 있으면 서버를 부르지 않는다. 시작은 `MOCK_SCENARIO.signedIn`, 로그인은 제공자 로그인(목)만 하고 세션을 저장하지 않는다(가짜 토큰을 저장소에 남기지 않는다).
-- 요청 시간 제한은 15초다. 저장 API 처럼 긴 요청은 붙일 때 요청별로 정한다.
+- 요청 시간 제한은 15초다. 저장 API 는 분석을 기다리지 않고 바로 돌아오므로(분석은 서버에서 비동기) 같은 제한을 쓴다.
+- 성공 상태 코드가 필요하면 `requestWithStatus` 를 쓴다(저장 API 의 201 새로 저장 · 200 이미 저장). 그 밖에는 `request` 로 본문만 받는다.
 - 로그인 요청의 401(제공자 자격 증명 거절)은 세션 만료가 아니라 로그인 실패다(00a-err · 00b-err).
   http(cleartext) 허용은 개발 빌드에서만 켜고 출시 빌드에는 넣지 않는다.
 - 세션이 있으면 Bearer 헤더를 붙인다. 응답은 래핑하지 않고, 에러 바디 `{code, message}` 는 `ApiError` 로 바꾼다.
@@ -297,6 +302,7 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 ## 목 데이터
 
 - `shared/api/mock/` 은 화면 props 모양 그대로 둔다. 서버 응답 계약처럼 만들지 않는다.
+  서버 계약 모양의 목(API 함수의 목 분기)은 API 모듈 안이나 옆에 둔다(`consents.ts`, `personalSavesMock.ts`).
 - UI 단계 동안 features 는 mock 에서 직접 받는다. `client.ts` 와 `mappers/` 를 거치지 않는다.
 - mock 은 features 의 타입을 import 하지 않는다(shared → features 금지). 구조적 타입으로 맞춘다.
 - 목 이미지 URL(picsum 고정 id)은 이 폴더 안에만 둔다.
@@ -305,6 +311,9 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 - 위치 권한과 현재 위치는 runtime 작업 전까지 목 플래그(`MOCK_SCENARIO`)와 목 좌표로 둔다.
   설정(11)의 권한 표시는 실제 권한 상태를 읽는다. 지도(10 · 08)의 현재 위치 · denied 분기는 runtime 작업 때 실제 권한으로 바꾼다.
 - 위치기반서비스 동의는 목 모드에서 목 플래그다. `MOCK_SCENARIO.locationConsent`(시작 시 동의 상태, never · agreed · withdrawn, 기본 never) · `consentSaveResult`(동의 저장 결과, ok · fail, 기본 ok).
+- 저장물 API 는 목 모드에서 빈 메모리 저장소로 시작한다. `MOCK_SCENARIO.saveResult`(저장 결과, ok · networkError · invalid, 기본 ok) ·
+  `analysisResult`(저장하고 약 5초 뒤 상세 · 목록에 보일 분석 결과, success · noPlace · failed · videoUnavailable, 기본 success).
+  같은 영상을 다시 저장하면 `created: false` 다. 지금 화면들은 이 목이 아니라 기존 화면 목(`saveResults` · `archive`)을 쓴다.
 - 장소 확정 저장물은 모두 상세(`detailId` → 08)를 가진다. 실제 데이터에서도 모든 저장물에 상세가 있다. 미확정 저장물은 저장 결과(02~05)로 간다.
 - 거리 표시: 도보 30분 이내는 "도보 N분", 30분을 넘으면 직선거리 "N.Nkm". 목 데이터는 이 규칙대로 문자열을 넣는다.
 
@@ -355,6 +364,30 @@ type FailureStage =
 - **목록 필드는 빈 배열 보장**이 문서 규칙이나, validation 애노테이션이 코드에 0개라
   강제되지 않는다. 방어 코드를 둔다.
 
+저장물 API(`/api/personal-saves`, 타입은 `shared/api/personalSaves.ts`):
+
+```ts
+type AnalysisStatus =
+    | "PENDING"
+    | "ANALYZING"
+    | "SUCCESS"
+    | "PARTIAL"
+    | "FAILED";
+type AnalysisFailureCode =
+    | "VIDEO_UNAVAILABLE"
+    | "EXTRACTION_API_ERROR"
+    | "EXTRACTION_RESULT_ERROR"
+    | "PLACE_SEARCH_API_ERROR"
+    | "PLACE_VERIFICATION_API_ERROR";
+```
+
+- **분석 진행 상태는 `analysisStatus` 다.** PENDING · ANALYZING 은 대기 UI(03 분석 중)로 본다.
+- **완료 통지는 따로 없다.** 앱이 상세 · 목록을 다시 읽어 확인한다(언제 다시 읽을지는 화면 연결 때 정한다).
+- **PARTIAL 은 끝난 것으로 본다.** SUCCESS · PARTIAL 은 장소가 있으면 ready, 없으면 noPlace(`mappers/personalSaveMapper.ts`).
+- 실패 코드는 상세에만 있고 PARTIAL · FAILED 일 때만 채워진다. 같은 영상을 다시 저장하면 서버가 다시 분석하는 실패는
+  `EXTRACTION_API_ERROR` 뿐이다(`VIDEO_UNAVAILABLE` 은 다시 분석해도 소용없다).
+- 저장 응답은 새로 저장하면 201, 이미 저장한 영상이면 200 이고 본문은 같다.
+
 ## 미확정 (앱 모델은 가설이다)
 
 아래는 `domain/` 에 타입을 만들어 두되, **백엔드 합의 전까지 확정이 아니다.**
@@ -362,14 +395,11 @@ type FailureStage =
 
 | 항목                                    | 현재 상태                                                                             | 영향                                                                                                                                                                                                                  |
 | --------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 분석 진행 상태 (ANALYZING / READY)      | 백엔드에 없음. `ExtractionStatus` 는 완료 후 결과 등급이지 진행 상태가 아니다         | 대기 UI(03 분석 중) 의 근거                                                                                                                                                                                           |
 | 장소 판정 결과 (확정 / 확인필요 / 없음) | 백엔드에 없음. `uncertainties: string[]` 자유 문자열뿐                                | 되묻기 화면(02 확인 필요 · 04 장소 없음) 의 근거                                                                                                                                                                      |
 | 카테고리                                | 팀 합의: 고정 enum 소수 + 분위기 태그 다수. enum 값은 미확정                          | 01 필터 칩 라벨(전체/식당/카페/가볼 곳)은 enum 확정 전까지 목 데이터 한정                                                                                                                                             |
 | 비공개·삭제 영상의 링크 보관 여부       | 서버 저장 정책 문제. 백엔드 합의 필요. 05 디자인은 "링크는 그대로 보관" 으로 안내한다 | (b) "다시 시도" 가 모든 실패에 똑같이 노출된다. 재시도가 의미 없는 비공개·삭제(`VIDEO_ACCESS`)에도 보인다. 재시도 가능 여부를 서버가 내려줘야 버튼 노출을 가를 수 있다. (07 실패 셀이 생겨 05 재진입 경로는 해결됐다) |
-| PARTIAL 표현                            | 부분 성공 배지는 제거(디자인 결정)                                                    | 추출 `PARTIAL` 이 저장 판정(PLACE_RESOLVED / NEEDS_CONFIRMATION / NO_PLACE) 중 무엇으로 매핑되는지 백엔드 확인 필요                                                                                                   |
 | 꺼내기 제안 유형                        | 문서상 가설이 5개 (장소 1곳 / 코스 / 장소 없는 콘텐츠 재노출 / 공용 풀 보충 / 침묵)   | **SINGLE·COURSE 2분기로 부족하다.** 열린 형태로 둔다                                                                                                                                                                  |
 | 알림 발생원 (FCM / 로컬)                | 백엔드에 FCM 의존성 없음                                                              | `runtime/notifications/notificationListener.ts` 안에서만 갈린다                                                                                                                                                       |
-| 완료 통지 방식 (폴링 / SSE / 푸시)      | 없음                                                                                  | **가장 시급.** 이것 없이는 저장 플로우가 완성되지 않는다                                                                                                                                                              |
 | API 서버 주소                           | 배포 주소 미정(백엔드 확인 중). 개발은 로컬 백엔드 `http://<PC LAN IP>:8080`          | `EXPO_PUBLIC_API_BASE_URL` 만 바꾼다                                                                                                                                                                                  |
 | 지오펜스 보고 엔드포인트                | 문서에만 서술. 시그니처 없음                                                          | 서버가 조용히 무시할 수 있어 프론트가 결과를 알 방법이 필요                                                                                                                                                           |
 

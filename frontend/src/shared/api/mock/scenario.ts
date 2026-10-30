@@ -9,6 +9,15 @@ export type MockLoginResult = "success" | "cancelled" | "failed";
 // 목 위치기반서비스 동의. 시작 상태와 저장(PUT) 결과. fail 이면 시트의 오류 상태를 본다.
 export type MockLocationConsent = "never" | "agreed" | "withdrawn";
 export type MockConsentSaveResult = "ok" | "fail";
+// 목 저장물(personalSavesMock). 저장(POST) 결과와, 저장하고 약 5초 뒤 상세 · 목록에 보일 분석 결과.
+// networkError: 응답 없음(ApiError status null). invalid: 400 INVALID_REQUEST.
+// failed 는 다시 저장하면 다시 분석되는 실패(EXTRACTION_API_ERROR), videoUnavailable 은 다시 분석되지 않는다.
+export type MockSaveResult = "ok" | "networkError" | "invalid";
+export type MockAnalysisResult =
+    | "success"
+    | "noPlace"
+    | "failed"
+    | "videoUnavailable";
 
 export const MOCK_SCENARIO: {
     // false 면 저장된 세션이 없는 것으로 보고 온보딩(00a)부터 시작한다.
@@ -21,6 +30,8 @@ export const MOCK_SCENARIO: {
     brokenThumbnails: boolean;
     locationConsent: MockLocationConsent;
     consentSaveResult: MockConsentSaveResult;
+    saveResult: MockSaveResult;
+    analysisResult: MockAnalysisResult;
 } = {
     signedIn: false, // 현재는 개발 과정이므로 false로 두었음. 설계 문서에는 true가 기본 값이라고 명시해두었음.
     loginResult: "success",
@@ -30,4 +41,6 @@ export const MOCK_SCENARIO: {
     brokenThumbnails: false,
     locationConsent: "never",
     consentSaveResult: "ok",
+    saveResult: "ok",
+    analysisResult: "success",
 };
