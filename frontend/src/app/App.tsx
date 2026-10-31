@@ -14,6 +14,7 @@ import { StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { ensureChannels } from "../runtime/notifications/channels";
 import { registerSessionRefresher } from "../shared/auth/login";
 import {
     isDemoToolsEnabled,
@@ -60,6 +61,8 @@ export default function App() {
         // 게스트 세션이 만료 · 401 이면 API 클라이언트가 조용히 다시 받는다.
         registerSessionRefresher();
         restoreSession();
+        // 로그인 여부와 무관하게 켤 때마다. 첫 알림(토큰 등록 뒤)보다 먼저 채널이 있게 한다.
+        ensureChannels();
     }, []);
 
     // 폰트 로드에 실패해도 시스템 폰트로 계속 띄운다.

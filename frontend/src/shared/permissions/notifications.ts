@@ -1,5 +1,6 @@
 // 기기 알림 권한(안드로이드 13+ POST_NOTIFICATIONS. 12 이하는 자동 허용). 00c · 설정(11)이 쓴다.
 // 기기 FCM 토큰(Expo 푸시 토큰 아님. 서버가 firebase-admin 으로 직접 보낸다)도 여기서 받는다(runtime/notifications/pushTokenSync).
+// 알림 채널 생성도 여기서 한다. 채널 정의는 runtime/notifications/channels 가 넘긴다.
 // expo-notifications 는 처음 쓸 때 불러온다. 이 모듈이 없는 개발 빌드에서 파일 맨 위에서 import 하면
 // import 만으로 앱이 멈춘다. 모듈이 없으면 "unavailable" 을 돌려주고 경고한다.
 // 안드로이드 Expo Go(SDK 53+)에서는 불러오지 않는다. expo-notifications 는 불러오는 순간 푸시 토큰 리스너를 등록하는데,
@@ -84,6 +85,42 @@ export function addFcmTokenListener(
         if (typeof data === "string" && data !== "") listener(data);
     });
     return () => subscription.remove();
+}
+
+// importance 는 AndroidImportance 로 바꿔 넘긴다. 필요할 때 값을 늘린다.
+export type NotificationChannelSpec = {
+    id: string;
+    name: string;
+    description: string;
+    importance: "default";
+};
+
+let channelFailureWarned = false;
+
+// 알림 채널을 만든다(있으면 이름 · 설명만 바뀐다. 중요도 · 소리 등은 처음 만들 때 정해지고 앱이 바꿀 수 없다).
+// Android 가 아니거나 모듈이 없으면(Expo Go 포함) 아무것도 하지 않는다. Android 8 미만은 네이티브가 무시한다.
+// 진동 · 소리 · 표시 범위는 OS 기본값을 따른다. 실패는 경고 한 번이고 예외를 던지지 않는다.
+export async function ensureNotificationChannel(
+    channel: NotificationChannelSpec,
+): Promise<void> {
+    if (Platform.OS !== "android") return;
+    const module = loadNotifications();
+    if (module == null) return;
+    try {
+        await module.setNotificationChannelAsync(channel.id, {
+            name: channel.name,
+            description: channel.description,
+            importance: module.AndroidImportance.DEFAULT,
+        });
+    } catch (error) {
+        if (!channelFailureWarned) {
+            channelFailureWarned = true;
+            console.warn(
+                `알림 채널(${channel.id})을 만들지 못했습니다. 알림은 기본 채널로 올 수 있습니다.`,
+                error,
+            );
+        }
+    }
 }
 
 // 이 앱의 시스템 알림 설정 화면을 연다. 열지 못하면(Expo Go 등) 앱 정보 화면을 연다.

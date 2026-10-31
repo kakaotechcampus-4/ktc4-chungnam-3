@@ -50,7 +50,8 @@
             [
                 "expo-notifications",
                 {
-                    "color": "#6B4E7A"
+                    "color": "#6B4E7A",
+                    "defaultChannel": "nearby"
                 }
             ]
         ],

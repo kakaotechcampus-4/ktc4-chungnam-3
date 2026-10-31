@@ -71,7 +71,7 @@ frontend/
     │   ├── background/       pendingQueue(저장 보내기 대기열)
     │   ├── geofence/         지오펜스 이벤트 처리 · 도착 보고 대기열 · 상태 파일(geofenceManager · geofenceState), 등록 계획(registrationPlan),
     │   │                     (재)등록 · 해제(geofenceSync), 백그라운드 태스크(geofenceTask), expo-task-manager 지연 로더(taskManager)
-    │   ├── notifications/    channels, listener(발생원 은닉), router, FCM 토큰 등록 판단(pushTokenSync)
+    │   ├── notifications/    channels(근처 알림 채널 정의 · 생성), listener(발생원 은닉), router, FCM 토큰 등록 판단(pushTokenSync)
     │   ├── permissions/      권한 상시 감시 (자동 회수 대응)
     │   └── share/
     │       └── supportedLinks/   [확장 포인트] 플랫폼별 파서 레지스트리
@@ -269,6 +269,12 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
       실패는 조용히 넘기고 다음 호출이 다시 한다. 재시도 큐 · 백오프는 없다.
     - Expo Go · 모듈 없는 빌드 · google-services.json 없이 만든 빌드(Firebase 초기화 안 됨)는 토큰을 받지 못해 건너뛴다(경고 한 번).
     - 알려진 한계: 요청 도중 게스트 세션을 다시 받으면 서버는 토큰이 지워진 상태로 그 요청을 처리한다(예: 서버 초기화 뒤 첫 도착 알림이 오지 않는다). 다음에 앱이 앞으로 돌아올 때 다시 등록된다.
+    - 알림 채널: "근처 알림"(id `nearby`, 중요도 DEFAULT, 소리 · 진동 · 표시 범위는 OS 기본값). `runtime/notifications/channels.ts` 의 `ensureChannels` 가
+      `shared/permissions/notifications.ts` 의 `ensureNotificationChannel` 로 만들고, App 마운트 때 켤 때마다 부른다(헤드리스 태스크에서는 부르지 않는다).
+      만든 뒤에는 이름 · 설명만 바뀌고 중요도 · 소리는 앱이 바꿀 수 없다. id 는 바꾸지 않는다(app.json 의 `defaultChannel` 과 같아야 한다).
+      서버가 channelId 없이 보내는 FCM 은 앱이 뒤에 있을 때 `defaultChannel`(manifest `default_notification_channel_id`)로 이 채널에 온다.
+      앱이 앞에 있을 때는 expo 가 받아 JS 핸들러에 묻는다. 핸들러가 없는 지금은 표시되지 않고, 핸들러를 넣어도 channelId 가 없으면 expo 대체 채널("Miscellaneous")로 간다.
+      그래서 서버가 `channelId: "nearby"` 를 보내도록 백엔드에 요청했고(`defaultChannel` 은 빠뜨렸을 때의 안전망), 핸들러는 F2 에서 넣는다.
 - 동의 API 는 서버에 있다: `GET /api/me/consents`, `PUT /api/me/consents/{consentType}`(유형 `LOCATION_BASED_SERVICE` · `PUBLIC_CANDIDATE_CONTRIBUTION`). 클라이언트 · 목은 있고(`shared/api/consents.ts`, 약관 URL `consentTerms.ts`, 상태 계산 `mappers/consentMapper.ts`). 00d "위치 허용하기"에 연결됐다(동의하지 않았으면 `shared/ui/LocationConsentSheet` 로 동의를 받은 뒤 권한 요청)과 설정(11c · 11d, "기기 권한" 절)에 연결됐다. 06b 는 연결 전이다.
     - 거둬도(`agreed: false`) 지오펜스 해제는 아직 없다(지오펜스 런타임 작업). 서버 기록까지만 한다.
     - 서버는 철회되지 않은 `LOCATION_BASED_SERVICE` 동의가 없으면 위치 이벤트를 실행 없이 버리고 그대로 202 를 돌려준다. 지금은 버린 이유가 응답 · 로그 어디에도 없다.
@@ -431,7 +437,7 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 - Firebase 설정(`google-services.json`, 패키지 `com.remembrall.app`)은 공개 레포라 커밋하지 않는다(gitignore). `app.config.ts` 가 `android.googleServicesFile` 을 정한다:
   EAS file 환경 변수 `GOOGLE_SERVICES_JSON`(경로) → 없으면 `frontend/google-services.json` 이 있을 때 그 파일 → 둘 다 없으면 설정하지 않고 경고(FCM 토큰을 받지 못하는 빌드).
   환경 변수를 넣었는데 그 경로에 파일이 없으면 config 평가를 실패시킨다(FCM 없는 빌드가 조용히 나오지 않게).
-- expo-notifications 플러그인은 알림 색만 정한다(`color` 브랜드 자두색 #6B4E7A). small icon · 기본 채널은 아직 없다.
+- expo-notifications 플러그인은 알림 색(`color` 브랜드 자두색 #6B4E7A)과 FCM 기본 채널(`defaultChannel` `nearby`, "인증 · 세션" 절의 알림 채널)을 정한다. small icon 은 아직 없다.
 - 키 제한: Maps SDK for Android 만, 패키지 `com.remembrall.app` + SHA-1 두 개(EAS 개발 빌드 keystore, 로컬 debug keystore).
   debug keystore SHA-1 은 모든 RN 프로젝트 공용이라 개발용 키에만 등록한다.
 - 개발 빌드 딥링크 scheme 은 `remembrall://` 이다(`app.json` 의 `scheme`). 실행 · 키 설정 절차는 README 에 둔다.
