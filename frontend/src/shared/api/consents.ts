@@ -5,9 +5,11 @@
 // 실패는 클라이언트의 ApiError 를 그대로 던진다.
 // 목 모드(API 주소 없음)에서는 서버를 부르지 않는다. 시작 상태는 MOCK_SCENARIO.locationConsent,
 // 서버 현재 버전은 locationTermsVersion, 저장 결과는 consentSaveResult. 목 저장이 성공하면 이번 실행 동안 메모리에 남아 이후 목 조회에 보인다.
+// 저장이 성공하면 위치 설정 신호를 낸다(지오펜스를 다시 등록하거나 해제한다).
 import { ApiError, request } from "./client";
 import { isApiConfigured } from "./config";
 import { toCurrentTermsVersion } from "./mappers/consentMapper";
+import { notifyLocationSettingsChanged } from "../permissions/locationSettings";
 import { MOCK_SCENARIO } from "./mock";
 
 export type ConsentType =
@@ -69,12 +71,15 @@ export async function setLocationConsent(
             throw new Error("mock consent save failed");
         }
         mockLocationConsent = applyMockChange(getMockLocationConsent(), body);
+        notifyLocationSettingsChanged();
         return mockLocationConsent;
     }
-    return request<ConsentResponse>(`/api/me/consents/${LOCATION}`, {
-        method: "PUT",
-        body,
-    });
+    const response = await request<ConsentResponse>(
+        `/api/me/consents/${LOCATION}`,
+        { method: "PUT", body },
+    );
+    notifyLocationSettingsChanged();
+    return response;
 }
 
 // 서버 현재 버전을 다시 읽는다. 읽지 못하거나(예외 그대로) 값이 없으면 동의를 보낼 수 없다.

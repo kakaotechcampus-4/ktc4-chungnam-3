@@ -3,7 +3,7 @@
 저장만 해두고 잊어버린 콘텐츠를, 에이전트가 꺼내주는 앱
 
 저장해둔 장소 영상을 근처에 갔을 때 다시 꺼내주는 앱의 React Native(Expo) 클라이언트다.
-지금은 UI 단계라 화면이 목 데이터로 렌더된다.
+API 주소(`EXPO_PUBLIC_API_BASE_URL`)가 있으면 서버를, 없으면 목 모드로 동작한다. 근처 탭 · 지도 탭은 아직 화면 목 데이터로 그린다.
 
 ## 실행
 
@@ -67,6 +67,37 @@ Google Cloud 콘솔에서 키를 제한한다.
 RN 기본 debug keystore 는 모든 프로젝트 공용이라 SHA-1 도 같다.
 이 SHA-1 은 개발용 API 키에만 등록하고, 출시용 키에는 릴리스(Play 앱 서명) SHA-1 만 등록한다.
 
+### google-services.json (FCM)
+
+푸시 알림을 받으려면 Firebase 설정 파일 `google-services.json`(패키지 `com.remembrall.app`)을 넣어 빌드해야 한다.
+공개 레포라 커밋하지 않는다(gitignore). 파일은 팀의 Firebase 프로젝트에서 받는다.
+
+`app.config.ts` 가 빌드 시점에 아래 순서로 파일을 고른다.
+
+1. 환경 변수 `GOOGLE_SERVICES_JSON`(파일 경로)이 있으면 그 파일. 그 경로에 파일이 없으면 경로를 담은 오류로 빌드가 멈춘다.
+2. 없으면 `frontend/google-services.json` 이 있을 때 그 파일.
+3. 둘 다 없으면 경고만 뜨고 빌드는 된다. 이 빌드는 FCM 토큰을 받지 못해 푸시 알림이 오지 않는다(앱은 그대로 쓴다).
+
+- EAS 빌드: file 환경 변수로 등록한다. EAS 가 빌드 서버에 파일을 내려받고 그 경로를 `GOOGLE_SERVICES_JSON` 에 넣는다.
+  `--value` 는 로컬 파일 경로다. 등록한 뒤에는 로컬 파일을 지워도 된다. preview 빌드 전에는 preview 환경에도 등록한다.
+    ```bash
+    npx eas-cli env:set development --name GOOGLE_SERVICES_JSON --type file --value ./google-services.json --visibility secret
+    npx eas-cli env:set preview --name GOOGLE_SERVICES_JSON --type file --value ./google-services.json --visibility secret
+    ```
+- 로컬 빌드(`npx expo run:android`): 파일을 `frontend/google-services.json` 에 둔다.
+
+### 시연 백업용 preview-mock
+
+서버 · FCM 없이 "가상 도착 → 알림 → 08" 을 시연하는 백업 APK 다. `preview` 를 물려받고(시연 도구 켬 · 내부 배포 APK · preview 환경 변수),
+`EXPO_PUBLIC_FORCE_MOCK=1` 로 preview 환경의 API 주소가 있어도 목 모드로 동작한다. 알림은 목 서버가 띄우는 로컬 알림이다(아래 "시연 도구").
+
+```bash
+npx eas-cli build --profile preview-mock --platform android
+```
+
+- 실서버 preview 와 같은 패키지(`com.remembrall.app`)라 한 폰에 동시에 설치되지 않는다. 설치하면 서로를 덮어쓴다. 시연 전에 어느 쪽이 깔려 있는지 확인한다.
+- 목 데이터는 앱 메모리에만 있어 앱을 완전히 끄면 처음 상태로 돌아간다.
+
 ## 딥링크로 화면 열기
 
 저장 결과 모달(02~05)처럼 앱 안에서 바로 갈 수 없는 화면은 딥링크로 연다.
@@ -96,7 +127,9 @@ Expo Go 에서는:
 실제 저장물은 `save-result/<personalSaveId>` 로 열린다(분석 중이면 03, 끝나면 그 상태 · 장소가 있으면 08 로 바뀐다).
 목 모드의 personalSaveId 는 실행마다 새로 만들어져서, 저장물 화면은 기억 탭에서 눌러 여는 것이 쉽다.
 `detail/<placeId>` 는 지도 · 근처와 같은 장소 목이다.
-없는 id 로 열면 저장물 없음(12)이 뜬다. 예: `save-result/unknown`(목 모드), `detail/unknown`.
+`notification/<notificationId>` 는 알림을 누른 것처럼 08 을 연다(알림 상세를 읽고 그 장소의 저장물 08 로 바뀐다).
+목 모드의 알림 id 는 실행마다 새로 만들어져서, 시연 도구의 목 도착 기록 줄을 눌러 여는 것이 쉽다.
+없는 id 로 열면 저장물 없음(12)이 뜬다. 예: `save-result/unknown`(목 모드), `detail/unknown`, `notification/unknown`(목 모드).
 
 ### 개발용 공유 진입
 
@@ -124,6 +157,39 @@ Expo Go 와 그 전에 만든 개발 빌드에서는 경고("expo-share-intent �
     adb shell am start -a android.intent.action.SEND -t text/plain --es android.intent.extra.TEXT "https://youtube.com/shorts/kbWy8_UC0Z8" com.remembrall.app
     ```
 
+### 근처 도착(지오펜스)
+
+지오펜싱(expo-task-manager)은 네이티브 모듈이라 **이 모듈을 넣은 뒤 다시 만든 개발 빌드에서만** 동작한다.
+Expo Go 와 그 전에 만든 개발 빌드에서는 경고("expo-task-manager 네이티브 모듈이 없는 빌드입니다…")가 한 번 뜨고 등록하지 않는다. 앱은 그대로 쓴다.
+
+재빌드 뒤 확인:
+
+1. 온보딩에서 위치 '항상 허용'과 위치 정보 이용 동의를 마친다(설정에서도 바꿀 수 있다).
+2. 앱을 열면 등록된다(signedIn 직후 · 앱이 앞으로 올 때). 등록 상태는 설정 → 시연 도구에서 본다(아래 "시연 도구").
+3. 저장한 장소 근처(반경 150m)로 가면 몇 분 안에 서버로 도착 보고가 간다. 서버가 꺼내기를 정하면 알림이 온다(google-services.json 을 넣어 만든 빌드에서만, 위 "google-services.json (FCM)").
+4. 모의 위치로 확인하려면 개발자 옵션의 모의 위치 앱이 Fused Location Provider 모의 모드(`setMockMode`)를 쓰는지 확인한다(그래야 지오펜싱에 반영된다).
+
+### 시연 도구
+
+설정 맨 아래 "시연 도구" 묶음은 개발 모드(Metro)와 preview 빌드(`eas.json` 의 preview 프로필 env `EXPO_PUBLIC_DEMO_TOOLS=1`)에서만 보인다.
+
+- 연결: 지금 붙은 서버의 호스트(포트 포함), 또는 "목 모드" · "목 모드(preview-mock)". 실서버 preview 와 preview-mock 은 이 줄로 구분한다.
+- FCM: 기기 FCM 토큰을 서버에 등록했는지("등록됨 · HH:mm", 목 모드면 "등록됨(목 서버)"). 아니면 이유(알림 권한 없음 · Firebase 설정 없는 빌드 · 이 빌드에서는 받지 않음 등).
+- 지오펜스: 등록된 곳 수와 마지막 등록 시각. 없으면 이유(권한 · 동의 · 모듈 없음 등).
+- 지금 다시 등록: 지오펜스를 다시 등록하고 결과를 보인다(Expo Go 는 "지오펜스 모듈이 없는 빌드예요").
+- {장소}에 도착: 그 장소에 도착한 것처럼 서버에 도착 보고를 바로 보낸다. 보낸 뒤 앱을 홈으로 내리고 알림을 기다린다. 같은 장소를 다시 눌러도 매번 보낸다.
+- 목 모드(API 주소 없음)면 목 서버가 받은 도착 기록이 맨 아래에 쌓인다. 목 서버가 그 도착으로 알림을 만들었으면(위치 정보 이용 동의가 있을 때) 줄을 눌러 알림처럼 08 을 연다.
+- 목 모드 개발 빌드(알림 권한 허용)에서는 목 서버가 알림을 만들 때 "근처 알림" 채널로 로컬 알림이 뜬다. 누르면 그 장소의 08 이 열린다(실제 알림과 같은 처리).
+  "도착"을 누른 뒤 1초쯤 앱에 머문다. 바로 홈으로 내리면 앱으로 돌아올 때까지 알림이 뜨지 않는다(백그라운드에서 JS 타이머가 멈춘다). Expo Go 에서는 뜨지 않는다.
+
+목 모드 시연(개발 빌드 · preview-mock) 리허설 메모:
+
+1. 앱에서 위치 정보 이용 동의를 먼저 한다. 목 서버는 서버처럼 동의가 없으면 알림을 만들지 않는다.
+2. 00c 에서 알림을 허용한다(로컬 알림이 뜨려면 필요하다).
+3. 설정 → 시연 도구 → "{장소}에 도착" 을 누르고 1초쯤 앱에 머문 뒤 알림창을 내려 알림을 누른다.
+4. 시연 전에 재부팅 · 위치를 껐다 켬 · 강제 종료를 했다면, 앱을 한 번 열어 앞으로 가져온 뒤 내린다.
+5. 실제로 걸어서 도착하는 장면을 보여 줄 때는, 폰의 배터리 설정에서 앱의 백그라운드 사용이 제한되지 않았는지 확인한다(삼성은 설정 → 배터리 → 백그라운드 사용 제한).
+
 빈 상태(06 · 07b), 위치 권한, 깨진 썸네일은 `src/shared/api/mock/scenario.ts` 의 `MOCK_SCENARIO` 플래그를 바꾸고 reload 해서 본다.
 
 ## 로컬 백엔드 연결
@@ -148,16 +214,16 @@ Expo Go 와 그 전에 만든 개발 빌드에서는 경고("expo-share-intent �
     ```
 
 - 주소를 지우고 Metro 를 다시 시작하면 목 모드로 돌아간다.
-- 개발 빌드는 JS 를 Metro 에서 받으므로 EAS 환경 변수는 필요 없다. 출시 빌드를 만들 때 등록한다.
+- 개발 빌드는 JS 를 Metro 에서 받으므로 EAS 환경 변수는 필요 없다. preview · 출시 빌드를 만들 때 그 환경에 등록한다.
 - 세션 저장(expo-secure-store)은 네이티브 모듈이다. 이 모듈이 들어가기 전에 만든 개발 빌드에서는 실제 모드에서 세션이 이번 실행 동안만 메모리에 남고, 경고("개발 빌드를 다시 만드세요")가 뜬다. 앱을 다시 켜면 다시 로그인해야 한다. 저장까지 확인하려면 Expo Go 를 쓰거나 개발 빌드를 다시 만든다. 목 모드는 이 모듈을 불러오지 않는다.
-- MVP 는 게스트 세션이다. 00a "시작하기"가 `POST /api/auth/guest` 를 부른다. 백엔드에 이 엔드포인트가 생기기 전에는 실제 모드에서 00a-err 가 뜨는 것이 정상이다(401 `INVALID_SESSION`. 엔드포인트가 아직 없고 서버의 인증 허용 목록에도 없다).
+- MVP 는 게스트 세션이다. 00a "시작하기"가 `POST /api/auth/guest` 를 부른다.
 - expo-crypto 가 없는 개발 빌드에서는 설치 id 를 만들 수 없어 실제 모드에서 00a-err 가 뜬다(경고: 개발 빌드를 다시 만드세요). 목 모드는 영향 없다.
 
 ## 온보딩 다시 보기
 
-지금은 세션과 로그인이 목이다(`MOCK_SCENARIO`). Expo Go 에서도 확인할 수 있다.
+목 모드(API 주소 없음)에서는 세션과 로그인이 목이다(`MOCK_SCENARIO`). Expo Go 에서도 확인할 수 있다.
 
-- 처음부터(00a): `signedIn: false` 로 바꾸고 Metro 터미널에서 `r` 로 reload 한다. 기본값 `true` 는 근처 탭부터 뜬다.
+- 처음부터(00a): `signedIn: false`(지금 기본값, 개발 중에 팀원이 바꿈)로 두고 Metro 터미널에서 `r` 로 reload 한다. `true` 면 근처 탭부터 뜬다.
 - 시작 결과: `loginResult` 를 바꾼다. `"success"` → 00c 로, `"failed"` → 00a-err. (`"cancelled"` 는 카카오를 다시 켰을 때 00b 에 그대로 머무는 경우다.)
 - 흐름(MVP): 00a → 00c → 00d → 00e → 00f → 근처 탭. 00b 는 건너뛴다. 00d 에서 "나중에 할게요"를 누르면 00e 를 건너뛴다.
   권한 단계(00c~00f)에서 시스템 뒤로 가기를 누르면 앱이 닫힌다.

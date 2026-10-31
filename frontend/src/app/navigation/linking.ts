@@ -23,7 +23,11 @@ export function buildLinkingConfig(): LinkingOptions<RootStackParamList> {
                     },
                 },
                 [ROUTES.Settings]: "settings",
-                [ROUTES.ContentDetail]: "detail/:placeId",
+                // 알림으로 여는 08 은 개발 · 확인용 주소다(실제 알림은 화면을 직접 연다).
+                [ROUTES.ContentDetail]: {
+                    path: "detail/:placeId",
+                    alias: ["notification/:notificationId"],
+                },
                 // 기존 경로는 그대로 Result 로 열린다. search 로 열어도 Result 가 아래에 깔린다.
                 [ROUTES.SaveResult]: {
                     initialRouteName: ROUTES.Result,

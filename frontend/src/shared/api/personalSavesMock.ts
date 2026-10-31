@@ -160,6 +160,32 @@ export function mockGeofencePlaces(): {
     });
 }
 
+// 알림 목이 쓴다. 이 장소를 가진 저장물(분석 실패 제외)과 그 장소. 없으면(지웠거나 분석 실패) null.
+export function mockSavedPlace(placeId: string): {
+    personalSaveId: string;
+    contentId: string;
+    savedAt: string;
+    title: string | null;
+    summary: string | null;
+    place: PersonalSavePlaceResponse;
+} | null {
+    for (const save of saves) {
+        finishIfDue(save);
+        if (save.analysisStatus === "FAILED") continue;
+        const place = save.places.find((item) => item.placeId === placeId);
+        if (place == null) continue;
+        return {
+            personalSaveId: save.personalSaveId,
+            contentId: save.contentId,
+            savedAt: save.savedAt,
+            title: save.title,
+            summary: save.summary,
+            place: { ...place },
+        };
+    }
+    return null;
+}
+
 function mockDelay() {
     return new Promise((resolve) => setTimeout(resolve, MOCK_DELAY_MS));
 }
@@ -402,8 +428,8 @@ function extractVideoId(url: string): string | null {
     return id != null && VIDEO_ID.test(id) ? id : null;
 }
 
-// 목 id. 서버처럼 UUID 모양이지만 보안 난수가 아니다.
-function mockUuid(): string {
+// 목 id. 서버처럼 UUID 모양이지만 보안 난수가 아니다. 알림 목도 쓴다.
+export function mockUuid(): string {
     return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
         const random = Math.floor(Math.random() * 16);
         const value = char === "x" ? random : (random % 4) + 8;

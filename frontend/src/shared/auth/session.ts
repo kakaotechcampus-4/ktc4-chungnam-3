@@ -120,9 +120,24 @@ async function readStoredSession(): Promise<StoredSession | null> {
     }
 }
 
+let restoring: Promise<void> | undefined;
+
 // 앱 시작 때 한 번. 저장된 세션이 있으면 근처 탭, 없으면 00a 부터.
 // 게스트 세션은 만료돼 있어도 근처 탭으로 간다(첫 요청 전에 다시 받는다). 다른 제공자 세션이 만료됐으면 00a 부터.
-export async function restoreSession(): Promise<void> {
+// 실제 복원은 한 번만 한다. 다시 불러도(App · 백그라운드 태스크) 같은 결과를 기다릴 뿐 상태를 다시 정하지 않는다
+// (온보딩 중에 다시 정하면 저장된 세션 때문에 온보딩을 건너뛴다).
+export function restoreSession(): Promise<void> {
+    restoring ??= readAndRestore();
+    return restoring;
+}
+
+// 백그라운드 태스크용. 아직 읽기 전(loading)이면 복원하고, 끝난 인증 상태를 돌려준다.
+export async function ensureSessionRestored(): Promise<AuthState> {
+    if (state.status === "loading") await restoreSession();
+    return state;
+}
+
+async function readAndRestore(): Promise<void> {
     if (!isApiConfigured) {
         setState(
             MOCK_SCENARIO.signedIn

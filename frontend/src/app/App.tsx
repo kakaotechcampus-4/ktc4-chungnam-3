@@ -14,15 +14,30 @@ import { StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { ensureChannels } from "../runtime/notifications/channels";
+import { startListening } from "../runtime/notifications/notificationListener";
 import { registerSessionRefresher } from "../shared/auth/login";
+import {
+    isDemoToolsEnabled,
+    registerDemoToolsSection,
+} from "../shared/demo/demoTools";
 import { restoreSession, useAuthState } from "../shared/auth/session";
+import { setForegroundPresentation } from "../shared/permissions/notifications";
 import { colors, fontFamily } from "../shared/ui/theme";
+import DemoToolsSection from "./demo/DemoToolsSection";
 import { buildLinkingConfig } from "./navigation/linking";
 import { navigationRef } from "./navigation/navigationRef";
 import RootNavigator from "./navigation/RootNavigator";
+import {
+    flushPendingNotification,
+    openFromNotification,
+} from "./notifications/notificationOpener";
 import ShareReceiverHost from "./share/ShareReceiverHost";
 
 SplashScreen.preventAutoHideAsync();
+
+// 설정의 시연 도구 묶음. 개발 모드 · preview 빌드(EXPO_PUBLIC_DEMO_TOOLS=1)에서만 등록한다.
+if (isDemoToolsEnabled) registerDemoToolsSection(DemoToolsSection);
 
 const linking = buildLinkingConfig();
 
@@ -52,6 +67,11 @@ export default function App() {
         // 게스트 세션이 만료 · 401 이면 API 클라이언트가 조용히 다시 받는다.
         registerSessionRefresher();
         restoreSession();
+        // 로그인 여부와 무관하게 켤 때마다. 첫 알림(토큰 등록 뒤)보다 먼저 채널 · 앞에 있을 때의 표시가 있게 한다.
+        ensureChannels();
+        setForegroundPresentation();
+        // 알림 누름(종료 상태에서 연 알림 포함). 열기는 대기 칸에 넣고 signedIn · 네비게이터 준비 뒤에 연다.
+        return startListening(openFromNotification);
     }, []);
 
     // 폰트 로드에 실패해도 시스템 폰트로 계속 띄운다.
@@ -70,6 +90,7 @@ export default function App() {
                     ref={navigationRef}
                     linking={linking}
                     theme={navigationTheme}
+                    onReady={flushPendingNotification}
                 >
                     {/* 모달 시트(동의 시트 · 공유 받음 시트)는 화면 위 · 하단 바 위에 뜬다. */}
                     <BottomSheetModalProvider>

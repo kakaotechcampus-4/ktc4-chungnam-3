@@ -4,6 +4,7 @@
 // 재조회 지오펜스는 중심이 요청 위치, 반경이 max(3000, 가장 먼 장소 거리 + 500)이다. 저장물을 지우면 그 장소도 빠진다.
 // 도착 보고는 받은 이벤트를 이번 실행 동안 메모리에 남기고 sent 다. 같은 triggerEventId 는 기록하지 않고 조용히 sent(서버처럼).
 // MOCK_SCENARIO.locationEventResult: networkError 면 기록하지 않고, timeout 이면 기록한 뒤 timeout(서버는 받았지만 앱이 응답을 못 받음).
+// 새로 기록한 도착마다 알림 목(notificationsMock)이 알림을 만든다(서버가 요청 안에서 꺼내기 · 알림까지 마치는 것처럼).
 import { distanceMeters } from "../geo/distanceMeters";
 import { isMockLocationConsentActive } from "./consents";
 import type {
@@ -12,6 +13,7 @@ import type {
     LocationEventResult,
 } from "./geofences";
 import { MOCK_SCENARIO } from "./mock";
+import { mockCreateNotification } from "./notificationsMock";
 import { mockGeofencePlaces } from "./personalSavesMock";
 
 const MOCK_DELAY_MS = 600;
@@ -73,6 +75,7 @@ export async function mockReportLocationEvent(
     if (result === "networkError") return { kind: "networkError" };
     if (!events.some((item) => item.triggerEventId === event.triggerEventId)) {
         events.push(event);
+        mockCreateNotification(event);
     }
     return result === "timeout" ? { kind: "timeout" } : { kind: "sent" };
 }

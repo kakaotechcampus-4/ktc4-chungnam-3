@@ -24,7 +24,10 @@ import SettingsScreen from "../../features/settings/SettingsScreen";
 import { BUTTON_PROVIDERS } from "../../shared/auth/providers";
 import { useAuthState } from "../../shared/auth/session";
 import BottomNav, { type BottomNavKey } from "../../shared/ui/BottomNav";
+import { useNotificationOpener } from "../notifications/notificationOpener";
+import { useGeofenceSync } from "../useGeofenceSync";
 import { usePendingSaveSender } from "../usePendingSaveSender";
+import { usePushTokenSync } from "../usePushTokenSync";
 import {
     type MainTabParamList,
     ROUTES,
@@ -109,6 +112,9 @@ function MainTabs() {
 export default function RootNavigator() {
     const auth = useAuthState();
     usePendingSaveSender(auth.status === "signedIn");
+    useGeofenceSync(auth.status);
+    usePushTokenSync(auth.status === "signedIn");
+    useNotificationOpener(auth.status);
 
     if (auth.status === "signedOut" || auth.status === "loading") {
         const hasLoginScreen = BUTTON_PROVIDERS.length > 0;

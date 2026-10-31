@@ -50,8 +50,12 @@ export type RootStackParamList = {
     [ROUTES.FirstSave]: undefined;
     [ROUTES.Main]: NavigatorScreenParams<MainTabParamList>;
     [ROUTES.Settings]: undefined;
-    // 지도 · 근처는 placeId(목 장소)로, 기억 탭은 저장물로 연다.
-    [ROUTES.ContentDetail]: { placeId: string } | PersonalSaveParams;
+    // 지도 · 근처는 placeId(목 장소)로, 기억 탭은 저장물로, 알림은 notificationId 로 연다.
+    // 저장물로 열 때 placeId 가 있으면 그 장소를 그린다(없거나 저장물에 없으면 첫 장소).
+    [ROUTES.ContentDetail]:
+        | { notificationId: string }
+        | (PersonalSaveParams & { placeId?: string })
+        | { placeId: string };
     [ROUTES.SaveResult]: NavigatorScreenParams<SaveResultStackParamList>;
 };
 
