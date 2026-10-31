@@ -11,19 +11,22 @@ export type MockLocationConsent = "never" | "agreed" | "withdrawn";
 export type MockConsentSaveResult = "ok" | "fail";
 // 목 저장물(personalSavesMock). 저장(POST) 결과와, 저장하고 약 5초 뒤 상세 · 목록에 보일 분석 결과.
 // networkError: 응답 없음(ApiError status null). invalid: 400 INVALID_REQUEST.
-// failed 는 다시 저장하면 다시 분석되는 실패(EXTRACTION_API_ERROR), videoUnavailable 은 다시 분석되지 않는다.
+// failed 는 다시 저장하면 다시 분석되는 실패(EXTRACTION_API_ERROR), videoUnavailable(VIDEO_UNAVAILABLE) ·
+// analysisError(EXTRACTION_RESULT_ERROR) 는 다시 분석되지 않는다.
 export type MockSaveResult = "ok" | "networkError" | "invalid";
 export type MockAnalysisResult =
     | "success"
     | "noPlace"
     | "failed"
-    | "videoUnavailable";
+    | "videoUnavailable"
+    | "analysisError";
 
 export const MOCK_SCENARIO: {
     // false 면 저장된 세션이 없는 것으로 보고 온보딩(00a)부터 시작한다.
     signedIn: boolean;
     loginResult: MockLoginResult;
     nearbyEmpty: boolean;
+    // 저장물 목(personalSavesMock)의 시작 상태. true 면 빈 저장소(07b), false 면 샘플 6개.
     archiveEmpty: boolean;
     locationPermission: MockLocationPermission;
     // true 면 목 썸네일 URL 을 깨뜨려 로드 실패(bg/placeholder) 를 본다.

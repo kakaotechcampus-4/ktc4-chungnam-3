@@ -91,7 +91,12 @@ Expo Go 에서는:
 후보가 1곳인 확인 필요(02b)는 `save-result/needs-confirmation-one` 이다.
 장소 직접 찾기(02c)는 `save-result/needs-confirmation/search` 이다.
 빈 필드 장소 상세(08b)는 `detail/daeheung-cathedral` 이다.
-없는 id 로 열면 저장물 없음(12)이 뜬다. 예: `save-result/unknown`, `detail/unknown`.
+
+`save-result/<키>` 는 개발 모드(`__DEV__`)에서만 화면 목(`saveResults`)을 그린다. 키가 목에 없으면 저장물 상세 API 를 읽는다.
+실제 저장물은 `save-result/<personalSaveId>` 로 열린다(분석 중이면 03, 끝나면 그 상태 · 장소가 있으면 08 로 바뀐다).
+목 모드의 personalSaveId 는 실행마다 새로 만들어져서, 저장물 화면은 기억 탭에서 눌러 여는 것이 쉽다.
+`detail/<placeId>` 는 지도 · 근처와 같은 장소 목이다.
+없는 id 로 열면 저장물 없음(12)이 뜬다. 예: `save-result/unknown`(목 모드), `detail/unknown`.
 
 ### 개발용 공유 진입
 

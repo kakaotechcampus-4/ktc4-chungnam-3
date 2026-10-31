@@ -28,8 +28,9 @@ export function buildLinkingConfig(): LinkingOptions<RootStackParamList> {
                 [ROUTES.SaveResult]: {
                     initialRouteName: ROUTES.Result,
                     screens: {
-                        [ROUTES.Result]: "save-result/:resultId",
-                        [ROUTES.PlaceSearch]: "save-result/:resultId/search",
+                        [ROUTES.Result]: "save-result/:personalSaveId",
+                        [ROUTES.PlaceSearch]:
+                            "save-result/:personalSaveId/search",
                     },
                 },
             },

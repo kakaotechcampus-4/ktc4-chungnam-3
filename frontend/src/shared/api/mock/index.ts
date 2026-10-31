@@ -9,7 +9,6 @@ export {
     type MockSaveResult,
 } from "./scenario";
 
-export { archiveMock } from "./archive";
 export { mapViewMock } from "./mapView";
 export { nearbyEmptyMock, nearbyMock } from "./nearby";
 export { onboardingMock } from "./onboarding";

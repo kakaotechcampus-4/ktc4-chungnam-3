@@ -2,6 +2,10 @@
 // 현재 위치 · 경로는 위치 권한이 "denied" 일 때만 숨긴다. 경로는 경로 API 전까지 직선 자리표시다.
 // 시트 멈춤 지점: 기본(08, 메모 2줄 상태의 내용 높이를 처음 한 번 재서 고정) · 펼침(08c, 상태바 아래까지).
 // 뒤로가기 버튼은 Figma 레이어 순서대로 시트 아래에 있어 펼치면 가려진다.
+// 두 경로가 있다. placeId 로 열면(지도 · 근처) 장소 목을 그리고 다른 저장 장소를 미니 핀으로 그린다.
+// personalSaveId 로 열면(기억 탭 · 저장 결과) 저장물 상세 API 를 읽어 첫 장소를 그린다(savedPlaceSheet). 미니 핀은 없다.
+// 저장물이 ready 가 아니면(장소가 없어졌거나 다시 분석 중) 저장 결과(02~05)로 바꾼다. 404 는 12.
+// 읽는 동안은 바탕과 뒤로가기만, 읽기 실패는 그 위에 다시 불러오기 문구를 보인다.
 import BottomSheet, {
     type BottomSheetFooterProps,
     BottomSheetScrollView,
@@ -13,13 +17,14 @@ import {
     useNavigation,
     useRoute,
 } from "@react-navigation/native";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
     BackHandler,
     type LayoutChangeEvent,
     PixelRatio,
     Pressable,
     StyleSheet,
+    Text,
     View,
 } from "react-native";
 import MapView, {
@@ -34,12 +39,16 @@ import {
     mapViewMock,
     placeDetailsMock,
 } from "../../shared/api/mock";
+import { usePersonalSaveDetail } from "../../shared/api/usePersonalSaveDetail";
+import { openExternalUrl } from "../../shared/external-links/openExternalUrl";
+import { youtubeShortsUrl } from "../../shared/external-links/youtubeLinks";
 import CurrentLocation from "../../shared/ui/CurrentLocation";
 import Icon from "../../shared/ui/Icon";
 import NotFound from "../../shared/ui/NotFound";
 import PhotoMarker, { photoMarkerSize } from "../../shared/ui/PhotoMarker";
 import PinLabel, { PIN_LABEL_EXTENT } from "../../shared/ui/PinLabel";
 import SheetHandle from "../../shared/ui/SheetHandle";
+import type { ThumbFade } from "../../shared/ui/Thumb";
 import {
     colors,
     effects,
@@ -47,23 +56,28 @@ import {
     metrics,
     radius,
     spacing,
+    typography,
 } from "../../shared/ui/theme";
 import DetailFooter, { footerHeight } from "./components/DetailFooter";
 import DetailSheet, { type DetailSheetProps } from "./components/DetailSheet";
+import { toSavedPlaceSheet } from "./savedPlaceSheet";
 
-const details: Readonly<
-    Record<string, DetailSheetProps & { coordinate: LatLng }>
-> = placeDetailsMock;
+type Detail = DetailSheetProps & { coordinate: LatLng };
+type MiniPlace = {
+    key: string;
+    coordinate: LatLng;
+    fade: ThumbFade;
+    thumbUri?: string;
+};
+
+const details: Readonly<Record<string, Detail>> = placeDetailsMock;
 const { current, initialRegion: mapRegion } = mapViewMock;
-// 08 지도의 다른 저장 장소(미니 핀). 상세가 있는 곳이 곧 장소 확정 저장물이다.
-const savedPlaces = Object.entries(details);
 
 const EXPANDED = 1;
 const HANDLE_HEIGHT =
     metrics.sheetHandle.paddingTop + metrics.sheetHandle.height;
 
 export default function ContentDetailScreen() {
-    const navigation = useNavigation();
     // RootParamList 는 interface 라 ParamListBase 제약을 못 맞춘다. Pick 으로 타입 별칭을 만든다.
     const route =
         useRoute<
@@ -72,6 +86,153 @@ export default function ContentDetailScreen() {
                 "ContentDetail"
             >
         >();
+    const params = route.params;
+    return "placeId" in params ? (
+        <MockPlaceDetail placeId={params.placeId} />
+    ) : (
+        <SavedPlaceDetail personalSaveId={params.personalSaveId} />
+    );
+}
+
+// 지도 · 근처에서 여는 08. 장소 목을 그린다.
+function MockPlaceDetail({ placeId }: { placeId: string }) {
+    const navigation = useNavigation();
+    const detail = details[placeId];
+    if (!detail) return <PlaceNotFound />;
+    // 08 지도의 다른 저장 장소(미니 핀). 상세가 있는 곳이 곧 장소 확정 저장물이다.
+    const otherPlaces = Object.entries(details)
+        .filter(([id]) => id !== placeId)
+        .map(([id, place]) => ({ key: id, ...place }));
+    return (
+        <ContentDetailView
+            detail={detail}
+            otherPlaces={otherPlaces}
+            onReplace={() =>
+                navigation.navigate("SaveResult", {
+                    screen: "PlaceSearch",
+                    params: { placeId },
+                })
+            }
+        />
+    );
+}
+
+// 기억 탭 · 저장 결과에서 여는 08. 저장물 상세 API 를 읽는다.
+function SavedPlaceDetail({ personalSaveId }: { personalSaveId: string }) {
+    const navigation = useNavigation();
+    const { view, reload } = usePersonalSaveDetail(personalSaveId, {
+        pollWhileAnalyzing: false,
+    });
+    const notReady = view.status === "loaded" && view.state.kind !== "ready";
+
+    useEffect(() => {
+        if (!notReady) return;
+        navigation.dispatch(
+            StackActions.replace("SaveResult", {
+                screen: "Result",
+                params: { personalSaveId },
+            }),
+        );
+    }, [notReady, navigation, personalSaveId]);
+
+    if (view.status === "notFound") return <PlaceNotFound />;
+    if (view.status === "failed") return <DetailPending onRetry={reload} />;
+    const sheet =
+        view.status === "loaded"
+            ? toSavedPlaceSheet(view.detail, new Date())
+            : null;
+    if (view.status !== "loaded" || sheet == null) return <DetailPending />;
+
+    const { detail } = view;
+    return (
+        <ContentDetailView
+            detail={sheet}
+            otherPlaces={[]}
+            onReplace={() =>
+                navigation.navigate("SaveResult", {
+                    screen: "PlaceSearch",
+                    params: {
+                        placeId: detail.places[0].placeId,
+                        sourceTitle: detail.title,
+                    },
+                })
+            }
+            onOpenSource={() =>
+                openExternalUrl(youtubeShortsUrl(detail.videoId))
+            }
+        />
+    );
+}
+
+// 삭제·만료된 장소. 12 를 재사용하고 push 화면이라 ← 를 쓴다.
+function PlaceNotFound() {
+    const navigation = useNavigation();
+    return (
+        <NotFound
+            topIcon="arrowLeft"
+            heading="이 장소를 찾을 수 없어요"
+            body="삭제됐거나 기간이 지난 저장이에요."
+            onClose={() => navigation.goBack()}
+            onGoArchive={() =>
+                navigation.dispatch(
+                    StackActions.popTo("Main", { screen: "Archive" }),
+                )
+            }
+        />
+    );
+}
+
+// 읽는 중(onRetry 없음)이면 바탕과 뒤로가기만, 읽기 실패면 다시 불러오기 문구를 보인다.
+function DetailPending({ onRetry }: { onRetry?: () => void }) {
+    const navigation = useNavigation();
+    const insets = useSafeAreaInsets();
+    return (
+        <View style={styles.screen}>
+            {onRetry != null && (
+                <Pressable
+                    accessibilityRole="button"
+                    onPress={onRetry}
+                    style={styles.pending}
+                >
+                    <Text style={styles.pendingCaption}>
+                        확인하지 못했어요. 눌러서 다시 불러와요
+                    </Text>
+                </Pressable>
+            )}
+            <BackButton
+                top={insets.top + spacing.md}
+                onPress={() => navigation.goBack()}
+            />
+        </View>
+    );
+}
+
+function BackButton({ top, onPress }: { top: number; onPress: () => void }) {
+    return (
+        <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="뒤로"
+            hitSlop={metrics.contentDetail.backHitSlop}
+            onPress={onPress}
+            style={[styles.back, { top }]}
+        >
+            <Icon name="arrowLeft" size={metrics.contentDetail.backIconSize} />
+        </Pressable>
+    );
+}
+
+function ContentDetailView({
+    detail,
+    otherPlaces,
+    onReplace,
+    onOpenSource,
+}: {
+    detail: Detail;
+    otherPlaces: readonly MiniPlace[];
+    onReplace: () => void;
+    onOpenSource?: () => void;
+}) {
+    const navigation = useNavigation();
     const insets = useSafeAreaInsets();
     const mapRef = useRef<MapView>(null);
     const sheetRef = useRef<BottomSheet>(null);
@@ -93,24 +254,6 @@ export default function ContentDetailScreen() {
             return () => sub.remove();
         }, []),
     );
-
-    const detail = details[route.params.placeId];
-    // 삭제·만료된 장소. 12 를 재사용하고 push 화면이라 ← 를 쓴다.
-    if (!detail) {
-        return (
-            <NotFound
-                topIcon="arrowLeft"
-                heading="이 장소를 찾을 수 없어요"
-                body="삭제됐거나 기간이 지난 저장이에요."
-                onClose={() => navigation.goBack()}
-                onGoArchive={() =>
-                    navigation.dispatch(
-                        StackActions.popTo("Main", { screen: "Archive" }),
-                    )
-                }
-            />
-        );
-    }
 
     const { coordinate, ...sheet } = detail;
     const showWalk = MOCK_SCENARIO.locationPermission !== "denied";
@@ -157,17 +300,12 @@ export default function ContentDetailScreen() {
     const measureBody = (event: LayoutChangeEvent) => {
         if (bodyHeight == null) setBodyHeight(event.nativeEvent.layout.height);
     };
-    // 바꾸기 모드 02c. 저장 결과 모달 안에 PlaceSearch 하나만 올린다.
-    const openReplace = () =>
-        navigation.navigate("SaveResult", {
-            screen: "PlaceSearch",
-            params: { placeId: route.params.placeId },
-        });
+    // "이 장소가 아니에요" → 바꾸기 모드 02c. 저장 결과 모달 안에 PlaceSearch 하나만 올린다.
     const renderFooter = (props: BottomSheetFooterProps) => (
         <DetailFooter
             {...props}
             bottomInset={insets.bottom}
-            onNotThisPlace={openReplace}
+            onNotThisPlace={onReplace}
         />
     );
 
@@ -219,17 +357,15 @@ export default function ContentDetailScreen() {
                     {showWalk && <CurrentLocation coordinate={current} />}
                     {/* 08 핀은 흰 테두리 그대로 두고 이름표만 붙인다. */}
                     {/* 다른 저장 장소는 먼저 넣어 이 장소 핀 아래에 그려지게 한다(zIndex 는 쓰지 않는다). 누르는 동작은 없다. */}
-                    {savedPlaces
-                        .filter(([placeId]) => placeId !== route.params.placeId)
-                        .map(([placeId, place]) => (
-                            <PhotoMarker
-                                key={placeId}
-                                coordinate={place.coordinate}
-                                fade={place.fade}
-                                uri={place.thumbUri}
-                                variant="mini"
-                            />
-                        ))}
+                    {otherPlaces.map((place) => (
+                        <PhotoMarker
+                            key={place.key}
+                            coordinate={place.coordinate}
+                            fade={place.fade}
+                            uri={place.thumbUri}
+                            variant="mini"
+                        />
+                    ))}
                     <PhotoMarker
                         coordinate={coordinate}
                         fade={detail.fade}
@@ -240,18 +376,10 @@ export default function ContentDetailScreen() {
                 </MapView>
             )}
 
-            <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="뒤로"
-                hitSlop={metrics.contentDetail.backHitSlop}
+            <BackButton
+                top={insets.top + spacing.md}
                 onPress={() => navigation.goBack()}
-                style={[styles.back, { top: insets.top + spacing.md }]}
-            >
-                <Icon
-                    name="arrowLeft"
-                    size={metrics.contentDetail.backIconSize}
-                />
-            </Pressable>
+            />
 
             {bodyHeight != null && (
                 <BottomSheet
@@ -282,6 +410,7 @@ export default function ContentDetailScreen() {
                             {...sheet}
                             showWalk={showWalk}
                             noteExpanded={noteExpanded}
+                            onOpenSource={onOpenSource}
                         />
                     </BottomSheetScrollView>
                 </BottomSheet>
@@ -319,5 +448,16 @@ const styles = StyleSheet.create({
         borderRadius: radius.full,
         backgroundColor: colors.bg.surface,
         boxShadow: effects.elevationLow,
+    },
+    // 읽기 실패 문구는 화면 가운데에 둔다(Figma 에 08 로딩 · 실패 표현이 없다).
+    pending: {
+        flex: 1,
+        alignItems: "center",
+        justifyContent: "center",
+        paddingHorizontal: spacing.lg,
+    },
+    pendingCaption: {
+        ...typography.captionMeta,
+        color: colors.text.secondary,
     },
 });

@@ -2,6 +2,10 @@
 // 허용 규칙은 이 파일 위쪽 상수에만 둔다. youtu.be · /watch · /live · /embed 는 실제 공유 형식을 기기에서 확인한 뒤 넓힌다.
 // 전역 URL 은 RN · Expo 구현마다 동작이 달라 쓰지 않고 정규식으로 나눈다.
 
+import {
+    youtubeShortsUrl,
+    youtubeThumbnailUrl,
+} from "../../../shared/external-links/youtubeLinks";
 import type { LinkParser, SharedLink } from "./index";
 
 // 정확히 일치해야 한다(접미사 일치 금지). 소문자로 비교한다.
@@ -31,12 +35,9 @@ export const youtubeParser: LinkParser = {
         return {
             platform: "YOUTUBE",
             videoId,
-            url: `https://www.youtube.com/shorts/${videoId}`,
+            url: youtubeShortsUrl(videoId),
         };
     },
-    // hqdefault(480×360)는 Shorts 면 가운데에 세로 영상, 양옆에 흐린 배경이 있다(kbWy8_UC0Z8 로 확인).
-    // 9:16 틀에 cover 로 넣으면 가운데 세로 영상만 남는다. 문서에 없는 세로 주소(oardefault)는 쓰지 않는다.
-    thumbnailUrl(videoId: string): string {
-        return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
-    },
+    // 주소 규칙은 화면들과 같이 쓰므로 shared 에 둔다.
+    thumbnailUrl: youtubeThumbnailUrl,
 };

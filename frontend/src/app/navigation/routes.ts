@@ -27,11 +27,18 @@ export type MainTabParamList = {
     [ROUTES.Archive]: undefined;
 };
 
+// 저장물로 여는 화면의 파라미터. 화면은 저장물 상세 API 를 읽는다.
+// 개발 모드에서는 personalSaveId 가 화면 목(saveResults)의 키면 그 목을 그린다(개발용 딥링크).
+export type PersonalSaveParams = { personalSaveId: string };
+
 // SaveResult 모달 안의 중첩 스택. Result(02~05 · 02b) → PlaceSearch(02c · 02d).
-// PlaceSearch 는 resultId 면 저장 모드, placeId 면 08 에서 여는 바꾸기 모드다.
+// PlaceSearch 는 personalSaveId 면 저장 모드, placeId 면 08 에서 여는 바꾸기 모드다.
+// sourceTitle 은 캡션에 쓰는 영상 제목이다(없으면 null). 넘기면 목에서 찾지 않는다.
 export type SaveResultStackParamList = {
-    [ROUTES.Result]: { resultId: string };
-    [ROUTES.PlaceSearch]: { resultId: string } | { placeId: string };
+    [ROUTES.Result]: PersonalSaveParams;
+    [ROUTES.PlaceSearch]:
+        | (PersonalSaveParams & { sourceTitle?: string | null })
+        | { placeId: string; sourceTitle?: string | null };
 };
 
 export type RootStackParamList = {
@@ -43,7 +50,8 @@ export type RootStackParamList = {
     [ROUTES.FirstSave]: undefined;
     [ROUTES.Main]: NavigatorScreenParams<MainTabParamList>;
     [ROUTES.Settings]: undefined;
-    [ROUTES.ContentDetail]: { placeId: string };
+    // 지도 · 근처는 placeId(목 장소)로, 기억 탭은 저장물로 연다.
+    [ROUTES.ContentDetail]: { placeId: string } | PersonalSaveParams;
     [ROUTES.SaveResult]: NavigatorScreenParams<SaveResultStackParamList>;
 };
 
