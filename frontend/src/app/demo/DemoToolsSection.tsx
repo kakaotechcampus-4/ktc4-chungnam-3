@@ -2,8 +2,7 @@
 // 지오펜스 등록 상태 · 보낼 도착 수 · "지금 다시 등록" · 저장한 장소별 가상 도착 · (목 모드) 목 서버가 받은 도착 기록.
 // 가상 도착은 누르면 바로 보낸다(RN Android 는 앱이 백그라운드면 JS 타이머가 멈춰 예약하지 않는다). 보낸 뒤 홈으로 내리고 알림을 기다린다.
 // 장소 목록은 묶음이 처음 그려질 때 한 번 읽는다. 목록(최대 100개) 중 장소가 있는 저장물만 상세를 하나씩 읽는다(시연용 N+1).
-// 목 도착 기록 줄은 목 서버가 그 도착으로 만든 알림이 있으면 눌러서 연다(알림을 누른 것처럼 08 을 지금 화면 위에 push).
-import { StackActions } from "@react-navigation/native";
+// 목 도착 기록 줄은 목 서버가 그 도착으로 만든 알림이 있으면 눌러서 연다(알림을 누른 것과 같은 opener).
 import { useCallback, useEffect, useState } from "react";
 
 import SettingsGroup from "../../features/settings/components/SettingsGroup";
@@ -27,8 +26,7 @@ import {
     fetchPersonalSave,
     fetchPersonalSaves,
 } from "../../shared/api/personalSaves";
-import { navigationRef } from "../navigation/navigationRef";
-import { ROUTES } from "../navigation/routes";
+import { openFromNotification } from "../notifications/notificationOpener";
 
 const LIST_SIZE = 100;
 
@@ -105,14 +103,6 @@ async function readPlaces(): Promise<DemoPlace[]> {
         }
     }
     return places;
-}
-
-// F2-2 에서 알림 누름 처리(opener)로 바꾼다.
-function openNotificationDetail(notificationId: string): void {
-    if (!navigationRef.isReady()) return;
-    navigationRef.dispatch(
-        StackActions.push(ROUTES.ContentDetail, { notificationId }),
-    );
 }
 
 export default function DemoToolsSection() {
@@ -253,7 +243,7 @@ export default function DemoToolsSection() {
                                     notificationId == null
                                         ? undefined
                                         : () =>
-                                              openNotificationDetail(
+                                              openFromNotification(
                                                   notificationId,
                                               )
                                 }

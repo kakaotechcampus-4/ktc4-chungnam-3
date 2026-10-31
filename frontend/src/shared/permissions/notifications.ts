@@ -1,6 +1,7 @@
 // 기기 알림 권한(안드로이드 13+ POST_NOTIFICATIONS. 12 이하는 자동 허용). 00c · 설정(11)이 쓴다.
 // 기기 FCM 토큰(Expo 푸시 토큰 아님. 서버가 firebase-admin 으로 직접 보낸다)도 여기서 받는다(runtime/notifications/pushTokenSync).
 // 알림 채널 생성도 여기서 한다. 채널 정의는 runtime/notifications/channels 가 넘긴다.
+// 앱이 앞에 있을 때의 표시(핸들러)와 알림 누름(응답) 구독도 여기서 한다. 응답은 data 만 넘긴다(runtime/notifications/notificationListener).
 // expo-notifications 는 처음 쓸 때 불러온다. 이 모듈이 없는 개발 빌드에서 파일 맨 위에서 import 하면
 // import 만으로 앱이 멈춘다. 모듈이 없으면 "unavailable" 을 돌려주고 경고한다.
 // 안드로이드 Expo Go(SDK 53+)에서는 불러오지 않는다. expo-notifications 는 불러오는 순간 푸시 토큰 리스너를 등록하는데,
@@ -120,6 +121,47 @@ export async function ensureNotificationChannel(
                 error,
             );
         }
+    }
+}
+
+// 앱이 앞에 있을 때 받은 알림도 시스템 알림으로 보인다: 목록 · 소리, 배지 없음.
+// 헤드업은 채널 중요도가 정한다(Android 8+ 는 banner · list 를 가르지 않고 둘 중 하나면 표시한다). 모듈이 없으면 아무것도 하지 않는다.
+export function setForegroundPresentation(): void {
+    const module = loadNotifications();
+    if (module == null) return;
+    module.setNotificationHandler({
+        handleNotification: async () => ({
+            shouldShowBanner: false,
+            shouldShowList: true,
+            shouldPlaySound: true,
+            shouldSetBadge: false,
+        }),
+    });
+}
+
+// 알림을 누르면 그 알림의 data 로 부른다(앞 · 뒤 상태). 모듈이 없으면 아무것도 하지 않는다. 돌려준 함수로 구독을 푼다.
+export function addNotificationResponseListener(
+    listener: (data: unknown) => void,
+): () => void {
+    const module = loadNotifications();
+    if (module == null) return () => {};
+    const subscription = module.addNotificationResponseReceivedListener(
+        (response) => listener(response.notification.request.content.data),
+    );
+    return () => subscription.remove();
+}
+
+// 앱을 연 마지막 알림 응답(종료 상태에서 누름)의 data. 읽고 바로 지운다. 없으면 null.
+export function takeLastNotificationResponse(): unknown {
+    const module = loadNotifications();
+    if (module == null) return null;
+    try {
+        const response = module.getLastNotificationResponse();
+        if (response == null) return null;
+        module.clearLastNotificationResponse();
+        return response.notification.request.content.data;
+    } catch {
+        return null;
     }
 }
 

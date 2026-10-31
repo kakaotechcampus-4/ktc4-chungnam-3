@@ -52,6 +52,7 @@ frontend/
     │   ├── usePushTokenSync.ts  FCM 토큰 등록 시점(signedIn 직후 · 앞으로 돌아올 때 · 토큰 변경)
     │   ├── demo/             설정의 "시연 도구" 묶음(DemoToolsSection). 개발 모드 · preview 빌드에서만 App 이 등록한다
     │   ├── share/            공유 받음 처리 흐름(shareReceiver) · 시트 호스트 · 개발용 진입(devShareLink)
+    │   ├── notifications/    알림을 눌러 08 열기(notificationOpener). 대기 칸 · signedIn 게이트 · navigationRef 로 push
     │   └── navigation/       RootNavigator, linking, routes, navigationRef(네비게이터 밖 이동)
     │
     ├── domain/
@@ -71,7 +72,8 @@ frontend/
     │   ├── background/       pendingQueue(저장 보내기 대기열)
     │   ├── geofence/         지오펜스 이벤트 처리 · 도착 보고 대기열 · 상태 파일(geofenceManager · geofenceState), 등록 계획(registrationPlan),
     │   │                     (재)등록 · 해제(geofenceSync), 백그라운드 태스크(geofenceTask), expo-task-manager 지연 로더(taskManager)
-    │   ├── notifications/    channels(근처 알림 채널 정의 · 생성), listener(발생원 은닉), router, FCM 토큰 등록 판단(pushTokenSync)
+    │   ├── notifications/    channels(근처 알림 채널 정의 · 생성), listener(알림 누름 구독 · 콜드 스타트 응답 · 중복 거르기, 발생원 은닉),
+    │   │                     router(응답 data → notificationId), FCM 토큰 등록 판단(pushTokenSync)
     │   ├── permissions/      권한 상시 감시 (자동 회수 대응)
     │   └── share/
     │       └── supportedLinks/   [확장 포인트] 플랫폼별 파서 레지스트리
@@ -204,7 +206,13 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   화면은 알림 상세(`useNotificationDetail`)를 읽고, 읽으면 열람 처리(`openNotification`)를 한 번 보낸 뒤(기다리지 않고 실패는 무시, 서버는 멱등)
   첫 항목으로 `replace(ContentDetail { personalSaveId, placeId })` 한다. 그래서 뒤로 가면 알림을 누르기 전 화면이고, 히스토리에 알림 08 이 남지 않는다.
   장소가 없는 항목(CONTENT)은 `{ personalSaveId }` 만 넘긴다(ready 가 아니면 저장 결과로 바뀐다). 404 · 항목 없음 · PUBLIC(내 저장물 아님)은 12, 그 밖의 읽기 실패는 다시 불러오기.
-  여러 장소(COURSE)도 지금은 첫 항목만 연다. 알림 누름 처리(앞 · 뒤 · 종료, 게이트 signedIn)는 F2-2, 지금은 시연 도구 · 개발용 딥링크(`notification/:notificationId`)로 연다.
+  여러 장소(COURSE)도 지금은 첫 항목만 연다. 개발용 딥링크 `notification/:notificationId` 로도 연다.
+- 알림 누름 처리: `runtime/notifications/notificationListener.ts` 의 `startListening`(App 마운트 때 한 번, 헤드리스 태스크에서는 부르지 않는다)이
+  응답 리스너를 붙인 뒤 앱을 연 마지막 응답(종료 상태에서 누름)을 읽고 지운다(`takeLastNotificationResponse`). 앞 · 뒤 상태는 이벤트로 온다.
+  id 는 `router.ts` 의 `toNotificationId`(data.notificationId, 문자열이 아니거나 비면 무시)로 꺼내고, 이번 실행에서 넘긴 id 는 다시 넘기지 않는다.
+  여는 것은 app 의 `app/notifications/notificationOpener.ts`: 대기 칸 한 칸(마지막 것만)에 두고, signedIn 이고 네비게이터가 준비돼 ContentDetail 이 등록돼 있으면 push 하고 비운다.
+  비우는 때는 넘겨받은 즉시 · NavigationContainer `onReady` · signedIn 이 된 직후 · signedIn 동안 내비게이션 상태가 바뀔 때(화면 등록이 늦게 반영되는 경우)다.
+  signedOut 이 되면 버린다. 위치 동의는 조건이 아니다. 시연 도구의 "알림 열기"도 같은 opener 를 부른다(중복 거르기는 거치지 않아 다시 누르면 다시 연다).
 - 02c 에서 저장하면 SaveResult 모달 하나만 닫아 흐름을 끝낸다. 뒤로 가기는 02c → 02 로 간다.
 - 08 "이 장소가 아니에요"는 SaveResult 모달에 PlaceSearch 하나만 올린 바꾸기 모드(placeId)다. 바꾸기 · 뒤로 가기 모두 모달을 닫고 08 로 돌아간다. 딥링크는 없다.
 - 08 "길 안내 시작"은 동작하지 않는다. 백엔드 협의 이슈 대기.
@@ -281,8 +289,10 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
       `shared/permissions/notifications.ts` 의 `ensureNotificationChannel` 로 만들고, App 마운트 때 켤 때마다 부른다(헤드리스 태스크에서는 부르지 않는다).
       만든 뒤에는 이름 · 설명만 바뀌고 중요도 · 소리는 앱이 바꿀 수 없다. id 는 바꾸지 않는다(app.json 의 `defaultChannel` 과 같아야 한다).
       서버가 channelId 없이 보내는 FCM 은 앱이 뒤에 있을 때 `defaultChannel`(manifest `default_notification_channel_id`)로 이 채널에 온다.
-      앱이 앞에 있을 때는 expo 가 받아 JS 핸들러에 묻는다. 핸들러가 없는 지금은 표시되지 않고, 핸들러를 넣어도 channelId 가 없으면 expo 대체 채널("Miscellaneous")로 간다.
-      그래서 서버가 `channelId: "nearby"` 를 보내도록 백엔드에 요청했고(`defaultChannel` 은 빠뜨렸을 때의 안전망), 핸들러는 F2 에서 넣는다.
+      앱이 앞에 있을 때는 expo 가 받아 JS 핸들러에 묻는다. 핸들러(`setForegroundPresentation`, App 마운트 때 채널과 같은 자리)는
+      `{ shouldShowBanner: false, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }` 다(목록 · 소리, 배지 없음).
+      Android 8+ 는 banner · list 를 가르지 않고, 헤드업 · 소리는 채널이 정한다. 그런데 channelId 가 없으면 expo 대체 채널("Miscellaneous", 중요도 HIGH → 헤드업)로 간다.
+      그래서 서버가 `channelId: "nearby"` 를 보내도록 백엔드에 요청했다(`defaultChannel` 은 빠뜨렸을 때의 안전망).
 - 동의 API 는 서버에 있다: `GET /api/me/consents`, `PUT /api/me/consents/{consentType}`(유형 `LOCATION_BASED_SERVICE` · `PUBLIC_CANDIDATE_CONTRIBUTION`). 클라이언트 · 목은 있고(`shared/api/consents.ts`, 약관 URL `consentTerms.ts`, 상태 계산 `mappers/consentMapper.ts`). 00d "위치 허용하기"에 연결됐다(동의하지 않았으면 `shared/ui/LocationConsentSheet` 로 동의를 받은 뒤 권한 요청)과 설정(11c · 11d, "기기 권한" 절)에 연결됐다. 06b 는 연결 전이다.
     - 거둬도(`agreed: false`) 지오펜스 해제는 아직 없다(지오펜스 런타임 작업). 서버 기록까지만 한다.
     - 서버는 철회되지 않은 `LOCATION_BASED_SERVICE` 동의가 없으면 위치 이벤트를 실행 없이 버리고 그대로 202 를 돌려준다. 지금은 버린 이유가 응답 · 로그 어디에도 없다.
@@ -332,7 +342,7 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   묶음은 runtime 을 불러야 해서 app 이 만들어 `shared/demo/demoTools.ts` 자리에 등록하고, 설정(features)은 등록된 묶음을 그리기만 한다. 꺼진 빌드에서는 등록 · 렌더가 일어나지 않는다.
     - 줄: 지오펜스 등록 상태("등록된 곳 N곳 · HH:mm" 또는 "등록된 곳 없음 · {마지막 등록 결과}") · 보낼 도착 N건 · "지금 다시 등록"(`syncGeofences`, 결과를 설명에) ·
       저장한 장소별 "{장소}에 도착"(목록 API 중 장소가 있는 저장물만 상세를 하나씩 읽음, 묶음을 처음 그릴 때 한 번) · 목 모드면 목 서버가 받은 도착 기록(최근 순).
-      목 도착 기록은 목 서버가 만든 알림이 있으면 눌러서 연다(`ContentDetail { notificationId }` push, F2-2 에서 알림 누름 처리로 바꾼다).
+      목 도착 기록은 목 서버가 만든 알림이 있으면 눌러서 연다(알림 누름과 같은 opener, `openFromNotification`).
     - 가상 도착(`simulateArrival`)은 **누르면 바로 보낸다.** RN Android 는 앱이 백그라운드면 JS 타이머가 멈춰(JavaTimerManager `onHostPause`) 예약하지 않는다. 보낸 뒤 홈으로 내리고 알림을 기다린다.
       등록된 장소면 `handleGeofenceEvent` 에 나감 → 들어옴(실제 이벤트와 같은 길, 반복해도 매번 보고), 등록 안 된 장소면 장소 상태는 그대로 두고 같은 대기열로 보낸다. 결과는 보냄 · 남김 · 버림.
 - 00b 의 약관 문구는 지금 링크 없이 문구만 있다. 이용약관 · 개인정보 처리방침 페이지가 생기면 링크로 연결한다.
