@@ -86,6 +86,11 @@ async function readLocationTermsVersion(): Promise<string> {
     return version;
 }
 
+// 지오펜스 목이 쓴다. 서버처럼 철회되지 않은 위치 동의가 있는지만 보고 약관 버전은 보지 않는다.
+export function isMockLocationConsentActive(): boolean {
+    return getMockLocationConsent().agreed;
+}
+
 function mockDelay() {
     return new Promise((resolve) => setTimeout(resolve, MOCK_DELAY_MS));
 }

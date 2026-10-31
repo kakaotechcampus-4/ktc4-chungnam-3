@@ -1,5 +1,7 @@
 // HTTP 클라이언트. 기본 주소 · Bearer 헤더 · ApiError · 401 처리.
 // 응답은 래핑하지 않는다. 실패 바디 {code, message} 와 네트워크 오류 · 시간 초과는 ApiError 로 바꾼다.
+// 성공 응답의 본문이 비어 있으면(204 · 본문 없는 202) body 는 undefined 다.
+// 시간 제한은 기본 15초이고 요청마다 timeoutMs 로 바꿀 수 있다. 제한은 fetch 한 번에 걸린다(세션 다시 받기 · 401 뒤 재전송은 따로 잰다).
 // 게스트 세션은 만료됐으면 요청 전에, 401 이면 그때 같은 설치 id 로 조용히 다시 받고 원래 요청을 딱 한 번 다시 보낸다.
 // 다시 보낸 요청이 또 401 이면 반복하지 않는다. 게스트가 아닌 세션(카카오)의 401 은 세션을 지우고 00b 로 간다.
 // 다시 받는 함수는 login.ts 가 등록한다(setSessionRefresher). 이 파일은 login.ts 를 import 하지 않는다(순환 방지).
@@ -45,6 +47,8 @@ type RequestOptions = {
     body?: unknown;
     // false 면 세션을 싣지 않는다(로그인 요청).
     auth?: boolean;
+    // 응답을 기다리는 시간(ms). 없으면 REQUEST_TIMEOUT_MS.
+    timeoutMs?: number;
 };
 
 export async function request<T>(
@@ -67,7 +71,12 @@ async function send<T>(
     options: RequestOptions,
     retried: boolean,
 ): Promise<{ status: number; body: T }> {
-    const { method = "GET", body, auth = true } = options;
+    const {
+        method = "GET",
+        body,
+        auth = true,
+        timeoutMs = REQUEST_TIMEOUT_MS,
+    } = options;
     if (API_BASE_URL == null) {
         throw new ApiError(
             null,
@@ -85,7 +94,7 @@ async function send<T>(
     if (token != null) headers.Authorization = `Bearer ${token}`;
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     let response: Response;
     try {
         response = await fetch(`${API_BASE_URL}${path}`, {
@@ -117,10 +126,11 @@ async function send<T>(
         const { code, message } = await readError(response);
         throw new ApiError(response.status, code, message);
     }
-    if (response.status === 204) {
-        return { status: response.status, body: undefined as T };
-    }
-    return { status: response.status, body: (await response.json()) as T };
+    const text = await response.text();
+    return {
+        status: response.status,
+        body: (text === "" ? undefined : JSON.parse(text)) as T,
+    };
 }
 
 async function readError(

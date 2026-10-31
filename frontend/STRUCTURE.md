@@ -103,17 +103,21 @@ frontend/
         │   └── usePermissionStatus.ts  진입 · 앞으로 돌아올 때 다시 읽는 hook
         ├── api/
         │   ├── config.ts     API 기본 주소(EXPO_PUBLIC_API_BASE_URL). 비면 목 모드
-        │   ├── client.ts     기본 주소 · Bearer 헤더 · ApiError · 401 처리
+        │   ├── client.ts     기본 주소 · Bearer 헤더 · ApiError · 401 처리 · 요청별 시간 제한(timeoutMs)
         │   ├── consents.ts   동의 API(조회 · 위치 동의 변경) · 목 분기
         │   ├── consentTerms.ts   약관 URL 상수(약관 버전은 서버가 준다)
         │   ├── personalSaves.ts  저장물 API(저장 · 상세 · 목록 · 삭제)와 서버 응답 타입 · 목 분기
         │   ├── personalSavesMock.ts  저장물 목. 서버 규칙을 따르는 메모리 저장소(서버 계약 모양이라 mock/ 밖)
+        │   ├── geofences.ts  지오펜스 API(등록 목록 · 장소 도착 보고)와 서버 타입 · 목 분기
+        │   ├── geofencesMock.ts  지오펜스 목. 서버 규칙대로 저장물 목의 장소로 목록을 만들고, 도착 보고를 메모리에 남긴다
         │   ├── usePersonalSaveDetail.ts  저장물 상세 hook. 포커스 · 앱 복귀 때 읽기, 분석 중 5초마다 다시 읽기
         │   ├── mappers/      ★ 서버 응답 -> 앱 모델 변환. 백엔드 변경 흡수 지점
         │   │   └── personalSaveMapper.ts  저장물 상세 · 목록 항목 -> SaveState
         │   └── mock/         UI 개발용 목 데이터. 화면 props 모양. 서버 계약 아님
         ├── storage/
         │   └── secureStore.ts    안전한 저장소(expo-secure-store) 지연 로더. 세션 · 설치 id
+        ├── geo/
+        │   └── distanceMeters.ts  두 좌표 거리(m). 서버 GeoDistance 와 같은 haversine
         ├── external-links/   지도 딥링크 (단순 URL 빌더)
         │   ├── youtubeLinks.ts  YouTube Shorts 주소 · 썸네일 주소(hqdefault). 공유 파서와 화면들이 같이 쓴다
         │   └── openExternalUrl.ts  웹 페이지(약관) 열기. expo-web-browser 지연 로드, 실패하면 Linking
@@ -259,6 +263,13 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
       `currentTermsVersion` 이 없으면(필드가 없는 옛 서버) 비교할 수 없어 `agreed` 로 보지만, 이때 동의 PUT 은 버전을 얻지 못해 실패한다.
     - 재동의는 00d 와 설정에서만 묻는다. 동의 시트는 outdated 에서 열 때 제목만 "위치 정보 약관이 바뀌었어요"다(`termsChanged`, 열 때의 값을 닫힐 때까지 유지).
     - 동의는 OS 위치 권한과 분리해 별도 동의 화면에서 명시적으로 받는다(설계 중).
+- 지오펜스 API(`shared/api/geofences.ts`)는 develop 코드(`GeofenceResponse` · `LocationEventRequest`)와 ADR003\_지오펜스 기준이다. docs/API.md 의 `regions[{…}]` · `dwellDelayMs` 모양은 옛 것이라 따르지 않는다. 호출 지점 · 태스크는 아직 없다(G2 · G3).
+    - `GET /api/geofences?latitude&longitude&platform=ANDROID`(앱은 ANDROID 고정) → `{ regions: [], resync: { geofenceId: "resync", latitude, longitude, radiusMeters } | null, places: [{ geofenceId: "place:{placeId}", placeId, latitude, longitude, radiusMeters }] }`.
+      장소는 현재 위치에서 가까운 순으로 최대 99개(한도 100 에서 재조회 한 자리), 반경 150m. 재조회 반경은 max(3000, 가장 먼 장소 거리 + 500). 위치 동의가 없으면 빈 목록 · resync null 이다.
+      서버는 철회되지 않은 동의만 보고 약관 버전은 보지 않는다(outdated 도 목록을 받는다). "agreed 만 등록"은 앱 쪽 게이트다.
+    - `POST /api/location-events` `{ placeId, triggerEventId, eventType: "ENTER", eventOccurredAt, location? }` → 본문 없는 202. 중복 triggerEventId · 30분 지난 이벤트 · 회원 쿨다운(2시간) · 동의 없음이어도 똑같이 202 다.
+      서버가 요청 안에서 꺼내기 실행과 알림 발송까지 마친 뒤 응답하므로 이 요청에만 시간 제한 10초를 건다. `reportLocationEvent` 는 예외를 던지지 않고
+      sent · timeout(서버는 받았을 수 있음) · networkError · serverError(5xx) · rejected(4xx, 401 포함)를 돌려준다. 다시 보낼지는 호출자가 정한다(같은 triggerEventId 로 보내면 서버가 중복을 거른다).
 - 00b 의 약관 문구는 지금 링크 없이 문구만 있다. 이용약관 · 개인정보 처리방침 페이지가 생기면 링크로 연결한다.
 - 의존 방향: `shared/api/client.ts` → `shared/auth/session.ts`, `shared/auth/login.ts` → `client.ts` · `session.ts` · `providers.ts`.
   `session.ts` 는 클라이언트를 import 하지 않는다(순환 방지). 둘이 같이 읽는 API 주소는 `shared/api/config.ts` 에 둔다.
@@ -388,6 +399,9 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 - 위치기반서비스 동의는 목 모드에서 목 플래그다. `MOCK_SCENARIO.locationConsent`(시작 시 동의 상태, never · agreed · withdrawn, 기본 never) · `consentSaveResult`(동의 저장 결과, ok · fail, 기본 ok) ·
   `locationTermsVersion`(목 서버의 현재 약관 버전, v1 · v2, 기본 v1). 시작 상태의 동의 기록은 v1 이라 v2 + agreed 면 outdated 다.
   목 PUT 도 서버처럼 현재 버전이 아닌 동의를 400 으로 거절한다. 공용 후보 동의의 목 현재 버전은 v1 고정.
+- 지오펜스 API 는 목 모드에서 `geofencesMock.ts` 가 답한다. 목록은 목 위치 동의(agreed, 버전 무관)와 저장물 목의 장소(분석 실패 제외)로 서버 규칙대로 만든다.
+  도착 보고는 이번 실행 동안 메모리에 남는다(`getMockLocationEvents`). `MOCK_SCENARIO.locationEventResult`(ok · networkError · timeout, 기본 ok):
+  networkError 는 기록하지 않고, timeout 은 기록한 뒤 timeout 을 돌려준다. 같은 triggerEventId 는 다시 기록하지 않고 sent.
 - 저장물 API 는 목 모드에서 메모리 저장소다. `MOCK_SCENARIO.archiveEmpty` 면 빈 저장소, 아니면 샘플 6개로 시작한다
   (장소 있는 성공 2 · 분석 중 1 · 실패(EXTRACTION_API_ERROR) 1 · 볼 수 없는 영상 1 · 장소 없음 1, 저장 시각은 오늘 · 3주 전 · 2달 전).
   샘플 영상 id 는 가짜(`mockSave001`~`006`)라 썸네일은 자리표시다. 분석 중 샘플은 앱을 켜고 약 5초 뒤 `analysisResult` 로 끝난다.
@@ -487,7 +501,7 @@ type AnalysisFailureCode =
 | 꺼내기 제안 유형                        | 문서상 가설이 5개 (장소 1곳 / 코스 / 장소 없는 콘텐츠 재노출 / 공용 풀 보충 / 침묵)   | **SINGLE·COURSE 2분기로 부족하다.** 열린 형태로 둔다                                                                                                                                                                  |
 | 알림 발생원 (FCM / 로컬)                | 백엔드에 FCM 의존성 없음                                                              | `runtime/notifications/notificationListener.ts` 안에서만 갈린다                                                                                                                                                       |
 | API 서버 주소                           | 배포 주소 미정(백엔드 확인 중). 개발은 로컬 백엔드 `http://<PC LAN IP>:8080`          | `EXPO_PUBLIC_API_BASE_URL` 만 바꾼다                                                                                                                                                                                  |
-| 지오펜스 보고 엔드포인트                | 문서에만 서술. 시그니처 없음                                                          | 서버가 조용히 무시할 수 있어 프론트가 결과를 알 방법이 필요                                                                                                                                                           |
+| 지오펜스 보고 엔드포인트                | 서버 코드 있음(늘 202). 클라이언트 `shared/api/geofences.ts`                          | 서버가 조용히 무시할 수 있어 프론트가 결과를 알 방법이 필요                                                                                                                                                           |
 
 ## 화면으로 만들 것 vs 상태로 표현할 것
 
