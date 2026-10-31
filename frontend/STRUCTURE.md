@@ -30,7 +30,8 @@ frontend/
 ├── index.js                  RN 엔트리. 지오펜스 백그라운드 태스크 정의(앱보다 먼저) + 앱 등록
 ├── app.json                  정적 앱 설정. EAS projectId · owner 포함
 ├── app.config.ts             app.json 을 받아 빌드 시점 비밀값(Google Maps 키)을 플러그인에 넣고 google-services.json 경로를 정한다
-├── eas.json                  EAS 빌드 프로필. development = 개발 빌드(dev client) APK, preview = 내부 배포 APK(시연 도구 켬), production
+├── eas.json                  EAS 빌드 프로필. development = 개발 빌드(dev client) APK, preview = 내부 배포 APK(시연 도구 켬),
+│                             preview-mock = preview + 목 모드 강제(EXPO_PUBLIC_FORCE_MOCK=1, 시연 백업), production
 ├── .prettierrc               prettier 설정(tabWidth 4, LF). 버전은 package.json 에 고정
 ├── .prettierignore           포맷하지 않는 생성물(package-lock.json, android/ 등)
 ├── .editorconfig             prettier 를 쓰지 않는 에디터용. .prettierrc 와 같은 값
@@ -108,7 +109,7 @@ frontend/
         │   ├── locationSettings.ts  위치 설정(동의 저장 · 권한 요청)이 바뀌었다는 신호. app 의 hook 이 받아 지오펜스를 다시 등록
         │   └── usePermissionStatus.ts  진입 · 앞으로 돌아올 때 다시 읽는 hook
         ├── api/
-        │   ├── config.ts     API 기본 주소(EXPO_PUBLIC_API_BASE_URL). 비면 목 모드
+        │   ├── config.ts     API 기본 주소(EXPO_PUBLIC_API_BASE_URL). 비거나 EXPO_PUBLIC_FORCE_MOCK=1 이면 목 모드
         │   ├── client.ts     기본 주소 · Bearer 헤더 · ApiError · 401 처리 · 요청별 시간 제한(timeoutMs)
         │   ├── consents.ts   동의 API(조회 · 위치 동의 변경) · 목 분기
         │   ├── consentTerms.ts   약관 URL 상수(약관 버전은 서버가 준다)
@@ -352,7 +353,9 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 ## API 클라이언트
 
 - 기본 주소는 `EXPO_PUBLIC_API_BASE_URL` 이다. 배포 주소가 정해질 때까지 로컬 백엔드(`http://<PC LAN IP>:8080`)를 쓴다.
-- **목 모드**: 주소가 비어 있으면 서버를 부르지 않는다. 시작은 `MOCK_SCENARIO.signedIn`, 로그인은 제공자 로그인(목)만 하고 세션을 저장하지 않는다(가짜 토큰을 저장소에 남기지 않는다).
+- **목 모드**: 주소가 비어 있거나 `EXPO_PUBLIC_FORCE_MOCK` 이 "1" 이면(시연 백업용 preview-mock 프로필. preview 환경의 주소를 무시한다) 서버를 부르지 않는다.
+  판정은 `shared/api/config.ts` 의 `isApiConfigured` 한 곳이다. 두 값은 번들에 인라인되도록 `process.env.이름` 으로 정적으로 읽는다.
+  eas.json env 는 빈 문자열을 거절해서(eas-json 스키마 `Joi.string()`) 주소를 비우는 대신 이 플래그를 쓴다. 시작은 `MOCK_SCENARIO.signedIn`, 로그인은 제공자 로그인(목)만 하고 세션을 저장하지 않는다(가짜 토큰을 저장소에 남기지 않는다).
 - 요청 시간 제한은 15초다. 저장 API 는 분석을 기다리지 않고 바로 돌아오므로(분석은 서버에서 비동기) 같은 제한을 쓴다.
 - 성공 상태 코드가 필요하면 `requestWithStatus` 를 쓴다(저장 API 의 201 새로 저장 · 200 이미 저장). 그 밖에는 `request` 로 본문만 받는다.
 - 로그인 요청의 401(제공자 자격 증명 거절)은 세션 만료가 아니라 로그인 실패다(00a-err · 00b-err).

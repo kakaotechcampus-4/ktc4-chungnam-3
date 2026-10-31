@@ -24,6 +24,12 @@
             },
             "environment": "preview"
         },
+        "preview-mock": {
+            "extends": "preview",
+            "env": {
+                "EXPO_PUBLIC_FORCE_MOCK": "1"
+            }
+        },
         "production": {
             "autoIncrement": true,
             "node": "24.11.0",
