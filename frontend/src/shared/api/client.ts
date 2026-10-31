@@ -47,10 +47,18 @@ type RequestOptions = {
     auth?: boolean;
 };
 
-export function request<T>(
+export async function request<T>(
     path: string,
     options: RequestOptions = {},
 ): Promise<T> {
+    return (await send<T>(path, options, false)).body;
+}
+
+// 성공 상태 코드가 필요할 때(저장 API 의 201 새로 저장 · 200 이미 저장). 실패는 request 와 같다.
+export function requestWithStatus<T>(
+    path: string,
+    options: RequestOptions = {},
+): Promise<{ status: number; body: T }> {
     return send<T>(path, options, false);
 }
 
@@ -58,7 +66,7 @@ async function send<T>(
     path: string,
     options: RequestOptions,
     retried: boolean,
-): Promise<T> {
+): Promise<{ status: number; body: T }> {
     const { method = "GET", body, auth = true } = options;
     if (API_BASE_URL == null) {
         throw new ApiError(
@@ -109,8 +117,10 @@ async function send<T>(
         const { code, message } = await readError(response);
         throw new ApiError(response.status, code, message);
     }
-    if (response.status === 204) return undefined as T;
-    return (await response.json()) as T;
+    if (response.status === 204) {
+        return { status: response.status, body: undefined as T };
+    }
+    return { status: response.status, body: (await response.json()) as T };
 }
 
 async function readError(

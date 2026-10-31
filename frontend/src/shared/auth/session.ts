@@ -54,6 +54,23 @@ export function useAuthState(): AuthState {
     return useSyncExternalStore(subscribe, () => state);
 }
 
+// React 밖(공유 처리 등)에서 지금 인증 상태를 읽는다.
+export function getAuthState(): AuthState {
+    return state;
+}
+
+// 저장된 세션을 다 읽을 때까지(loading 이 끝날 때까지) 기다린다. 콜드 스타트 공유가 세션 복원보다 먼저 올 수 있다.
+export function waitForAuthResolved(): Promise<AuthState> {
+    if (state.status !== "loading") return Promise.resolve(state);
+    return new Promise((resolve) => {
+        const unsubscribe = subscribe(() => {
+            if (state.status === "loading") return;
+            unsubscribe();
+            resolve(state);
+        });
+    });
+}
+
 // API 클라이언트가 Bearer 헤더에 쓴다.
 export function getSessionToken(): string | undefined {
     return session?.sessionToken;

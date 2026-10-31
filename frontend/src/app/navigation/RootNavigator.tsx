@@ -24,6 +24,7 @@ import SettingsScreen from "../../features/settings/SettingsScreen";
 import { BUTTON_PROVIDERS } from "../../shared/auth/providers";
 import { useAuthState } from "../../shared/auth/session";
 import BottomNav, { type BottomNavKey } from "../../shared/ui/BottomNav";
+import { usePendingSaveSender } from "../usePendingSaveSender";
 import {
     type MainTabParamList,
     ROUTES,
@@ -107,6 +108,7 @@ function MainTabs() {
 
 export default function RootNavigator() {
     const auth = useAuthState();
+    usePendingSaveSender(auth.status === "signedIn");
 
     if (auth.status === "signedOut" || auth.status === "loading") {
         const hasLoginScreen = BUTTON_PROVIDERS.length > 0;

@@ -39,6 +39,13 @@
                     "isAndroidBackgroundLocationEnabled": true,
                     "isAndroidForegroundServiceEnabled": false
                 }
+            ],
+            [
+                "expo-share-intent",
+                {
+                    "disableIOS": true,
+                    "androidIntentFilters": ["text/plain"]
+                }
             ]
         ],
         "experiments": {
