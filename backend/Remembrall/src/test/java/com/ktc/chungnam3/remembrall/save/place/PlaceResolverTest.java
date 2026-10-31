@@ -17,12 +17,12 @@ class PlaceResolverTest {
     // 빈 값으로 충분하다.
     private final PlaceResolver resolver =
             new PlaceResolver((lon, lat, radiusMeters) -> List.of(), (name, branch, region) -> List.of(),
-                    query -> Optional.empty(), 1000);
+                    query -> Optional.empty(), name -> List.of(), 1000);
 
     private static PlaceResolver resolverWithNearbyStores(
             List<DataportalStoreClient.StoreResult> nearbyStores) {
         return new PlaceResolver((lon, lat, radiusMeters) -> nearbyStores, (name, branch, region) -> List.of(),
-                query -> Optional.empty(), 1000);
+                query -> Optional.empty(), name -> List.of(), 1000);
     }
 
     private static PlaceResolver resolverForAnchor(
@@ -32,6 +32,7 @@ class PlaceResolverTest {
                 (lon, lat, radiusMeters) -> nearbyStores,
                 (name, branch, region) -> anchorCandidates,
                 query -> Optional.empty(),
+                name -> List.of(),
                 1000);
     }
 
@@ -42,6 +43,16 @@ class PlaceResolverTest {
                 (lon, lat, radiusMeters) -> nearbyStores,
                 (name, branch, region) -> List.of(),
                 query -> Optional.of(vworldAnchor),
+                name -> List.of(),
+                1000);
+    }
+
+    private static PlaceResolver resolverForTourApi(List<TourApiClient.TourApiItem> tourApiItems) {
+        return new PlaceResolver(
+                (lon, lat, radiusMeters) -> List.of(),
+                (name, branch, region) -> List.of(),
+                query -> Optional.empty(),
+                name -> tourApiItems,
                 1000);
     }
 
@@ -418,6 +429,7 @@ class PlaceResolverTest {
                 (lon, lat, radiusMeters) -> List.of(wrongRegionStore),
                 (name, branch, region) -> List.of(),
                 query -> Optional.of(vworldAnchor),
+                name -> List.of(),
                 1000);
 
         var fallbackSearchResults = List.of(result("CU, 대전광역시", 36.35, 127.38));
@@ -462,7 +474,8 @@ class PlaceResolverTest {
                 return List.of(cuStore);
             }
         };
-        var resolver = new PlaceResolver(lookup, (name, branch, region) -> List.of(), query -> Optional.of(vworldAnchor), 1000);
+        var resolver = new PlaceResolver(lookup, (name, branch, region) -> List.of(), query -> Optional.of(vworldAnchor),
+                name -> List.of(), 1000);
 
         PlaceResolver.Result resolved = resolver.resolve("p1", "CU", "서초삼성타운점", "서울 서초", List.of());
 
@@ -477,6 +490,7 @@ class PlaceResolverTest {
                 (lon, lat, radiusMeters) -> List.of(),
                 (name, branch, region) -> List.of(),
                 query -> Optional.of(vworldAnchor),
+                name -> List.of(),
                 1000);
 
         var fallbackSearchResults = List.of(result("이디야커피, 서울특별시", 37.56, 126.92));
@@ -539,6 +553,7 @@ class PlaceResolverTest {
                 (lon, lat, radiusMeters) -> lat == 36.3277 ? List.of(honjeomStore) : List.of(),
                 (name, branch, region) -> List.of(),
                 query -> Optional.empty(),
+                name -> List.of(),
                 1000);
 
         PlaceResolver.Result resolved = resolver.resolve(
@@ -558,6 +573,7 @@ class PlaceResolverTest {
                 (lon, lat, radiusMeters) -> lat == 36.32 ? List.of(storeA) : List.of(storeB),
                 (name, branch, region) -> List.of(),
                 query -> Optional.empty(),
+                name -> List.of(),
                 1000);
 
         PlaceResolver.Result resolved = resolver.resolve(
@@ -590,5 +606,76 @@ class PlaceResolverTest {
 
         assertThat(resolved.resolvedPlace().geocodingProvider()).isEqualTo(GeocodingProvider.DATAPORTAL);
         assertThat(resolved.resolvedPlace().geocodingPlaceId()).isEqualTo("MA0101");
+    }
+
+    private static TourApiClient.TourApiItem tourApiItem(String title, String address) {
+        return new TourApiClient.TourApiItem("1", title, address, 36.37, 127.39);
+    }
+
+    @Test
+    void 지점명없는_일반장소는_TourAPI_제목_완전일치로_RESOLVED() {
+        // 실측 사례("올림픽공원" - contentTypeId=12로 좁히면 서울 송파 올림픽공원만 제목이 정확히
+        // 일치, 수원/창원의 "OO올림픽공원"은 완전일치에서 자동으로 빠진다, 2026-10-28).
+        var resolver = resolverForTourApi(List.of(
+                tourApiItem("올림픽공원", "서울특별시 송파구 올림픽로 424"),
+                tourApiItem("수원올림픽공원", "경기도 수원시 권선구 효원로256번길 16")));
+
+        PlaceResolver.Result resolved = resolver.resolve("p1", "올림픽공원", null, null, List.of());
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+        assertThat(resolved.resolvedPlace().address()).isEqualTo("서울특별시 송파구 올림픽로 424");
+        assertThat(resolved.resolvedPlace().geocodingProvider()).isEqualTo(GeocodingProvider.TOURAPI);
+        assertThat(resolved.resolvedPlace().geocodingPlaceId()).isEqualTo("1");
+    }
+
+    @Test
+    void 완전일치가_없으면_끝일치로_구제해_RESOLVED() {
+        // 실측 사례("반계리 은행나무" - 공식 제목은 "원주 반계리 은행나무", 2026-10-28).
+        var resolver = resolverForTourApi(List.of(tourApiItem("원주 반계리 은행나무", "강원특별자치도 원주시 문막읍 반저리2길 42")));
+
+        PlaceResolver.Result resolved = resolver.resolve("p1", "반계리 은행나무", null, null, List.of());
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+        assertThat(resolved.resolvedPlace().address()).isEqualTo("강원특별자치도 원주시 문막읍 반저리2길 42");
+    }
+
+    @Test
+    void 완전일치_끝일치_모두_없으면_기존_LocationIQ_흐름으로_폴백한다() {
+        // 실측 사례("용문사" - 전국에 동명이인이 많아 전부 "용문사(남해)"처럼 접두어/괄호가 붙어있고
+        // "용문사" 그 자체로 끝나는 제목이 하나도 없다, 2026-10-28). contains가 아니라 endsWith라서
+        // 이 케이스는 구제되지 않고 그대로 기존 흐름(LocationIQ)으로 넘어가야 한다.
+        var resolver = resolverForTourApi(List.of(
+                tourApiItem("용문사(남해)", "경상남도 남해군 이동면 용문사길 166-11"),
+                tourApiItem("양평 용문사 은행나무", "경기도 양평군 용문면 용문산로 782")));
+
+        var fallback = List.of(result("용문사, 경기도", 37.55, 127.57));
+        PlaceResolver.Result resolved = resolver.resolve("p1", "용문사", null, null, fallback);
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+        assertThat(resolved.resolvedPlace().geocodingProvider()).isEqualTo(GeocodingProvider.LOCATIONIQ);
+    }
+
+    @Test
+    void 끝일치가_여러건이어도_regionHint로_좁혀지면_RESOLVED() {
+        var resolver = resolverForTourApi(List.of(
+                tourApiItem("동쪽 전망대", "강원특별자치도 속초시 어딘가"),
+                tourApiItem("서쪽 전망대", "전라남도 여수시 어딘가")));
+
+        PlaceResolver.Result resolved = resolver.resolve("p1", "전망대", null, "강원", List.of());
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+        assertThat(resolved.resolvedPlace().address()).isEqualTo("강원특별자치도 속초시 어딘가");
+    }
+
+    @Test
+    void 끝일치가_여러건이고_regionHint로도_안_좁혀지면_되묻는다() {
+        var resolver = resolverForTourApi(List.of(
+                tourApiItem("동쪽 전망대", "강원특별자치도 속초시 어딘가"),
+                tourApiItem("서쪽 전망대", "강원특별자치도 삼척시 어딘가")));
+
+        PlaceResolver.Result resolved = resolver.resolve("p1", "전망대", null, "강원", List.of());
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.NEEDS_CONFIRMATION);
+        assertThat(resolved.confirmRequest().candidates()).hasSize(2);
     }
 }

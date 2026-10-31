@@ -1,0 +1,27 @@
+meta {
+  name: AUTH-GUEST-02 설치 ID 누락 - 400
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/auth/guest
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {}
+}
+
+tests {
+  test("HTTP 400 및 오류 형식", function () {
+    expect(res.status).to.equal(400);
+    expect(res.body.code).to.equal("INVALID_REQUEST");
+    expect(res.body.message).to.be.a("string").and.not.empty;
+  });
+}

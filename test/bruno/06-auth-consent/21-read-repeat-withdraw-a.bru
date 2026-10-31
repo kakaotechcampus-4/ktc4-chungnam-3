@@ -1,0 +1,31 @@
+meta {
+  name: CON-09 반복 철회 후 DB 상태 확인 - 200
+  type: http
+  seq: 21
+}
+
+get {
+  url: {{baseUrl}}/api/me/consents
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{sessionTokenA}}
+}
+
+script:pre-request {
+  if (!bru.getVar("sessionToken")) { throw new Error("컬렉션을 처음부터 실행하세요: sessionToken가 없습니다."); }
+  if (!bru.getVar("sessionTokenA")) { throw new Error("컬렉션을 처음부터 실행하세요: sessionTokenA가 없습니다."); }
+  if (!bru.getVar("sessionTokenB")) { throw new Error("컬렉션을 처음부터 실행하세요: sessionTokenB가 없습니다."); }
+}
+
+tests {
+  test("최초 철회 시각 유지", function () {
+    expect(res.status).to.equal(200);
+    const location = res.body.find(function (item) { return item.consentType === "LOCATION_BASED_SERVICE"; });
+    expect(location.agreed).to.equal(false);
+    expect(Date.parse(location.agreedAt)).to.equal(bru.getVar("repeatWithdrawalAgreedAt"));
+    expect(Date.parse(location.withdrawnAt)).to.equal(bru.getVar("firstWithdrawnAt"));
+  });
+}

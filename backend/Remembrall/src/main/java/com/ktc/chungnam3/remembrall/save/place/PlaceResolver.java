@@ -82,6 +82,13 @@ import java.util.stream.IntStream;
  * (실측 사례: "성심당 대전 본점" - 대전에 실제로 지점이 3곳 있어서 전부 되묻기 후보로 나감). 이제는
  * 2~3건이어도 각 후보 반경 내 공공 상가정보에서 지점명이 일치하는 곳이 정확히 하나면 그걸로 확정한다
  * ({@link #findCandidateWithBranch}).
+ * <p>
+ * <b>TourAPI 제목 매칭(2026-10-28)</b>: 지점명이 없는 일반 장소(공원·관광지 등)는 OSM에 출입구·구역별
+ * 중복 등록이 많아 ①~④만으로는 되묻기가 잦다(예: "한밭수목원"). {@link #resolveViaTourApi}가 branchName이
+ * 없을 때 먼저 시도한다 - 제목 완전일치(1차), 끝일치(2차, "원주 반계리 은행나무"가 "반계리 은행나무"로
+ * 끝나는 걸 구제하되 {@code contains}가 아니라 {@code endsWith}라서 "용문사"가 "양평 용문사 은행나무"에는
+ * 안 걸림, 실측으로 확인됨) 순으로 좁히고, 둘 다 0건이면(동명이인이 많아 전부 접두어가 붙는 "용문사"류)
+ * 억지로 확정하지 않고 기존 ①~④ 흐름으로 폴백한다.
  */
 @Slf4j
 @Component
@@ -149,15 +156,18 @@ public class PlaceResolver {
     private final NearbyStoreLookup nearbyStoreLookup;
     private final PlaceLookup placeLookup;
     private final FranchiseAnchorLookup franchiseAnchorLookup;
+    private final GeneralPlaceAnchorLookup generalPlaceLookup;
 
     public PlaceResolver(
             NearbyStoreLookup nearbyStoreLookup,
             PlaceLookup placeLookup,
             FranchiseAnchorLookup franchiseAnchorLookup,
+            GeneralPlaceAnchorLookup generalPlaceLookup,
             @Value("${franchise.anchor-radius-meters:1000}") int franchiseAnchorRadiusMeters) {
         this.nearbyStoreLookup = nearbyStoreLookup;
         this.placeLookup = placeLookup;
         this.franchiseAnchorLookup = franchiseAnchorLookup;
+        this.generalPlaceLookup = generalPlaceLookup;
         this.franchiseAnchorRadiusMeters = franchiseAnchorRadiusMeters;
     }
 
@@ -176,6 +186,11 @@ public class PlaceResolver {
             Optional<Result> viaAnchor = resolveViaAnchor(candidateId, name, branchName, regionHint);
             if (viaAnchor.isPresent()) {
                 return viaAnchor.get();
+            }
+        } else {
+            Optional<Result> viaTourApi = resolveViaTourApi(candidateId, name, regionHint);
+            if (viaTourApi.isPresent()) {
+                return viaTourApi.get();
             }
         }
 
@@ -311,6 +326,17 @@ public class PlaceResolver {
         return stores.stream()
                 .filter(s -> s.roadAddress() != null
                         && aliases.stream().anyMatch(alias -> containsIgnoreCase(s.roadAddress(), alias)))
+                .toList();
+    }
+
+    /** {@link #filterByRegion}과 같은 기준을 TourAPI 결과 주소({@link TourApiClient.TourApiItem#address()})에 적용한다. */
+    private List<TourApiClient.TourApiItem> filterTourApiByRegion(String regionHint, List<TourApiClient.TourApiItem> items) {
+        List<String> aliases = regionAliases(regionHint);
+        if (aliases.isEmpty()) {
+            return items;
+        }
+        return items.stream()
+                .filter(i -> aliases.stream().anyMatch(alias -> containsIgnoreCase(i.address(), alias)))
                 .toList();
     }
 
@@ -541,6 +567,68 @@ public class PlaceResolver {
 
         return narrowByBrandThenDistance(
                 candidateId, name, branchName, anchor.get().lat(), anchor.get().lon(), brandMatches);
+    }
+
+    /**
+     * 지점명 없는 일반 장소(공원·관광지 등) 판정(2026-10-28) - TourAPI 제목 매칭을 먼저 시도한다.
+     * 완전일치(1차) → 끝일치(2차, {@code endsWith} - 클래스 javadoc "TourAPI 제목 매칭" 참고) 순으로
+     * 좁히고, 둘 다 0건이면 빈 값을 반환해 호출부가 기존 ①~④ 흐름으로 폴백하게 한다 - {@link
+     * #resolveViaAnchor}와 같은 계약("찾으면 확정/되묻기, 못 찾으면 모르겠다")이다. regionHint로 narrowing한
+     * 뒤에도 전부 걸러지면(엉뚱한 지역) 마찬가지로 빈 값을 반환하지만, 개수 상한을 넘으면(동명이인이
+     * 여전히 여럿) 더 볼 것도 없으니 바로 NO_PLACE로 끊는다.
+     */
+    private Optional<Result> resolveViaTourApi(String candidateId, String name, String regionHint) {
+        List<TourApiClient.TourApiItem> candidates;
+        try {
+            candidates = generalPlaceLookup.search(name);
+        } catch (RuntimeException e) {
+            return Optional.empty();
+        }
+        if (candidates.isEmpty()) {
+            return Optional.empty();
+        }
+
+        List<TourApiClient.TourApiItem> matched = candidates.stream()
+                .filter(c -> c.title().equalsIgnoreCase(name))
+                .toList();
+        if (matched.isEmpty()) {
+            matched = candidates.stream()
+                    .filter(c -> c.title().endsWith(name))
+                    .toList();
+        }
+        if (matched.isEmpty()) {
+            return Optional.empty();
+        }
+
+        matched = filterTourApiByRegion(regionHint, matched);
+        if (matched.isEmpty()) {
+            return Optional.empty();
+        }
+        if (matched.size() > MAX_CONFIRMATION_CANDIDATES) {
+            return Optional.of(new Result(Decision.NO_PLACE, null, null));
+        }
+
+        return Optional.of(buildTourApiResult(candidateId, name, matched));
+    }
+
+    /** 후보 1건이면 확정, 여러 건이면 되묻기 결과를 만든다 - {@link #resolveViaTourApi} 전용. */
+    private Result buildTourApiResult(String candidateId, String name, List<TourApiClient.TourApiItem> matches) {
+        if (matches.size() == 1) {
+            TourApiClient.TourApiItem m = matches.get(0);
+            ResolvedPlaceDto place = new ResolvedPlaceDto(candidateId, name, null, m.address(), m.lat(), m.lon(),
+                    GeocodingProvider.TOURAPI, m.contentId(), null);
+            return new Result(Decision.RESOLVED, place, null);
+        }
+
+        List<ResolvedPlaceDto> options = IntStream.range(0, matches.size())
+                .mapToObj(i -> {
+                    TourApiClient.TourApiItem m = matches.get(i);
+                    return new ResolvedPlaceDto(candidateId + "-" + (i + 1), name, null, m.address(), m.lat(), m.lon(),
+                            GeocodingProvider.TOURAPI, m.contentId(), null);
+                })
+                .toList();
+        ConfirmRequestDto confirm = new ConfirmRequestDto("어느 장소가 맞을까요?", options);
+        return new Result(Decision.NEEDS_CONFIRMATION, null, confirm);
     }
 
     /**

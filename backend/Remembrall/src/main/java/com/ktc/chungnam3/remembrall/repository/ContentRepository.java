@@ -47,6 +47,22 @@ public interface ContentRepository extends JpaRepository<Content, UUID> {
     @Modifying
     @Query(value = """
             UPDATE content
+               SET analysis_started_at = :startedAt, updated_at = :startedAt
+             WHERE id = :contentId AND analysis_status = 'ANALYZING'
+            """, nativeQuery = true)
+    int refreshAnalysisStartedAt(@Param("contentId") UUID contentId, @Param("startedAt") Instant startedAt);
+
+    @Modifying
+    @Query(value = """
+            UPDATE content
+               SET analysis_status = 'PENDING', analysis_started_at = NULL, updated_at = :now
+             WHERE id = :contentId AND analysis_status = 'ANALYZING'
+            """, nativeQuery = true)
+    int releaseAnalysisClaim(@Param("contentId") UUID contentId, @Param("now") Instant now);
+
+    @Modifying
+    @Query(value = """
+            UPDATE content
                SET analysis_status = :status,
                    source_status = COALESCE(:sourceStatus, source_status),
                    title = COALESCE(:title, title),

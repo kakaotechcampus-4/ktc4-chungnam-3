@@ -1,11 +1,18 @@
 package com.ktc.chungnam3.remembrall.consent;
 
+import com.ktc.chungnam3.remembrall.auth.security.ApiAuthenticationEntryPoint;
+import com.ktc.chungnam3.remembrall.auth.security.SecurityConfig;
+import com.ktc.chungnam3.remembrall.auth.security.SessionAuthenticationFilter;
 import com.ktc.chungnam3.remembrall.auth.token.SessionTokenHasher;
 import com.ktc.chungnam3.remembrall.common.exception.ApiErrorResponse;
 import com.ktc.chungnam3.remembrall.common.exception.ErrorCode;
+import com.ktc.chungnam3.remembrall.common.exception.GlobalExceptionHandler;
+import com.ktc.chungnam3.remembrall.consent.config.ConsentConfiguration;
 import com.ktc.chungnam3.remembrall.consent.config.ConsentProperties;
+import com.ktc.chungnam3.remembrall.consent.controller.MemberConsentController;
 import com.ktc.chungnam3.remembrall.consent.dto.ConsentRequest;
 import com.ktc.chungnam3.remembrall.consent.dto.ConsentResponse;
+import com.ktc.chungnam3.remembrall.consent.service.MemberConsentService;
 import com.ktc.chungnam3.remembrall.domain.device.Device;
 import com.ktc.chungnam3.remembrall.domain.member.AuthProvider;
 import com.ktc.chungnam3.remembrall.domain.member.Member;
@@ -20,14 +27,21 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.persistence.autoconfigure.EntityScan;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestComponent;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -61,7 +75,8 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.reset;
 
 @Testcontainers
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
+@SpringBootTest(classes = MemberConsentIntegrationTest.ConsentTestApplication.class,
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "spring.ai.google.genai.api-key=test-api-key", "spring.ai.google.genai.embedding.api-key=test-api-key",
         "youtube.api.key=test-api-key", "kakao.app-id=1",
         "dataportal.api.key=test-api-key", "locationiq.api.key=test-api-key",
@@ -102,9 +117,12 @@ class MemberConsentIntegrationTest {
 
     @Test
     void neverAgreedReturnsBothTypesWithNullHistory() throws Exception {
+        doReturn("public-v2").when(properties).currentVersion(ConsentType.PUBLIC_CANDIDATE_CONTRIBUTION);
+        doReturn("location-v3").when(properties).currentVersion(ConsentType.LOCATION_BASED_SERVICE);
+
         assertThat(list(fixture)).containsExactly(
-                new ConsentResponse(ConsentType.PUBLIC_CANDIDATE_CONTRIBUTION, false, null, null, null),
-                new ConsentResponse(ConsentType.LOCATION_BASED_SERVICE, false, null, null, null));
+                new ConsentResponse(ConsentType.PUBLIC_CANDIDATE_CONTRIBUTION, false, null, "public-v2", null, null),
+                new ConsentResponse(ConsentType.LOCATION_BASED_SERVICE, false, null, "location-v3", null, null));
         assertThat(consents.count()).isZero();
     }
 
@@ -112,7 +130,7 @@ class MemberConsentIntegrationTest {
     @EnumSource(ConsentType.class)
     void agreementIsActiveAndSameVersionIsIdempotent(ConsentType type) throws Exception {
         ConsentResponse first = put(type, true, "v1");
-        assertThat(first).isEqualTo(new ConsentResponse(type, true, "v1", NOW, null));
+        assertThat(first).isEqualTo(new ConsentResponse(type, true, "v1", "v1", NOW, null));
         assertThat(list(fixture)).contains(first);
         MemberConsent active = consents.findByMemberIdAndConsentTypeAndWithdrawnAtIsNull(fixture.memberId(), type)
                 .orElseThrow();
@@ -137,7 +155,7 @@ class MemberConsentIntegrationTest {
 
         ConsentResponse current = put(type, true, "v2");
 
-        assertThat(current).isEqualTo(new ConsentResponse(type, true, "v2", changeTime, null));
+        assertThat(current).isEqualTo(new ConsentResponse(type, true, "v2", "v2", changeTime, null));
         assertThat(consents.count()).isEqualTo(2);
         assertThat(consents.findById(previous.getId()).orElseThrow().getWithdrawnAt()).isEqualTo(changeTime);
         assertThat(consents.findByMemberIdAndConsentTypeAndWithdrawnAtIsNull(fixture.memberId(), type)
@@ -149,7 +167,7 @@ class MemberConsentIntegrationTest {
 
         clock.set(NOW.plusSeconds(60));
         ConsentResponse withdrawn = put(type, false, null);
-        assertThat(withdrawn).isEqualTo(new ConsentResponse(type, false, "v2", changeTime, clock.instant()));
+        assertThat(withdrawn).isEqualTo(new ConsentResponse(type, false, "v2", "v2", changeTime, clock.instant()));
         assertThat(list(fixture)).contains(withdrawn);
     }
 
@@ -160,7 +178,7 @@ class MemberConsentIntegrationTest {
         Instant withdrawnAt = NOW.plusSeconds(30);
         clock.set(withdrawnAt);
         ConsentResponse withdrawn = put(type, false, null);
-        assertThat(withdrawn).isEqualTo(new ConsentResponse(type, false, "v1", NOW, withdrawnAt));
+        assertThat(withdrawn).isEqualTo(new ConsentResponse(type, false, "v1", "v1", NOW, withdrawnAt));
         assertThat(list(fixture)).contains(withdrawn);
         assertThat(consents.existsByMemberIdAndConsentTypeAndWithdrawnAtIsNull(fixture.memberId(), type)).isFalse();
 
@@ -168,7 +186,7 @@ class MemberConsentIntegrationTest {
         assertThat(put(type, false, null)).isEqualTo(withdrawn);
         assertThat(consents.count()).isOne();
         ConsentResponse again = put(type, true, "v1");
-        assertThat(again).isEqualTo(new ConsentResponse(type, true, "v1", clock.instant(), null));
+        assertThat(again).isEqualTo(new ConsentResponse(type, true, "v1", "v1", clock.instant(), null));
         assertThat(consents.count()).isEqualTo(2);
         assertThat(consents.findAll()).filteredOn(consent -> consent.getWithdrawnAt() != null).hasSize(1);
         assertThat(list(fixture)).contains(again);
@@ -177,10 +195,35 @@ class MemberConsentIntegrationTest {
     @ParameterizedTest
     @EnumSource(ConsentType.class)
     void withdrawalWithoutActiveConsentDoesNotInsertHistory(ConsentType type) throws Exception {
+        doReturn("v3").when(properties).currentVersion(type);
+
         ConsentResponse response = put(type, false, null);
-        assertThat(response).isEqualTo(new ConsentResponse(type, false, null, null, null));
+        assertThat(response).isEqualTo(new ConsentResponse(type, false, null, "v3", null, null));
         assertThat(consents.count()).isZero();
         assertThat(list(fixture)).contains(response);
+    }
+
+    @ParameterizedTest
+    @EnumSource(ConsentType.class)
+    void currentTermsVersionIsIndependentOfAgreedAndWithdrawnHistory(ConsentType type) throws Exception {
+        put(type, true, "v1");
+        doReturn("v2").when(properties).currentVersion(type);
+
+        ConsentResponse agreed = new ConsentResponse(type, true, "v1", "v2", NOW, null);
+        assertThat(list(fixture)).contains(agreed);
+        assertThat(consents.count()).isOne();
+
+        Instant withdrawnAt = NOW.plusSeconds(30);
+        clock.set(withdrawnAt);
+        ConsentResponse withdrawn = new ConsentResponse(type, false, "v1", "v2", NOW, withdrawnAt);
+        assertThat(put(type, false, null)).isEqualTo(withdrawn);
+        assertThat(list(fixture)).contains(withdrawn);
+
+        doReturn("v3").when(properties).currentVersion(type);
+        ConsentResponse latest = new ConsentResponse(type, false, "v1", "v3", NOW, withdrawnAt);
+        assertThat(put(type, false, null)).isEqualTo(latest);
+        assertThat(list(fixture)).contains(latest);
+        assertThat(consents.count()).isOne();
     }
 
     @ParameterizedTest
@@ -259,7 +302,7 @@ class MemberConsentIntegrationTest {
                 var response = pending.get(30, TimeUnit.SECONDS);
                 assertThat(response.statusCode()).isEqualTo(200);
                 assertThat(mapper.readValue(response.body(), ConsentResponse.class))
-                        .isEqualTo(new ConsentResponse(type, true, "v1", NOW, null));
+                        .isEqualTo(new ConsentResponse(type, true, "v1", "v1", NOW, null));
             }
         }
         assertThat(consents.count()).isOne();
@@ -419,4 +462,16 @@ class MemberConsentIntegrationTest {
             return new TestClock();
         }
     }
+
+    @Configuration(proxyBeanMethods = false)
+    @TestComponent
+    @EnableAutoConfiguration
+    @EntityScan(basePackageClasses = {Member.class, Device.class, MemberConsent.class})
+    @EnableJpaRepositories(basePackageClasses = MemberRepository.class, includeFilters = @ComponentScan.Filter(
+            type = FilterType.ASSIGNABLE_TYPE,
+            classes = {MemberRepository.class, DeviceRepository.class, MemberConsentRepository.class}))
+    @Import({SecurityConfig.class, SessionAuthenticationFilter.class, ApiAuthenticationEntryPoint.class,
+            SessionTokenHasher.class, GlobalExceptionHandler.class, ConsentConfiguration.class,
+            MemberConsentController.class, MemberConsentService.class})
+    static class ConsentTestApplication {}
 }

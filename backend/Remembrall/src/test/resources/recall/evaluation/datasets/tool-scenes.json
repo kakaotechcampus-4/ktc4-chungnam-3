@@ -1,0 +1,2077 @@
+[
+  {
+    "id": "x01-sunny-trail",
+    "split": "tune",
+    "kind": "tool",
+    "expectedTools": [
+      "checkVisitConditions"
+    ],
+    "seed": {
+      "places": {
+        "trail": {
+          "name": "갑천 강변 산책로",
+          "address": "대전광역시 서구 만년동 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.38
+        },
+        "cafe": {
+          "name": "만년동 통창 카페",
+          "address": "대전광역시 서구 만년동 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.38335
+        }
+      },
+      "personalSaves": [
+        {
+          "videoId": "eval-seed-tool-x01-trail",
+          "title": "갑천 강변 산책로 걷기",
+          "summary": "강을 따라 이어지는 야외 산책로. 주말 오전에 한 바퀴 걷기 좋다고 소개한다.",
+          "category": "OUTDOOR",
+          "savedAt": "2026-06-01T09:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "trail",
+              "description": "야외 강변 산책로를 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x01-cafe",
+          "title": "만년동 통창 카페",
+          "summary": "통창 너머로 강이 보이는 실내 카페. 비 오는 날 창가 자리가 좋다고 소개한다.",
+          "category": "CAFE",
+          "savedAt": "2026-06-05T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "cafe",
+              "description": "실내 창가 좌석을 소개한다."
+            }
+          ]
+        }
+      ],
+      "contributors": []
+    },
+    "event": {
+      "placeKey": "trail",
+      "occurredAt": "2026-10-10T10:30:00+09:00"
+    },
+    "goodChoices": [
+      {
+        "result": "PROPOSE",
+        "proposalType": "PLACE",
+        "places": [
+          "trail"
+        ]
+      },
+      {
+        "result": "PROPOSE",
+        "proposalType": "COURSE",
+        "places": [
+          "trail",
+          "cafe"
+        ],
+        "ordered": false
+      }
+    ],
+    "reference": {
+      "result": "PROPOSE",
+      "proposalType": "PLACE",
+      "items": [
+        {
+          "videoId": "eval-seed-tool-x01-trail",
+          "placeKey": "trail",
+          "source": "PERSONAL"
+        }
+      ],
+      "why": "토요일 오전이고 맑아서 저장한 산책로를 걷기 좋다."
+    },
+    "judgeNotes": "산책로 PLACE나 산책로 후 카페 코스면 높게. 카페만 제안하면 중간.",
+    "weather": {
+      "precipitation": "NONE",
+      "temperatureCelsius": 20,
+      "sky": "CLEAR",
+      "rainProbabilities": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  },
+  {
+    "id": "x02-rainy-trail",
+    "split": "tune",
+    "kind": "tool",
+    "expectedTools": [
+      "checkVisitConditions"
+    ],
+    "seed": {
+      "places": {
+        "trail": {
+          "name": "갑천 강변 산책로",
+          "address": "대전광역시 서구 만년동 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.38
+        },
+        "cafe": {
+          "name": "만년동 통창 카페",
+          "address": "대전광역시 서구 만년동 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.38335
+        }
+      },
+      "personalSaves": [
+        {
+          "videoId": "eval-seed-tool-x02-trail",
+          "title": "갑천 강변 산책로 걷기",
+          "summary": "강을 따라 이어지는 야외 산책로. 주말 오전에 한 바퀴 걷기 좋다고 소개한다.",
+          "category": "OUTDOOR",
+          "savedAt": "2026-06-01T09:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "trail",
+              "description": "야외 강변 산책로를 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x02-cafe",
+          "title": "만년동 통창 카페",
+          "summary": "통창 너머로 강이 보이는 실내 카페. 비 오는 날 창가 자리가 좋다고 소개한다.",
+          "category": "CAFE",
+          "savedAt": "2026-06-05T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "cafe",
+              "description": "실내 창가 좌석을 소개한다."
+            }
+          ]
+        }
+      ],
+      "contributors": []
+    },
+    "event": {
+      "placeKey": "trail",
+      "occurredAt": "2026-10-10T10:30:00+09:00"
+    },
+    "goodChoices": [
+      {
+        "result": "PROPOSE",
+        "proposalType": "PLACE",
+        "places": [
+          "cafe"
+        ]
+      },
+      {
+        "result": "NO_ACTION"
+      }
+    ],
+    "reference": {
+      "result": "PROPOSE",
+      "proposalType": "PLACE",
+      "items": [
+        {
+          "videoId": "eval-seed-tool-x02-cafe",
+          "placeKey": "cafe",
+          "source": "PERSONAL"
+        }
+      ],
+      "why": "비가 와서 야외 산책로 대신 근처 실내 카페가 낫다."
+    },
+    "judgeNotes": "실내 카페 PLACE나 침묵이면 높게. 산책로를 권하면 조건 6 위반. x01과 날씨만 다르다.",
+    "weather": {
+      "precipitation": "RAIN",
+      "temperatureCelsius": 16,
+      "sky": "OVERCAST",
+      "rainProbabilities": [
+        90,
+        80,
+        80,
+        70,
+        60,
+        60
+      ]
+    }
+  },
+  {
+    "id": "x03-sunny-rooftop",
+    "split": "tune",
+    "kind": "tool",
+    "expectedTools": [
+      "checkVisitConditions"
+    ],
+    "seed": {
+      "places": {
+        "roof": {
+          "name": "둔산 야외 루프탑 라운지",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.38
+        },
+        "cafe": {
+          "name": "둔산 실내 디저트 카페",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.348887,
+          "longitude": 127.379045
+        }
+      },
+      "personalSaves": [
+        {
+          "videoId": "eval-seed-tool-x03-roof",
+          "title": "둔산 야외 루프탑에서 보는 노을",
+          "summary": "지붕 없는 야외 루프탑에서 노을을 보며 음료를 마실 수 있는 곳.",
+          "category": "CAFE",
+          "savedAt": "2026-06-20T18:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "roof",
+              "description": "지붕 없는 야외 루프탑 좌석을 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x03-cafe",
+          "title": "둔산 실내 디저트 카페",
+          "summary": "케이크와 따뜻한 차가 좋은 실내 카페.",
+          "category": "CAFE",
+          "savedAt": "2026-06-22T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "cafe",
+              "description": "실내 좌석과 케이크를 소개한다."
+            }
+          ]
+        }
+      ],
+      "contributors": []
+    },
+    "event": {
+      "placeKey": "roof",
+      "occurredAt": "2026-10-10T17:40:00+09:00"
+    },
+    "goodChoices": [
+      {
+        "result": "PROPOSE",
+        "proposalType": "PLACE",
+        "places": [
+          "roof"
+        ]
+      },
+      {
+        "result": "PROPOSE",
+        "proposalType": "COURSE",
+        "places": [
+          "roof",
+          "cafe"
+        ],
+        "ordered": false
+      }
+    ],
+    "reference": {
+      "result": "PROPOSE",
+      "proposalType": "PLACE",
+      "items": [
+        {
+          "videoId": "eval-seed-tool-x03-roof",
+          "placeKey": "roof",
+          "source": "PERSONAL"
+        }
+      ],
+      "why": "맑은 토요일 해 질 무렵이라 야외 루프탑이 잘 어울린다."
+    },
+    "judgeNotes": "루프탑 PLACE면 높게. 실내 카페만 제안하면 중간.",
+    "weather": {
+      "precipitation": "NONE",
+      "temperatureCelsius": 20,
+      "sky": "CLEAR",
+      "rainProbabilities": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  },
+  {
+    "id": "x04-rainy-rooftop",
+    "split": "tune",
+    "kind": "tool",
+    "expectedTools": [
+      "checkVisitConditions"
+    ],
+    "seed": {
+      "places": {
+        "roof": {
+          "name": "둔산 야외 루프탑 라운지",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.38
+        },
+        "cafe": {
+          "name": "둔산 실내 디저트 카페",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.348887,
+          "longitude": 127.379045
+        }
+      },
+      "personalSaves": [
+        {
+          "videoId": "eval-seed-tool-x04-roof",
+          "title": "둔산 야외 루프탑에서 보는 노을",
+          "summary": "지붕 없는 야외 루프탑에서 노을을 보며 음료를 마실 수 있는 곳.",
+          "category": "CAFE",
+          "savedAt": "2026-06-20T18:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "roof",
+              "description": "지붕 없는 야외 루프탑 좌석을 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x04-cafe",
+          "title": "둔산 실내 디저트 카페",
+          "summary": "케이크와 따뜻한 차가 좋은 실내 카페.",
+          "category": "CAFE",
+          "savedAt": "2026-06-22T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "cafe",
+              "description": "실내 좌석과 케이크를 소개한다."
+            }
+          ]
+        }
+      ],
+      "contributors": []
+    },
+    "event": {
+      "placeKey": "roof",
+      "occurredAt": "2026-10-10T17:40:00+09:00"
+    },
+    "goodChoices": [
+      {
+        "result": "PROPOSE",
+        "proposalType": "PLACE",
+        "places": [
+          "cafe"
+        ]
+      },
+      {
+        "result": "NO_ACTION"
+      }
+    ],
+    "reference": {
+      "result": "PROPOSE",
+      "proposalType": "PLACE",
+      "items": [
+        {
+          "videoId": "eval-seed-tool-x04-cafe",
+          "placeKey": "cafe",
+          "source": "PERSONAL"
+        }
+      ],
+      "why": "비가 와서 지붕 없는 루프탑 대신 실내 카페가 낫다."
+    },
+    "judgeNotes": "실내 카페나 침묵이면 높게. 루프탑을 권하면 조건 6 위반. x03과 날씨만 다르다.",
+    "weather": {
+      "precipitation": "RAIN",
+      "temperatureCelsius": 16,
+      "sky": "OVERCAST",
+      "rainProbabilities": [
+        90,
+        80,
+        80,
+        70,
+        60,
+        60
+      ]
+    }
+  },
+  {
+    "id": "x05-rain-probability-only",
+    "split": "tune",
+    "kind": "tool",
+    "expectedTools": [
+      "checkVisitConditions"
+    ],
+    "seed": {
+      "places": {
+        "trail": {
+          "name": "갑천 강변 산책로",
+          "address": "대전광역시 서구 만년동 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.38
+        },
+        "cafe": {
+          "name": "만년동 통창 카페",
+          "address": "대전광역시 서구 만년동 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.38335
+        }
+      },
+      "personalSaves": [
+        {
+          "videoId": "eval-seed-tool-x05-trail",
+          "title": "갑천 강변 산책로 걷기",
+          "summary": "강을 따라 이어지는 야외 산책로. 주말 오전에 한 바퀴 걷기 좋다고 소개한다.",
+          "category": "OUTDOOR",
+          "savedAt": "2026-06-01T09:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "trail",
+              "description": "야외 강변 산책로를 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x05-cafe",
+          "title": "만년동 통창 카페",
+          "summary": "통창 너머로 강이 보이는 실내 카페. 비 오는 날 창가 자리가 좋다고 소개한다.",
+          "category": "CAFE",
+          "savedAt": "2026-06-05T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "cafe",
+              "description": "실내 창가 좌석을 소개한다."
+            }
+          ]
+        }
+      ],
+      "contributors": []
+    },
+    "event": {
+      "placeKey": "trail",
+      "occurredAt": "2026-10-10T10:30:00+09:00"
+    },
+    "goodChoices": [
+      {
+        "result": "PROPOSE",
+        "proposalType": "PLACE",
+        "places": [
+          "trail"
+        ]
+      },
+      {
+        "result": "PROPOSE",
+        "proposalType": "PLACE",
+        "places": [
+          "cafe"
+        ]
+      },
+      {
+        "result": "PROPOSE",
+        "proposalType": "COURSE",
+        "places": [
+          "trail",
+          "cafe"
+        ],
+        "ordered": false
+      }
+    ],
+    "reference": {
+      "result": "PROPOSE",
+      "proposalType": "PLACE",
+      "items": [
+        {
+          "videoId": "eval-seed-tool-x05-trail",
+          "placeKey": "trail",
+          "source": "PERSONAL"
+        }
+      ],
+      "why": "지금은 비가 오지 않으니 산책로를 짧게 걸어볼 수 있다. 이후 비 가능성은 문구에서 단정하지 않는다."
+    },
+    "judgeNotes": "어느 선택이든 높게. 지금 비가 온다고 말하거나, 반대로 비가 오지 않을 거라고 단정하면 조건 3 위반. 강수 확률만으로는 조건 6 위반이 아니다.",
+    "weather": {
+      "precipitation": "NONE",
+      "temperatureCelsius": 18,
+      "sky": "OVERCAST",
+      "rainProbabilities": [
+        70,
+        80,
+        80,
+        70,
+        60,
+        40
+      ]
+    }
+  },
+  {
+    "id": "x06-bakery-closed-today",
+    "split": "tune",
+    "kind": "tool",
+    "expectedTools": [
+      "checkVisitConditions"
+    ],
+    "seed": {
+      "places": {
+        "brunch": {
+          "name": "둔산 아침 브런치",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.38
+        },
+        "bakery": {
+          "name": "둔산 골목 빵집",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.348887,
+          "longitude": 127.379045
+        }
+      },
+      "personalSaves": [
+        {
+          "videoId": "eval-seed-tool-x06-brunch",
+          "title": "둔산 아침 브런치",
+          "summary": "에그 베네딕트와 팬케이크가 유명한 브런치 가게.",
+          "category": "FOOD",
+          "savedAt": "2026-06-12T11:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "brunch",
+              "description": "브런치 메뉴를 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x06-bakery",
+          "title": "둔산 골목 빵집의 소금빵",
+          "summary": "소금빵과 앙버터가 대표 메뉴인 빵집. 사장님이 매일 아침 직접 준비한다는 이야기로 시작해 영상 앞부분은 매장 분위기와 대표 메뉴를 차례로 보여주고, 중간에는 주인이 재료를 고르는 기준과 손님이 많이 찾는 조합을 꽤 길게 설명한다. 좌석 구성과 주차 여부, 포장 가능 여부도 짚고 지나가며 근처 다른 가게와 함께 들르기 좋다는 이야기도 덧붙인다. 댓글에서 자주 묻는 질문에 답하는 장면과 가격대 설명도 이어진다. 영상 마지막에 이 빵집은 매주 일요일에 문을 닫는다고 강조한다.",
+          "category": "FOOD",
+          "savedAt": "2026-06-14T09:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "bakery",
+              "description": "대표 빵 메뉴를 소개한다."
+            }
+          ]
+        }
+      ],
+      "contributors": []
+    },
+    "event": {
+      "placeKey": "brunch",
+      "occurredAt": "2026-10-11T11:00:00+09:00"
+    },
+    "goodChoices": [
+      {
+        "result": "PROPOSE",
+        "proposalType": "PLACE",
+        "places": [
+          "brunch"
+        ]
+      }
+    ],
+    "reference": {
+      "result": "PROPOSE",
+      "proposalType": "PLACE",
+      "items": [
+        {
+          "videoId": "eval-seed-tool-x06-brunch",
+          "placeKey": "brunch",
+          "source": "PERSONAL"
+        }
+      ],
+      "why": "일요일인데 빵집은 일요일 휴무라 브런치 가게만 제안한다."
+    },
+    "judgeNotes": "브런치 PLACE면 높게. 빵집을 넣으면 조건 6 위반. 휴무 정보는 첫 입력의 200자 뒤에 있다."
+  },
+  {
+    "id": "x07-bakery-closed-other-day",
+    "split": "tune",
+    "kind": "tool",
+    "expectedTools": [
+      "checkVisitConditions"
+    ],
+    "seed": {
+      "places": {
+        "brunch": {
+          "name": "둔산 아침 브런치",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.38
+        },
+        "bakery": {
+          "name": "둔산 골목 빵집",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.348887,
+          "longitude": 127.379045
+        }
+      },
+      "personalSaves": [
+        {
+          "videoId": "eval-seed-tool-x07-brunch",
+          "title": "둔산 아침 브런치",
+          "summary": "에그 베네딕트와 팬케이크가 유명한 브런치 가게.",
+          "category": "FOOD",
+          "savedAt": "2026-06-12T11:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "brunch",
+              "description": "브런치 메뉴를 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x07-bakery",
+          "title": "둔산 골목 빵집의 소금빵",
+          "summary": "소금빵과 앙버터가 대표 메뉴인 빵집. 사장님이 매일 아침 직접 준비한다는 이야기로 시작해 영상 앞부분은 매장 분위기와 대표 메뉴를 차례로 보여주고, 중간에는 주인이 재료를 고르는 기준과 손님이 많이 찾는 조합을 꽤 길게 설명한다. 좌석 구성과 주차 여부, 포장 가능 여부도 짚고 지나가며 근처 다른 가게와 함께 들르기 좋다는 이야기도 덧붙인다. 댓글에서 자주 묻는 질문에 답하는 장면과 가격대 설명도 이어진다. 영상 마지막에 이 빵집은 매주 월요일에 문을 닫는다고 강조한다.",
+          "category": "FOOD",
+          "savedAt": "2026-06-14T09:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "bakery",
+              "description": "대표 빵 메뉴를 소개한다."
+            }
+          ]
+        }
+      ],
+      "contributors": []
+    },
+    "event": {
+      "placeKey": "brunch",
+      "occurredAt": "2026-10-11T11:00:00+09:00"
+    },
+    "goodChoices": [
+      {
+        "result": "PROPOSE",
+        "proposalType": "PLACE",
+        "places": [
+          "brunch"
+        ]
+      },
+      {
+        "result": "PROPOSE",
+        "proposalType": "COURSE",
+        "places": [
+          "brunch",
+          "bakery"
+        ],
+        "ordered": false
+      },
+      {
+        "result": "PROPOSE",
+        "proposalType": "PLACE",
+        "places": [
+          "bakery"
+        ]
+      }
+    ],
+    "reference": {
+      "result": "PROPOSE",
+      "proposalType": "COURSE",
+      "items": [
+        {
+          "videoId": "eval-seed-tool-x07-brunch",
+          "placeKey": "brunch",
+          "source": "PERSONAL"
+        },
+        {
+          "videoId": "eval-seed-tool-x07-bakery",
+          "placeKey": "bakery",
+          "source": "PERSONAL"
+        }
+      ],
+      "why": "빵집 휴무일은 월요일이라 일요일에는 브런치 후 빵집 코스가 가능하다."
+    },
+    "judgeNotes": "브런치와 빵집 코스, 각각 하나만 제안해도 높게. x06과 휴무 요일만 다르다."
+  },
+  {
+    "id": "x08-exhibit-ongoing",
+    "split": "tune",
+    "kind": "tool",
+    "expectedTools": [
+      "checkVisitConditions"
+    ],
+    "seed": {
+      "places": {
+        "gallery": {
+          "name": "둔산 작은 갤러리",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.38
+        },
+        "cafe": {
+          "name": "둔산 갤러리 옆 카페",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.382233
+        }
+      },
+      "personalSaves": [
+        {
+          "videoId": "eval-seed-tool-x08-gallery",
+          "title": "둔산 작은 갤러리 사진전",
+          "summary": "신진 작가의 사진전을 둘러보는 영상. 사장님이 매일 아침 직접 준비한다는 이야기로 시작해 영상 앞부분은 매장 분위기와 대표 메뉴를 차례로 보여주고, 중간에는 주인이 재료를 고르는 기준과 손님이 많이 찾는 조합을 꽤 길게 설명한다. 좌석 구성과 주차 여부, 포장 가능 여부도 짚고 지나가며 근처 다른 가게와 함께 들르기 좋다는 이야기도 덧붙인다. 댓글에서 자주 묻는 질문에 답하는 장면과 가격대 설명도 이어진다. 영상 마지막에 이번 전시는 11월 30일까지만 열린다고 안내한다.",
+          "category": "CULTURE",
+          "savedAt": "2026-08-20T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "gallery",
+              "description": "기간 한정 사진전을 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x08-cafe",
+          "title": "갤러리 옆 조용한 카페",
+          "summary": "전시를 보고 들르기 좋은 조용한 카페.",
+          "category": "CAFE",
+          "savedAt": "2026-08-21T16:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "cafe",
+              "description": "관람 후 들르는 카페로 소개한다."
+            }
+          ]
+        }
+      ],
+      "contributors": []
+    },
+    "event": {
+      "placeKey": "gallery",
+      "occurredAt": "2026-10-17T14:30:00+09:00"
+    },
+    "goodChoices": [
+      {
+        "result": "PROPOSE",
+        "proposalType": "COURSE",
+        "places": [
+          "gallery",
+          "cafe"
+        ],
+        "ordered": true
+      },
+      {
+        "result": "PROPOSE",
+        "proposalType": "PLACE",
+        "places": [
+          "gallery"
+        ]
+      }
+    ],
+    "reference": {
+      "result": "PROPOSE",
+      "proposalType": "COURSE",
+      "items": [
+        {
+          "videoId": "eval-seed-tool-x08-gallery",
+          "placeKey": "gallery",
+          "source": "PERSONAL"
+        },
+        {
+          "videoId": "eval-seed-tool-x08-cafe",
+          "placeKey": "cafe",
+          "source": "PERSONAL"
+        }
+      ],
+      "why": "전시가 11월 30일까지라 지금 관람 후 카페로 이어갈 수 있다."
+    },
+    "judgeNotes": "갤러리 포함 제안이면 높게. 전시가 지금 열려 있다고 단정하면 조건 3 위반이지만 안내된 기간을 근거로 말하는 건 괜찮다."
+  },
+  {
+    "id": "x09-exhibit-ended",
+    "split": "tune",
+    "kind": "tool",
+    "expectedTools": [
+      "checkVisitConditions"
+    ],
+    "seed": {
+      "places": {
+        "gallery": {
+          "name": "둔산 작은 갤러리",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.38
+        },
+        "cafe": {
+          "name": "둔산 갤러리 옆 카페",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.382233
+        }
+      },
+      "personalSaves": [
+        {
+          "videoId": "eval-seed-tool-x09-gallery",
+          "title": "둔산 작은 갤러리 사진전",
+          "summary": "신진 작가의 사진전을 둘러보는 영상. 사장님이 매일 아침 직접 준비한다는 이야기로 시작해 영상 앞부분은 매장 분위기와 대표 메뉴를 차례로 보여주고, 중간에는 주인이 재료를 고르는 기준과 손님이 많이 찾는 조합을 꽤 길게 설명한다. 좌석 구성과 주차 여부, 포장 가능 여부도 짚고 지나가며 근처 다른 가게와 함께 들르기 좋다는 이야기도 덧붙인다. 댓글에서 자주 묻는 질문에 답하는 장면과 가격대 설명도 이어진다. 영상 마지막에 이번 전시는 9월 30일까지만 열린다고 안내한다.",
+          "category": "CULTURE",
+          "savedAt": "2026-08-20T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "gallery",
+              "description": "기간 한정 사진전을 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x09-cafe",
+          "title": "갤러리 옆 조용한 카페",
+          "summary": "전시를 보고 들르기 좋은 조용한 카페.",
+          "category": "CAFE",
+          "savedAt": "2026-08-21T16:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "cafe",
+              "description": "관람 후 들르는 카페로 소개한다."
+            }
+          ]
+        }
+      ],
+      "contributors": []
+    },
+    "event": {
+      "placeKey": "gallery",
+      "occurredAt": "2026-10-17T14:30:00+09:00"
+    },
+    "goodChoices": [
+      {
+        "result": "PROPOSE",
+        "proposalType": "PLACE",
+        "places": [
+          "cafe"
+        ]
+      },
+      {
+        "result": "NO_ACTION"
+      }
+    ],
+    "reference": {
+      "result": "PROPOSE",
+      "proposalType": "PLACE",
+      "items": [
+        {
+          "videoId": "eval-seed-tool-x09-cafe",
+          "placeKey": "cafe",
+          "source": "PERSONAL"
+        }
+      ],
+      "why": "전시가 9월 30일에 끝나 갤러리 대신 옆 카페만 제안한다."
+    },
+    "judgeNotes": "카페 PLACE나 침묵이면 높게. 갤러리 방문을 권하면 조건 6 위반. x08과 종료일만 다르다."
+  },
+  {
+    "id": "x10-recent-unopened",
+    "split": "tune",
+    "kind": "tool",
+    "expectedTools": [
+      "checkVisitConditions"
+    ],
+    "seed": {
+      "places": {
+        "a": {
+          "name": "둔산 원두 로스터리",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.38
+        },
+        "b": {
+          "name": "둔산 다락방 카페",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.352908,
+          "longitude": 127.382369
+        }
+      },
+      "personalSaves": [
+        {
+          "videoId": "eval-seed-tool-x10-a",
+          "title": "둔산 원두 로스터리",
+          "summary": "직접 볶은 원두로 드립 커피를 내리는 카페.",
+          "category": "CAFE",
+          "savedAt": "2026-06-01T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "a",
+              "description": "드립 커피를 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x10-b",
+          "title": "둔산 다락방 카페",
+          "summary": "다락방 좌석이 아늑한 카페. 수제 쿠키가 맛있다.",
+          "category": "CAFE",
+          "savedAt": "2026-07-01T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "b",
+              "description": "다락방 좌석과 쿠키를 소개한다."
+            }
+          ]
+        }
+      ],
+      "contributors": []
+    },
+    "event": {
+      "placeKey": "a",
+      "occurredAt": "2026-10-10T15:00:00+09:00"
+    },
+    "goodChoices": [
+      {
+        "result": "PROPOSE",
+        "proposalType": "PLACE",
+        "places": [
+          "b"
+        ]
+      }
+    ],
+    "reference": {
+      "result": "PROPOSE",
+      "proposalType": "PLACE",
+      "items": [
+        {
+          "videoId": "eval-seed-tool-x10-b",
+          "placeKey": "b",
+          "source": "PERSONAL"
+        }
+      ],
+      "why": "사흘 전에 같은 로스터리를 제안했는데 열어보지 않았으니 근처 다른 카페를 꺼낸다."
+    },
+    "judgeNotes": "다락방 카페면 높게. 로스터리를 다시 제안하면 위반은 아니지만 중간. 최근 제안 사실을 문구에 쓰는 건 괜찮다.",
+    "recentNotifications": [
+      {
+        "placeKey": "a",
+        "sentAt": "2026-10-07T15:10:00+09:00",
+        "opened": false
+      }
+    ]
+  },
+  {
+    "id": "x11-no-history",
+    "split": "tune",
+    "kind": "tool",
+    "expectedTools": [
+      "checkVisitConditions"
+    ],
+    "seed": {
+      "places": {
+        "a": {
+          "name": "둔산 원두 로스터리",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.38
+        },
+        "b": {
+          "name": "둔산 다락방 카페",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.352908,
+          "longitude": 127.382369
+        }
+      },
+      "personalSaves": [
+        {
+          "videoId": "eval-seed-tool-x11-a",
+          "title": "둔산 원두 로스터리",
+          "summary": "직접 볶은 원두로 드립 커피를 내리는 카페.",
+          "category": "CAFE",
+          "savedAt": "2026-06-01T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "a",
+              "description": "드립 커피를 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x11-b",
+          "title": "둔산 다락방 카페",
+          "summary": "다락방 좌석이 아늑한 카페. 수제 쿠키가 맛있다.",
+          "category": "CAFE",
+          "savedAt": "2026-07-01T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "b",
+              "description": "다락방 좌석과 쿠키를 소개한다."
+            }
+          ]
+        }
+      ],
+      "contributors": []
+    },
+    "event": {
+      "placeKey": "a",
+      "occurredAt": "2026-10-10T15:00:00+09:00"
+    },
+    "goodChoices": [
+      {
+        "result": "PROPOSE",
+        "proposalType": "PLACE",
+        "places": [
+          "a"
+        ]
+      },
+      {
+        "result": "PROPOSE",
+        "proposalType": "PLACE",
+        "places": [
+          "b"
+        ]
+      }
+    ],
+    "reference": {
+      "result": "PROPOSE",
+      "proposalType": "PLACE",
+      "items": [
+        {
+          "videoId": "eval-seed-tool-x11-a",
+          "placeKey": "a",
+          "source": "PERSONAL"
+        }
+      ],
+      "why": "최근 제안 이력이 없어 출발점 로스터리를 제안한다."
+    },
+    "judgeNotes": "어느 카페든 높게. x10과 최근 제안 이력만 다르다."
+  },
+  {
+    "id": "x12-recent-unopened-no-alternative",
+    "split": "tune",
+    "kind": "tool",
+    "expectedTools": [
+      "checkVisitConditions"
+    ],
+    "seed": {
+      "places": {
+        "a": {
+          "name": "둔산 원두 로스터리",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.38
+        }
+      },
+      "personalSaves": [
+        {
+          "videoId": "eval-seed-tool-x12-a",
+          "title": "둔산 원두 로스터리",
+          "summary": "직접 볶은 원두로 드립 커피를 내리는 카페.",
+          "category": "CAFE",
+          "savedAt": "2026-06-01T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "a",
+              "description": "드립 커피를 소개한다."
+            }
+          ]
+        }
+      ],
+      "contributors": []
+    },
+    "event": {
+      "placeKey": "a",
+      "occurredAt": "2026-10-10T15:00:00+09:00"
+    },
+    "goodChoices": [
+      {
+        "result": "NO_ACTION"
+      }
+    ],
+    "reference": {
+      "result": "NO_ACTION",
+      "proposalType": null,
+      "items": [],
+      "why": "사흘 전 제안을 열어보지 않았고 다른 후보도 없어 반복하지 않는다."
+    },
+    "judgeNotes": "침묵이면 높게. 로스터리를 다시 제안하면 위반은 아니지만 중간.",
+    "recentNotifications": [
+      {
+        "placeKey": "a",
+        "sentAt": "2026-10-07T15:10:00+09:00",
+        "opened": false
+      }
+    ]
+  },
+  {
+    "id": "x13-dinner-search-found",
+    "split": "tune",
+    "kind": "tool",
+    "expectedTools": [
+      "searchCandidates",
+      "checkVisitConditions"
+    ],
+    "seed": {
+      "places": {
+        "cafe": {
+          "name": "둔산 디저트 거리 1호점",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.38
+        },
+        "d1": {
+          "name": "둔산 디저트 거리 2호점",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.351934,
+          "longitude": 127.380874
+        },
+        "d2": {
+          "name": "둔산 디저트 거리 3호점",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.351446,
+          "longitude": 127.381932
+        },
+        "d3": {
+          "name": "둔산 디저트 거리 4호점",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.350259,
+          "longitude": 127.382398
+        },
+        "d4": {
+          "name": "둔산 디저트 거리 5호점",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.348865,
+          "longitude": 127.381657
+        },
+        "d5": {
+          "name": "둔산 디저트 거리 6호점",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.348044,
+          "longitude": 127.379679
+        },
+        "d6": {
+          "name": "둔산 디저트 거리 7호점",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.34846,
+          "longitude": 127.377161
+        },
+        "d7": {
+          "name": "둔산 디저트 거리 8호점",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.350262,
+          "longitude": 127.375287
+        },
+        "d8": {
+          "name": "둔산 디저트 거리 9호점",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.352892,
+          "longitude": 127.375183
+        },
+        "d9": {
+          "name": "둔산 디저트 거리 10호점",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.355247,
+          "longitude": 127.377313
+        },
+        "d10": {
+          "name": "둔산 디저트 거리 11호점",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.356137,
+          "longitude": 127.381125
+        },
+        "meal": {
+          "name": "둔산 솥밥집",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.348601,
+          "longitude": 127.388184
+        }
+      },
+      "personalSaves": [
+        {
+          "videoId": "eval-seed-tool-x13-cafe",
+          "title": "둔산 디저트 거리 첫 가게",
+          "summary": "디저트 카페가 모인 골목의 첫 가게. 마카롱이 유명하다.",
+          "category": "CAFE",
+          "savedAt": "2026-06-01T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "cafe",
+              "description": "마카롱을 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x13-d1",
+          "title": "둔산 디저트 거리 2번째 가게",
+          "summary": "케이크와 음료를 파는 디저트 카페.",
+          "category": "CAFE",
+          "savedAt": "2026-06-02T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "d1",
+              "description": "디저트 메뉴를 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x13-d2",
+          "title": "둔산 디저트 거리 3번째 가게",
+          "summary": "케이크와 음료를 파는 디저트 카페.",
+          "category": "CAFE",
+          "savedAt": "2026-06-03T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "d2",
+              "description": "디저트 메뉴를 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x13-d3",
+          "title": "둔산 디저트 거리 4번째 가게",
+          "summary": "케이크와 음료를 파는 디저트 카페.",
+          "category": "CAFE",
+          "savedAt": "2026-06-04T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "d3",
+              "description": "디저트 메뉴를 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x13-d4",
+          "title": "둔산 디저트 거리 5번째 가게",
+          "summary": "케이크와 음료를 파는 디저트 카페.",
+          "category": "CAFE",
+          "savedAt": "2026-06-05T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "d4",
+              "description": "디저트 메뉴를 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x13-d5",
+          "title": "둔산 디저트 거리 6번째 가게",
+          "summary": "케이크와 음료를 파는 디저트 카페.",
+          "category": "CAFE",
+          "savedAt": "2026-06-06T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "d5",
+              "description": "디저트 메뉴를 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x13-d6",
+          "title": "둔산 디저트 거리 7번째 가게",
+          "summary": "케이크와 음료를 파는 디저트 카페.",
+          "category": "CAFE",
+          "savedAt": "2026-06-07T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "d6",
+              "description": "디저트 메뉴를 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x13-d7",
+          "title": "둔산 디저트 거리 8번째 가게",
+          "summary": "케이크와 음료를 파는 디저트 카페.",
+          "category": "CAFE",
+          "savedAt": "2026-06-08T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "d7",
+              "description": "디저트 메뉴를 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x13-d8",
+          "title": "둔산 디저트 거리 9번째 가게",
+          "summary": "케이크와 음료를 파는 디저트 카페.",
+          "category": "CAFE",
+          "savedAt": "2026-06-09T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "d8",
+              "description": "디저트 메뉴를 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x13-d9",
+          "title": "둔산 디저트 거리 10번째 가게",
+          "summary": "케이크와 음료를 파는 디저트 카페.",
+          "category": "CAFE",
+          "savedAt": "2026-06-10T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "d9",
+              "description": "디저트 메뉴를 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x13-d10",
+          "title": "둔산 디저트 거리 11번째 가게",
+          "summary": "케이크와 음료를 파는 디저트 카페.",
+          "category": "CAFE",
+          "savedAt": "2026-06-11T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "d10",
+              "description": "디저트 메뉴를 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x13-meal",
+          "title": "둔산 솥밥 정식",
+          "summary": "전복 솥밥과 반찬이 나오는 저녁 식당.",
+          "category": "FOOD",
+          "savedAt": "2026-06-20T19:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "meal",
+              "description": "솥밥 정식을 소개한다."
+            }
+          ]
+        }
+      ],
+      "contributors": []
+    },
+    "event": {
+      "placeKey": "cafe",
+      "occurredAt": "2026-10-10T18:20:00+09:00"
+    },
+    "goodChoices": [
+      {
+        "result": "PROPOSE",
+        "proposalType": "COURSE",
+        "places": [
+          "cafe",
+          "meal"
+        ],
+        "ordered": false
+      },
+      {
+        "result": "PROPOSE",
+        "proposalType": "PLACE",
+        "places": [
+          "meal"
+        ]
+      }
+    ],
+    "reference": {
+      "result": "PROPOSE",
+      "proposalType": "COURSE",
+      "items": [
+        {
+          "videoId": "eval-seed-tool-x13-meal",
+          "placeKey": "meal",
+          "source": "PERSONAL"
+        },
+        {
+          "videoId": "eval-seed-tool-x13-cafe",
+          "placeKey": "cafe",
+          "source": "PERSONAL"
+        }
+      ],
+      "why": "저녁 시간인데 첫 입력엔 디저트 카페뿐이라 식사 장소를 검색해 솥밥집을 찾는다."
+    },
+    "judgeNotes": "솥밥집을 포함하면 높게. 카페 하나만 제안하면 중간. 솥밥집은 주변 후보 상한에 밀려 첫 입력에 없어야 정상이다."
+  },
+  {
+    "id": "x14-dinner-search-none",
+    "split": "tune",
+    "kind": "tool",
+    "expectedTools": [
+      "searchCandidates"
+    ],
+    "seed": {
+      "places": {
+        "cafe": {
+          "name": "둔산 디저트 거리 1호점",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.38
+        },
+        "d1": {
+          "name": "둔산 디저트 거리 2호점",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.351934,
+          "longitude": 127.380874
+        },
+        "d2": {
+          "name": "둔산 디저트 거리 3호점",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.351446,
+          "longitude": 127.381932
+        },
+        "d3": {
+          "name": "둔산 디저트 거리 4호점",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.350259,
+          "longitude": 127.382398
+        },
+        "d4": {
+          "name": "둔산 디저트 거리 5호점",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.348865,
+          "longitude": 127.381657
+        },
+        "d5": {
+          "name": "둔산 디저트 거리 6호점",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.348044,
+          "longitude": 127.379679
+        },
+        "d6": {
+          "name": "둔산 디저트 거리 7호점",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.34846,
+          "longitude": 127.377161
+        },
+        "d7": {
+          "name": "둔산 디저트 거리 8호점",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.350262,
+          "longitude": 127.375287
+        },
+        "d8": {
+          "name": "둔산 디저트 거리 9호점",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.352892,
+          "longitude": 127.375183
+        },
+        "d9": {
+          "name": "둔산 디저트 거리 10호점",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.355247,
+          "longitude": 127.377313
+        },
+        "d10": {
+          "name": "둔산 디저트 거리 11호점",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.356137,
+          "longitude": 127.381125
+        }
+      },
+      "personalSaves": [
+        {
+          "videoId": "eval-seed-tool-x14-cafe",
+          "title": "둔산 디저트 거리 첫 가게",
+          "summary": "디저트 카페가 모인 골목의 첫 가게. 마카롱이 유명하다.",
+          "category": "CAFE",
+          "savedAt": "2026-06-01T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "cafe",
+              "description": "마카롱을 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x14-d1",
+          "title": "둔산 디저트 거리 2번째 가게",
+          "summary": "케이크와 음료를 파는 디저트 카페.",
+          "category": "CAFE",
+          "savedAt": "2026-06-02T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "d1",
+              "description": "디저트 메뉴를 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x14-d2",
+          "title": "둔산 디저트 거리 3번째 가게",
+          "summary": "케이크와 음료를 파는 디저트 카페.",
+          "category": "CAFE",
+          "savedAt": "2026-06-03T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "d2",
+              "description": "디저트 메뉴를 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x14-d3",
+          "title": "둔산 디저트 거리 4번째 가게",
+          "summary": "케이크와 음료를 파는 디저트 카페.",
+          "category": "CAFE",
+          "savedAt": "2026-06-04T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "d3",
+              "description": "디저트 메뉴를 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x14-d4",
+          "title": "둔산 디저트 거리 5번째 가게",
+          "summary": "케이크와 음료를 파는 디저트 카페.",
+          "category": "CAFE",
+          "savedAt": "2026-06-05T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "d4",
+              "description": "디저트 메뉴를 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x14-d5",
+          "title": "둔산 디저트 거리 6번째 가게",
+          "summary": "케이크와 음료를 파는 디저트 카페.",
+          "category": "CAFE",
+          "savedAt": "2026-06-06T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "d5",
+              "description": "디저트 메뉴를 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x14-d6",
+          "title": "둔산 디저트 거리 7번째 가게",
+          "summary": "케이크와 음료를 파는 디저트 카페.",
+          "category": "CAFE",
+          "savedAt": "2026-06-07T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "d6",
+              "description": "디저트 메뉴를 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x14-d7",
+          "title": "둔산 디저트 거리 8번째 가게",
+          "summary": "케이크와 음료를 파는 디저트 카페.",
+          "category": "CAFE",
+          "savedAt": "2026-06-08T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "d7",
+              "description": "디저트 메뉴를 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x14-d8",
+          "title": "둔산 디저트 거리 9번째 가게",
+          "summary": "케이크와 음료를 파는 디저트 카페.",
+          "category": "CAFE",
+          "savedAt": "2026-06-09T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "d8",
+              "description": "디저트 메뉴를 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x14-d9",
+          "title": "둔산 디저트 거리 10번째 가게",
+          "summary": "케이크와 음료를 파는 디저트 카페.",
+          "category": "CAFE",
+          "savedAt": "2026-06-10T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "d9",
+              "description": "디저트 메뉴를 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x14-d10",
+          "title": "둔산 디저트 거리 11번째 가게",
+          "summary": "케이크와 음료를 파는 디저트 카페.",
+          "category": "CAFE",
+          "savedAt": "2026-06-11T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "d10",
+              "description": "디저트 메뉴를 소개한다."
+            }
+          ]
+        }
+      ],
+      "contributors": []
+    },
+    "event": {
+      "placeKey": "cafe",
+      "occurredAt": "2026-10-10T18:20:00+09:00"
+    },
+    "goodChoices": [
+      {
+        "result": "PROPOSE",
+        "proposalType": "PLACE",
+        "places": [
+          "cafe"
+        ]
+      },
+      {
+        "result": "NO_ACTION"
+      }
+    ],
+    "reference": {
+      "result": "PROPOSE",
+      "proposalType": "PLACE",
+      "items": [
+        {
+          "videoId": "eval-seed-tool-x14-cafe",
+          "placeKey": "cafe",
+          "source": "PERSONAL"
+        }
+      ],
+      "why": "식사 장소를 찾아봤지만 저장한 곳이 없어 출발점 카페만 제안한다."
+    },
+    "judgeNotes": "카페 하나나 침묵이면 높게. 입력이나 검색 결과에 없는 식당을 언급하면 조건 1 위반. x13과 식당 유무만 다르다."
+  },
+  {
+    "id": "x15-rain-indoor-via-search",
+    "split": "tune",
+    "kind": "tool",
+    "expectedTools": [
+      "checkVisitConditions",
+      "searchCandidates"
+    ],
+    "seed": {
+      "places": {
+        "park": {
+          "name": "둔산 대공원 잔디광장",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.38
+        },
+        "o1": {
+          "name": "둔산 숲길",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.351781,
+          "longitude": 127.380842
+        },
+        "o2": {
+          "name": "둔산 야외 운동장",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.351213,
+          "longitude": 127.38188
+        },
+        "o3": {
+          "name": "둔산 분수광장",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.349898,
+          "longitude": 127.382107
+        },
+        "o4": {
+          "name": "둔산 장미정원",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.348579,
+          "longitude": 127.380862
+        },
+        "o5": {
+          "name": "둔산 야외 무대",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.34827,
+          "longitude": 127.378419
+        },
+        "o6": {
+          "name": "둔산 생태연못",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.349573,
+          "longitude": 127.376022
+        },
+        "o7": {
+          "name": "둔산 산책 데크",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.35217,
+          "longitude": 127.375248
+        },
+        "o8": {
+          "name": "둔산 야외 체육공원",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.354813,
+          "longitude": 127.377041
+        },
+        "o9": {
+          "name": "둔산 꽃길",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.35593,
+          "longitude": 127.380969
+        },
+        "o10": {
+          "name": "둔산 전망 언덕",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.354526,
+          "longitude": 127.385218
+        },
+        "indoor": {
+          "name": "둔산 북카페",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.348478,
+          "longitude": 127.371396
+        }
+      },
+      "personalSaves": [
+        {
+          "videoId": "eval-seed-tool-x15-park",
+          "title": "둔산 대공원 잔디광장",
+          "summary": "넓은 야외 잔디광장에서 쉬기 좋은 공원.",
+          "category": "OUTDOOR",
+          "savedAt": "2026-06-01T14:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "park",
+              "description": "야외 잔디광장을 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x15-o1",
+          "title": "둔산 숲길 산책",
+          "summary": "야외에서 걷거나 쉬기 좋은 곳.",
+          "category": "OUTDOOR",
+          "savedAt": "2026-06-02T10:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "o1",
+              "description": "야외 공간을 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x15-o2",
+          "title": "둔산 야외 운동장 산책",
+          "summary": "야외에서 걷거나 쉬기 좋은 곳.",
+          "category": "OUTDOOR",
+          "savedAt": "2026-06-03T10:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "o2",
+              "description": "야외 공간을 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x15-o3",
+          "title": "둔산 분수광장 산책",
+          "summary": "야외에서 걷거나 쉬기 좋은 곳.",
+          "category": "OUTDOOR",
+          "savedAt": "2026-06-04T10:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "o3",
+              "description": "야외 공간을 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x15-o4",
+          "title": "둔산 장미정원 산책",
+          "summary": "야외에서 걷거나 쉬기 좋은 곳.",
+          "category": "OUTDOOR",
+          "savedAt": "2026-06-05T10:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "o4",
+              "description": "야외 공간을 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x15-o5",
+          "title": "둔산 야외 무대 산책",
+          "summary": "야외에서 걷거나 쉬기 좋은 곳.",
+          "category": "OUTDOOR",
+          "savedAt": "2026-06-06T10:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "o5",
+              "description": "야외 공간을 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x15-o6",
+          "title": "둔산 생태연못 산책",
+          "summary": "야외에서 걷거나 쉬기 좋은 곳.",
+          "category": "OUTDOOR",
+          "savedAt": "2026-06-07T10:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "o6",
+              "description": "야외 공간을 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x15-o7",
+          "title": "둔산 산책 데크 산책",
+          "summary": "야외에서 걷거나 쉬기 좋은 곳.",
+          "category": "OUTDOOR",
+          "savedAt": "2026-06-08T10:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "o7",
+              "description": "야외 공간을 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x15-o8",
+          "title": "둔산 야외 체육공원 산책",
+          "summary": "야외에서 걷거나 쉬기 좋은 곳.",
+          "category": "OUTDOOR",
+          "savedAt": "2026-06-09T10:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "o8",
+              "description": "야외 공간을 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x15-o9",
+          "title": "둔산 꽃길 산책",
+          "summary": "야외에서 걷거나 쉬기 좋은 곳.",
+          "category": "OUTDOOR",
+          "savedAt": "2026-06-10T10:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "o9",
+              "description": "야외 공간을 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x15-o10",
+          "title": "둔산 전망 언덕 산책",
+          "summary": "야외에서 걷거나 쉬기 좋은 곳.",
+          "category": "OUTDOOR",
+          "savedAt": "2026-06-11T10:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "o10",
+              "description": "야외 공간을 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x15-indoor",
+          "title": "비 오는 날 가기 좋은 둔산 북카페",
+          "summary": "책장과 조용한 실내 좌석이 있는 북카페.",
+          "category": "CAFE",
+          "savedAt": "2026-07-01T15:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "indoor",
+              "description": "실내 좌석을 소개한다."
+            }
+          ]
+        }
+      ],
+      "contributors": []
+    },
+    "event": {
+      "placeKey": "park",
+      "occurredAt": "2026-10-10T14:00:00+09:00"
+    },
+    "goodChoices": [
+      {
+        "result": "PROPOSE",
+        "proposalType": "PLACE",
+        "places": [
+          "indoor"
+        ]
+      },
+      {
+        "result": "NO_ACTION"
+      }
+    ],
+    "reference": {
+      "result": "PROPOSE",
+      "proposalType": "PLACE",
+      "items": [
+        {
+          "videoId": "eval-seed-tool-x15-indoor",
+          "placeKey": "indoor",
+          "source": "PERSONAL"
+        }
+      ],
+      "why": "비가 와서 야외 공원과 주변 야외 장소는 제외하고, 실내 장소를 검색해 북카페를 찾는다."
+    },
+    "judgeNotes": "북카페나 침묵이면 높게. 공원이나 다른 야외 장소를 권하면 조건 6 위반. 북카페는 첫 입력에 없어야 정상이다.",
+    "weather": {
+      "precipitation": "RAIN",
+      "temperatureCelsius": 16,
+      "sky": "OVERCAST",
+      "rainProbabilities": [
+        90,
+        80,
+        80,
+        70,
+        60,
+        60
+      ]
+    }
+  },
+  {
+    "id": "x16-weekday-morning-no-tool",
+    "split": "tune",
+    "kind": "no_tool",
+    "expectedTools": [],
+    "seed": {
+      "places": {
+        "cafe": {
+          "name": "둔산 출근길 카페",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.38
+        }
+      },
+      "personalSaves": [
+        {
+          "videoId": "eval-seed-tool-x16-cafe",
+          "title": "둔산 출근길 카페",
+          "summary": "테이크아웃이 빠른 카페.",
+          "category": "CAFE",
+          "savedAt": "2026-06-01T08:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "cafe",
+              "description": "테이크아웃 메뉴를 소개한다."
+            }
+          ]
+        }
+      ],
+      "contributors": []
+    },
+    "event": {
+      "placeKey": "cafe",
+      "occurredAt": "2026-10-13T08:05:00+09:00"
+    },
+    "goodChoices": [
+      {
+        "result": "NO_ACTION"
+      }
+    ],
+    "reference": {
+      "result": "NO_ACTION",
+      "proposalType": null,
+      "items": [],
+      "why": "평일 출근 시간이라 침묵한다. 확인이 필요 없다."
+    },
+    "judgeNotes": "침묵이면 높게. 카페를 제안해도 위반은 아니지만 중간. 도구 호출은 불필요하다."
+  },
+  {
+    "id": "x17-content-no-tool",
+    "split": "tune",
+    "kind": "no_tool",
+    "expectedTools": [],
+    "seed": {
+      "places": {
+        "market": {
+          "name": "한민시장",
+          "address": "대전광역시 서구 갈마동 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.38
+        }
+      },
+      "personalSaves": [
+        {
+          "videoId": "eval-seed-tool-x17-market",
+          "title": "한민시장 장보기",
+          "summary": "시장 안 채소 가게를 둘러보는 영상.",
+          "category": "FOOD",
+          "savedAt": "2026-07-15T16:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "market",
+              "description": "채소 가게를 소개한다."
+            }
+          ]
+        },
+        {
+          "videoId": "eval-seed-tool-x17-recipe",
+          "title": "시장 채소로 만드는 비빔국수",
+          "summary": "제철 채소로 비빔국수를 만드는 레시피.",
+          "category": "RECIPE",
+          "savedAt": "2026-07-20T19:00:00+09:00",
+          "places": []
+        }
+      ],
+      "contributors": []
+    },
+    "event": {
+      "placeKey": "market",
+      "occurredAt": "2026-10-10T16:00:00+09:00"
+    },
+    "goodChoices": [
+      {
+        "result": "PROPOSE",
+        "proposalType": "CONTENT",
+        "videos": [
+          "eval-seed-tool-x17-recipe"
+        ]
+      },
+      {
+        "result": "PROPOSE",
+        "proposalType": "PLACE",
+        "places": [
+          "market"
+        ]
+      }
+    ],
+    "reference": {
+      "result": "PROPOSE",
+      "proposalType": "CONTENT",
+      "items": [
+        {
+          "videoId": "eval-seed-tool-x17-recipe",
+          "placeKey": null,
+          "source": "PERSONAL"
+        }
+      ],
+      "why": "시장 앞이라 저장한 레시피를 다시 보여준다. CONTENT라 방문 확인이 필요 없다."
+    },
+    "judgeNotes": "레시피 CONTENT나 시장 PLACE면 높게. CONTENT일 때 방문 확인 호출은 불필요하다."
+  },
+  {
+    "id": "x18-noon-pub-no-tool",
+    "split": "tune",
+    "kind": "no_tool",
+    "expectedTools": [],
+    "seed": {
+      "places": {
+        "pub": {
+          "name": "둔산 실내 포차",
+          "address": "대전광역시 서구 둔산동 (평가 시드)",
+          "latitude": 36.351,
+          "longitude": 127.38
+        }
+      },
+      "personalSaves": [
+        {
+          "videoId": "eval-seed-tool-x18-pub",
+          "title": "둔산 실내 포차",
+          "summary": "밤늦게까지 여는 실내 포차.",
+          "category": "BAR",
+          "savedAt": "2026-05-10T22:00:00+09:00",
+          "places": [
+            {
+              "placeKey": "pub",
+              "description": "야식 메뉴를 소개한다."
+            }
+          ]
+        }
+      ],
+      "contributors": []
+    },
+    "event": {
+      "placeKey": "pub",
+      "occurredAt": "2026-10-14T12:30:00+09:00"
+    },
+    "goodChoices": [
+      {
+        "result": "NO_ACTION"
+      }
+    ],
+    "reference": {
+      "result": "NO_ACTION",
+      "proposalType": null,
+      "items": [],
+      "why": "평일 낮에 포차를 권하기엔 맞지 않아 침묵한다."
+    },
+    "judgeNotes": "침묵이면 높게. 도구 호출은 불필요하다."
+  }
+]

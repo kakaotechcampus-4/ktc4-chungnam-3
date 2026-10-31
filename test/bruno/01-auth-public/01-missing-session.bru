@@ -1,0 +1,19 @@
+meta {
+  name: AUTH-06 세션 없이 동의 조회 - 401
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/me/consents
+  body: none
+  auth: none
+}
+
+tests {
+  test("세션 없이 접근 차단", function () {
+    expect(res.status).to.equal(401);
+    expect(res.body.code).to.equal("INVALID_SESSION");
+    expect(res.body.message).to.be.a("string").and.not.empty;
+  });
+}

@@ -10,6 +10,10 @@ spring:
         vertex-ai: ${gemini.vertex-ai.enabled:false}
         project-id: ${gemini.vertex-ai.project-id:}
         location: ${gemini.vertex-ai.location:us-central1}
+        embedding:
+          # 채팅 모델과 동일 - 임베딩 전용 네임스페이스라 따로 안 채우면 project-id 필수인
+          # Vertex 모드로 떨어져서 로컬 ADC 설정이 필요해짐. API 키만으로 충분.
+          api-key: ${gemini.api.key:}
   config:
     import: optional:file:./secrets.properties
 
@@ -40,15 +44,67 @@ consent:
   public-candidate-contribution-terms-version: ${CONSENT_PUBLIC_CANDIDATE_CONTRIBUTION_TERMS_VERSION:v1}
   location-based-service-terms-version: ${CONSENT_LOCATION_BASED_SERVICE_TERMS_VERSION:v1}
 
+personal-save:
+  default-page-size: 20
+  max-page-size: 100
+  max-summary-length: 200
+  analysis-concurrency: 2
+  analysis-queue-capacity: 100
+
 recall:
+  trace:
+    max-detail-bytes: 65536
+    max-error-length: 1000
+    include-agent-input: false
   max-event-age: 30m
-  member-cooldown: 10m
-  agent-version: stub-v1
+  member-cooldown: 2h
+  max-course-walking-minutes: 30
+  agent:
+    mode: ${RECALL_AGENT_MODE:stub}
+    provider: ${RECALL_AGENT_PROVIDER:google-genai}
+    model: ${RECALL_AGENT_MODEL:gemini-3.6-flash}
+    timeout: ${RECALL_AGENT_TIMEOUT:30s}
+    tools-enabled: ${RECALL_AGENT_TOOLS_ENABLED:true}
+    max-tool-calls: ${RECALL_AGENT_MAX_TOOL_CALLS:6}
+    execution-timeout: ${RECALL_AGENT_EXECUTION_TIMEOUT:90s}
+    max-tool-response-bytes: ${RECALL_AGENT_MAX_TOOL_RESPONSE_BYTES:24000}
+    openai-base-url: ${RECALL_OPENAI_BASE_URL:https://api.openai.com/v1}
+    openai-api-key: ${RECALL_OPENAI_API_KEY:}
+  candidates:
+    radius-meters: 1000
+    nearby-personal-limit: 10
+    nearby-public-limit: 10
+    semantic-limit: 5
+    max-summary-length: 200
+  tools:
+    max-radius-meters: 5000
+    search-place-limit: 5
+    search-content-limit: 5
+    max-visit-places: 3
+    visit-summary-length: 2000
+    recent-proposal-window: 7d
+    walking-detour-factor: 1.3
+    walking-speed-meters-per-minute: 80
+  weather:
+    service-key: ${kma.api.key:}
+    base-url: https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0
+    connect-timeout: 2s
+    read-timeout: 3s
+    forecast-hours: 6
+    max-cache-entries: 512
 
 notification:
   max-title-length: 120
   max-body-length: 200
   fcm-credentials-path: ${FCM_CREDENTIALS_PATH:}
+
+geofence:
+  ios-limit: 20
+  android-limit: 100
+  place-radius-meters: 150
+  resync-margin-meters: 500
+  resync-min-radius-meters: 3000
+
 locationiq:
   api:
     key: ${locationiq.api.key:}
@@ -75,5 +131,16 @@ franchise:
 vworld:
   api:
     key: ${vworld.api.key:}
+  connect-timeout-ms: 2000
+  read-timeout-ms: 3000
+
+# 한국관광공사 TourAPI(국문관광정보 서비스_GW) - 지점명 없는 일반 장소(공원·관광지 등) 되묻기 완화
+# (TourApiClient, 2026-10-28). serviceKey는 dataportal.api.key가 계정 단위로 공용이라 그대로 통함
+# (실측 확인) - tourapi.api.key는 비워둬도 됨.
+tourapi:
+  api:
+    # tourapi.api.key 자기참조는 순환 플레이스홀더라 secrets.properties에 그 키가 없으면 그대로 터짐
+    # (실측 확인, 2026-10-29) - dataportal.api.key만 직접 참조하도록 수정.
+    key: ${dataportal.api.key:}
   connect-timeout-ms: 2000
   read-timeout-ms: 3000

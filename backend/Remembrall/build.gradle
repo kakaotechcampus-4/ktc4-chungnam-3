@@ -35,6 +35,7 @@ dependencies {
 	// 짜면 지오펜스 정확도가 걸린 부분이라 검증된 라이브러리를 쓴다.
 	implementation 'org.locationtech.proj4j:proj4j:1.3.0'
 	implementation 'org.springframework.ai:spring-ai-starter-model-google-genai'
+	implementation 'org.springframework.ai:spring-ai-openai'
 	implementation 'org.springframework.ai:spring-ai-starter-model-google-genai-embedding'
 	implementation 'org.springframework.ai:spring-ai-starter-vector-store-pgvector'
 	implementation 'org.springframework.ai:spring-ai-vector-store-advisor'
@@ -62,6 +63,11 @@ dependencyManagement {
 }
 
 tasks.named('test') {
+	// Vertex AI 임베딩(spring.ai.google.genai.embedding.*)이 project-id/location만으론 안 되고
+	// GCP ADC 인증까지 필요하다 - secrets.properties와 같은 패턴으로, 레포에 커밋 안 되는 로컬
+	// serviceAccount.json을 상대경로로 연결한다(실측 확인, 2026-10-29). 파일이 없는 개발자는
+	// 기존과 동일하게 실패하므로 회귀 없음.
+	environment 'GOOGLE_APPLICATION_CREDENTIALS', "${projectDir}/serviceAccount.json"
 	useJUnitPlatform {
 		excludeTags 'live'
 	}
@@ -74,5 +80,23 @@ tasks.register('liveTest', Test) {
 	classpath = sourceSets.test.runtimeClasspath
 	useJUnitPlatform {
 		includeTags 'live'
+	}
+}
+
+tasks.register('recallEval', JavaExec) {
+	dependsOn testClasses
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = 'com.ktc.chungnam3.remembrall.recall.evaluation.RecallEvaluationMain'
+	systemProperties System.properties.findAll { key, value ->
+		key.startsWith('recall.') || key.startsWith('spring.ai.google.genai.') || key.startsWith('content.embedding.')
+	}
+}
+
+tasks.register('recallJudge', JavaExec) {
+	dependsOn testClasses
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = 'com.ktc.chungnam3.remembrall.recall.evaluation.judge.RecallJudgeMain'
+	systemProperties System.properties.findAll { key, value ->
+		key.startsWith('recall.judge.') || key.startsWith('spring.ai.google.genai.')
 	}
 }

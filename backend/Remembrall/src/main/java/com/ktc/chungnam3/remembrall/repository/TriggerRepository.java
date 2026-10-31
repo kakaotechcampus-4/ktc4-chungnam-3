@@ -9,12 +9,37 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 public interface TriggerRepository extends JpaRepository<Trigger, UUID> {
 
     Optional<Trigger> findByMemberIdAndPlaceId(UUID memberId, UUID placeId);
+
+    @Query(value = """
+            SELECT p.id AS "placeId", p.latitude AS latitude, p.longitude AS longitude
+              FROM trigger t
+              JOIN place p ON p.id = t.place_id
+             WHERE t.member_id = :memberId
+               AND EXISTS (
+                   SELECT 1
+                     FROM content_place cp
+                     JOIN content c ON c.id = cp.content_id
+                     JOIN personal_save ps ON ps.content_id = c.id
+                    WHERE cp.place_id = p.id
+                      AND ps.member_id = :memberId
+                      AND c.analysis_status <> 'FAILED'
+                      AND c.source_status <> 'UNAVAILABLE'
+               )
+            """, nativeQuery = true)
+    List<GeofencePlace> findEligibleGeofencePlaces(@Param("memberId") UUID memberId);
+
+    interface GeofencePlace {
+        UUID getPlaceId();
+        double getLatitude();
+        double getLongitude();
+    }
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT trigger FROM Trigger trigger WHERE trigger.memberId = :memberId AND trigger.placeId = :placeId")

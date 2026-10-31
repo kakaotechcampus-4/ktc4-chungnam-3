@@ -53,18 +53,25 @@ public class AuthService {
 
     public SessionResponse loginWithKakao(String kakaoAccessToken) {
         String providerUserId = kakaoUserClient.getProviderUserId(kakaoAccessToken);
+        return login(AuthProvider.KAKAO, providerUserId);
+    }
 
+    public SessionResponse loginWithGuest(UUID installationId) {
+        return login(AuthProvider.GUEST, sessionTokenHasher.hash(installationId.toString()));
+    }
+
+    private SessionResponse login(AuthProvider authProvider, String providerUserId) {
         return Objects.requireNonNull(transactionTemplate.execute(status -> {
             Instant now = clock.instant();
             memberRepository.insertIfAbsent(
                     UUID.randomUUID(),
-                    AuthProvider.KAKAO.name(),
+                    authProvider.name(),
                     providerUserId,
                     now
             );
 
             Member member = memberRepository
-                    .findByAuthProviderAndProviderUserId(AuthProvider.KAKAO, providerUserId)
+                    .findByAuthProviderAndProviderUserId(authProvider, providerUserId)
                     .orElseThrow(() -> new IllegalStateException("회원 생성 또는 조회에 실패했습니다."));
 
             Device device = deviceRepository.findByMemberId(member.getId()).orElse(null);

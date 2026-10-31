@@ -10,6 +10,7 @@ import com.ktc.chungnam3.remembrall.repository.ContentRepository;
 import com.ktc.chungnam3.remembrall.repository.NotificationRepository;
 import com.ktc.chungnam3.remembrall.repository.PersonalSaveRepository;
 import com.ktc.chungnam3.remembrall.repository.PlaceRepository;
+import com.ktc.chungnam3.remembrall.repository.PublicCandidateRepository;
 import com.ktc.chungnam3.remembrall.repository.RecallExecutionRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,10 +30,12 @@ public class NotificationService {
     private final PersonalSaveRepository saves;
     private final ObjectMapper mapper;
     private final Clock clock;
+    private final PublicCandidateRepository publicCandidates;
 
     public NotificationService(NotificationRepository notifications, RecallExecutionRepository executions,
                                ContentRepository contents, PlaceRepository places, ContentPlaceRepository links,
-                               PersonalSaveRepository saves, ObjectMapper mapper, Clock clock) {
+                               PersonalSaveRepository saves, ObjectMapper mapper, Clock clock,
+                               PublicCandidateRepository publicCandidates) {
         this.notifications = notifications;
         this.executions = executions;
         this.contents = contents;
@@ -41,6 +44,7 @@ public class NotificationService {
         this.saves = saves;
         this.mapper = mapper;
         this.clock = clock;
+        this.publicCandidates = publicCandidates;
     }
 
     @Transactional
@@ -61,11 +65,17 @@ public class NotificationService {
         var items = new ArrayList<NotificationDetail.Item>();
         for (var item : payload.items()) {
             var content = contents.findById(item.contentId()).orElse(null);
-            if (content == null || item.source() != ProposalSource.PERSONAL) {
+            if (content == null || item.source() == null) {
                 continue;
             }
-            var save = saves.findByMemberIdAndContentId(memberId, item.contentId()).orElse(null);
-            if (save == null) {
+            UUID personalSaveId = null;
+            if (item.source() == ProposalSource.PERSONAL) {
+                var save = saves.findByMemberIdAndContentId(memberId, item.contentId()).orElse(null);
+                if (save == null) {
+                    continue;
+                }
+                personalSaveId = save.getId();
+            } else if (!publicCandidates.isEligibleContent(item.contentId())) {
                 continue;
             }
             NotificationDetail.Place place = null;
@@ -77,7 +87,7 @@ public class NotificationService {
                 place = new NotificationDetail.Place(entity.getId(), entity.getName(), entity.getAddress(),
                         entity.getLatitude(), entity.getLongitude());
             }
-            items.add(new NotificationDetail.Item(content.getId(), item.source(), save.getId(),
+            items.add(new NotificationDetail.Item(content.getId(), item.source(), personalSaveId,
                     content.getTitle(), content.getSummary(), place));
         }
         return new NotificationDetail(notificationId, notification.getTitle(), notification.getBody(),

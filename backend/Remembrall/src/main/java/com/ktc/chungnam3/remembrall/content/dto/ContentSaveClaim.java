@@ -2,6 +2,7 @@ package com.ktc.chungnam3.remembrall.content.dto;
 
 import com.ktc.chungnam3.remembrall.domain.content.ContentAnalysisStatus;
 
+import java.time.Instant;
 import java.util.UUID;
 
 public record ContentSaveClaim(
@@ -9,6 +10,7 @@ public record ContentSaveClaim(
         UUID personalSaveId,
         boolean personalSaveCreated,
         ContentAnalysisStatus analysisStatus,
-        boolean analysisClaimed
+        boolean analysisClaimed,
+        Instant savedAt
 ) {
 }

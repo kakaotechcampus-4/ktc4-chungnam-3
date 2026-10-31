@@ -78,7 +78,9 @@ backend/Remembrall/CLAUDE.md
 backend/Remembrall/src/main/java/com/ktc/chungnam3/remembrall/save/docs/AGENTS.md
 
 # 개인 Claude Code 스킬 (CLAUDE.md에서 옮긴 상세 디버깅 기록, 팀 공유 대상 아님)
+# - 디렉토리 위치가 .claude/ -> .agents/ 로 바뀐 이력이 있어 둘 다 무시한다 (로컬에 둘 다 남아있음).
 .claude/skills/place-resolution-history/
+.agents/skills/place-resolution-history/
 
 AI/CLAUDE.md
 AI/NOTES.md

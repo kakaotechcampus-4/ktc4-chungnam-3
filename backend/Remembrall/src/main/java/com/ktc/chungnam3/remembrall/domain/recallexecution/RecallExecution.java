@@ -56,7 +56,7 @@ public class RecallExecution {
     @Column(name = "failure_code", length = 50)
     private String failureCode;
 
-    @Column(name = "agent_version", nullable = false, length = 50)
+    @Column(name = "agent_version", nullable = false, length = 200)
     private String agentVersion;
 
     @Column(name = "event_occurred_at", nullable = false)
