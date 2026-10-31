@@ -3,14 +3,12 @@
 모노레포의 `frontend/` 가 RN 프로젝트 루트다.
 `package.json`, `metro.config.js`, `app.json`, `android/` 가 모두 이 아래에 생긴다.
 
-## 전제: 백엔드 계약은 아직 없다
+## 전제: 백엔드 계약과 앱 모델을 나눈다
 
-`develop` 기준으로 backend 에는 Controller · Entity · Repository · Service 가 하나도 없다.
-존재하는 것은 Spring Boot 스켈레톤과 YouTube 추출 결과 DTO 7개, enum 3개뿐이다.
-그 DTO 도 **모듈 간 내부 반환 타입**이지 HTTP 응답 바디라는 근거가 없다.
+API 계약은 백엔드 `develop` 코드(Controller · DTO)가 기준이다. 서버 응답 타입은 `shared/api/*` 에 백엔드 코드대로 둔다.
+YouTube 추출 결과 DTO 7개 · enum 3개(`domain/extraction/`)는 **모듈 간 내부 반환 타입**이지 HTTP 응답 바디가 아니다.
 
-따라서 이 구조는 **백엔드 계약이 확정되기 전에도 화면을 만들 수 있고,
-확정된 뒤에 고치는 범위가 좁도록** 짠다. 원칙은 하나다.
+이 구조는 **백엔드 계약이 바뀌어도 고치는 범위가 좁도록** 짠다. 원칙은 하나다.
 
 > 백엔드가 이름을 바꿔도 `features/` 는 건드리지 않는다.
 
@@ -31,8 +29,8 @@
 frontend/
 ├── index.js                  RN 엔트리. 지오펜스 백그라운드 태스크 정의(앱보다 먼저) + 앱 등록
 ├── app.json                  정적 앱 설정. EAS projectId · owner 포함
-├── app.config.ts             app.json 을 받아 빌드 시점 비밀값(Google Maps 키)을 플러그인에 넣는다
-├── eas.json                  EAS 빌드 프로필. development = 개발 빌드(dev client) APK
+├── app.config.ts             app.json 을 받아 빌드 시점 비밀값(Google Maps 키)을 플러그인에 넣고 google-services.json 경로를 정한다
+├── eas.json                  EAS 빌드 프로필. development = 개발 빌드(dev client) APK, preview = 내부 배포 APK(시연 도구 켬), production
 ├── .prettierrc               prettier 설정(tabWidth 4, LF). 버전은 package.json 에 고정
 ├── .prettierignore           포맷하지 않는 생성물(package-lock.json, android/ 등)
 ├── .editorconfig             prettier 를 쓰지 않는 에디터용. .prettierrc 와 같은 값
@@ -74,7 +72,7 @@ frontend/
     │   │                     (재)등록 · 해제(geofenceSync), 백그라운드 태스크(geofenceTask), expo-task-manager 지연 로더(taskManager)
     │   ├── notifications/    channels(근처 알림 채널 정의 · 생성), listener(알림 누름 구독 · 콜드 스타트 응답 · 중복 거르기, 발생원 은닉),
     │   │                     router(응답 data → notificationId), FCM 토큰 등록 판단(pushTokenSync)
-    │   ├── permissions/      권한 상시 감시 (자동 회수 대응)
+    │   ├── permissions/      권한 상시 감시 (자동 회수 대응) (자리만 있음, 아직 쓰지 않음)
     │   └── share/
     │       └── supportedLinks/   [확장 포인트] 플랫폼별 파서 레지스트리
     │
@@ -92,13 +90,13 @@ frontend/
     │   ├── settings/         설정(11). 알림 · 위치 · 계정 · 앱 정보
     │   │   └── components/
     │   ├── share-received/   공유 받음 시트(C/ShareReceivedSheet). 지금 화면 위에 뜬다
-    │   ├── execution-trace/  "왜 에이전트인가" 증명 화면
+    │   ├── execution-trace/  "왜 에이전트인가" 증명 화면 (자리만 있음, 아직 쓰지 않음)
     │   └── map-view/         지도 탭(10). 사진 핀 · 요약 시트
     │       └── components/
     │
     └── shared/
         ├── auth/             로그인 · 세션
-        │   ├── session.ts        세션 저장(안전한 저장소) · 메모리 캐시 · 구독(useSession) · 복원은 한 번(백그라운드 태스크도 부름)
+        │   ├── session.ts        세션 저장(안전한 저장소) · 메모리 캐시 · 구독(useAuthState) · 복원은 한 번(백그라운드 태스크도 부름)
         │   ├── providers.ts      [확장 포인트] 로그인 제공자 목록(켜짐 · 버튼 · 엔드포인트 · 요청 바디)
         │   ├── login.ts          로그인 흐름 · 게스트 세션 조용히 다시 받기
         │   ├── guest.ts          게스트 로그인(MVP). 설치 id 만들기 · 보관
@@ -256,7 +254,7 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 - 10b 요약 시트는 핀을 누르면 뜬다. 요약을 누르거나 위로 끌면 08 로 가고, 지도 빈 곳 · 아래로 끌기 · 뒤로 가기는 닫는다. 다른 탭으로 옮기면 선택을 풀고, 08 에 다녀오면 선택을 유지한다.
 - 06 "{동네} 기억 보기"는 `Main > Map` 에 `area` 를 넘긴다. 지도는 그 동네로 가운데를 잡고 `area` 를 비운다.
 - 지도 핀 크기는 fade 로 정한다(recent 40 · weeks 26 · months 22). 위치 권한이 "denied" 면 현재 위치 · 내 위치 버튼 · 도보 시간을 숨긴다.
-- 지도 구조: 근처 감지는 OS 지오펜싱, 앱 안 표시는 Google Maps SDK, 장소 좌표는 LocationIQ 지오코딩. UI 단계는 표시와 핀만 한다.
+- 지도 구조: 근처 감지는 OS 지오펜싱, 앱 안 표시는 Google Maps SDK, 장소 좌표는 서버가 LocationIQ · 공공데이터(상가) · TourAPI 로 정한다. UI 단계는 표시와 핀만 한다.
 - 시트는 `@gorhom/bottom-sheet`, 지도는 `react-native-maps`(Google provider)로 구현한다.
 - 지명 라벨이 핀에 가려지는 것은 Google 지도 기본 동작이라 수정하지 않는다. 마커는 항상 지도 라벨 위에 그려지고, 겹치는 라벨을 숨기는 Advanced Marker 충돌 처리는 react-native-maps 가 지원하지 않는다. 가게 · 교통 · 도로 이름은 이미 끈다.
 - 지도(10·08)는 Expo Go SDK 57 안드로이드에서 검은 화면으로 나온다(expo/expo#49323). 우리 Google Maps API 키를 넣은 개발 빌드에서 확인한다.
@@ -264,7 +262,7 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 ## 인증 · 세션
 
 - **MVP 인증은 게스트 세션이다.** 로그인 없이 쓰는 모드는 없지만, 사용자가 계정을 고르지 않는다.
-  백엔드(구현 예정): `POST /api/auth/guest {installationId}` → `{sessionToken, sessionExpiresAt}`(카카오와 같은 응답).
+  백엔드(구현 완료): `POST /api/auth/guest {installationId}` → `{sessionToken, sessionExpiresAt}`(카카오와 같은 응답).
 - 설치 id: 처음 필요할 때(실제 모드의 첫 게스트 로그인) 무작위 UUID v4 로 만들어 안전한 저장소 키 `remembrall.installation-id` 에 둔다.
   난수는 `expo-crypto` 의 `randomUUID()`(안드로이드 `java.util.UUID.randomUUID`, 보안 난수)다. `Math.random` 은 쓰지 않는다.
   이 값으로 그 게스트의 세션을 받을 수 있으므로 로그 · 오류 · 경고에 남기지 않는다. 목 모드에서는 만들지 않는다.
@@ -296,17 +294,17 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
       Android 8+ 는 banner · list 를 가르지 않고, 헤드업 · 소리는 채널이 정한다. 그런데 channelId 가 없으면 expo 대체 채널("Miscellaneous", 중요도 HIGH → 헤드업)로 간다.
       그래서 서버가 `channelId: "nearby"` 를 보내도록 백엔드에 요청했다(`defaultChannel` 은 빠뜨렸을 때의 안전망).
 - 동의 API 는 서버에 있다: `GET /api/me/consents`, `PUT /api/me/consents/{consentType}`(유형 `LOCATION_BASED_SERVICE` · `PUBLIC_CANDIDATE_CONTRIBUTION`). 클라이언트 · 목은 있고(`shared/api/consents.ts`, 약관 URL `consentTerms.ts`, 상태 계산 `mappers/consentMapper.ts`). 00d "위치 허용하기"에 연결됐다(동의하지 않았으면 `shared/ui/LocationConsentSheet` 로 동의를 받은 뒤 권한 요청)과 설정(11c · 11d, "기기 권한" 절)에 연결됐다. 06b 는 연결 전이다.
-    - 거둬도(`agreed: false`) 지오펜스 해제는 아직 없다(지오펜스 런타임 작업). 서버 기록까지만 한다.
+    - 거두면(`agreed: false`) 서버에 기록한 뒤 위치 설정 신호를 내고, `syncGeofences` 가 동의가 `agreed` 가 아니므로 지오펜스를 해제하고 상태를 지운다.
     - 서버는 철회되지 않은 `LOCATION_BASED_SERVICE` 동의가 없으면 위치 이벤트를 실행 없이 버리고 그대로 202 를 돌려준다. 지금은 버린 이유가 응답 · 로그 어디에도 없다.
     - PUT 으로 동의할 때(`agreed: true`) `termsVersion` 은 그 유형의 서버 설정 버전(`consent.*-terms-version`, 기본 v1)과 같아야 하고, 다르면 400 이다.
       GET · PUT 응답의 `currentTermsVersion` 이 그 현재 버전이다(서버는 늘 채운다). 앱은 버전을 고정하지 않고 화면이 읽어 둔 `currentTermsVersion` 을 보낸다.
       화면이 모르면(00d 미리 읽기 실패 등) `setLocationConsent` 가 PUT 전에 GET 을 한 번 해서 얻고, 그것도 실패하거나 값이 없으면 예외(시트 Error)다. 철회는 버전 없이 보낸다.
     - 동의 중인데 `termsVersion` 이 `currentTermsVersion` 과 다르면 `outdated` 다(백엔드 합의: 동의한 버전이 현재 버전과 다르면 재동의를 받는다).
-      화면은 outdated 를 동의 없음과 같이 다룬다(근처 기능 꺼짐). 이후 근처 알림 · 지오펜스 게이트도 `agreed` 만 통과시킨다.
+      화면은 outdated 를 동의 없음과 같이 다룬다(근처 기능 꺼짐). 지오펜스 등록도 `agreed` 만 통과시킨다.
       `currentTermsVersion` 이 없으면(필드가 없는 옛 서버) 비교할 수 없어 `agreed` 로 보지만, 이때 동의 PUT 은 버전을 얻지 못해 실패한다.
     - 재동의는 00d 와 설정에서만 묻는다. 동의 시트는 outdated 에서 열 때 제목만 "위치 정보 약관이 바뀌었어요"다(`termsChanged`, 열 때의 값을 닫힐 때까지 유지).
-    - 동의는 OS 위치 권한과 분리해 별도 동의 화면에서 명시적으로 받는다(설계 중).
-- 지오펜스 API(`shared/api/geofences.ts`)는 develop 코드(`GeofenceResponse` · `LocationEventRequest`)와 ADR003\_지오펜스 기준이다. docs/API.md 의 `regions[{…}]` · `dwellDelayMs` 모양은 옛 것이라 따르지 않는다. 호출 지점 · 태스크는 아직 없다(G2 · G3).
+    - 동의는 OS 위치 권한과 분리해 동의 시트(`shared/ui/LocationConsentSheet`)에서 명시적으로 받는다(00d · 설정).
+- 지오펜스 API(`shared/api/geofences.ts`)는 develop 코드(`GeofenceResponse` · `LocationEventRequest`)와 ADR003\_지오펜스 기준이다. docs/API.md 의 `regions[{…}]` · `dwellDelayMs` 모양은 옛 것이라 따르지 않는다.
     - `GET /api/geofences?latitude&longitude&platform=ANDROID`(앱은 ANDROID 고정) → `{ regions: [], resync: { geofenceId: "resync", latitude, longitude, radiusMeters } | null, places: [{ geofenceId: "place:{placeId}", placeId, latitude, longitude, radiusMeters }] }`.
       장소는 현재 위치에서 가까운 순으로 최대 99개(한도 100 에서 재조회 한 자리), 반경 150m. 재조회 반경은 max(3000, 가장 먼 장소 거리 + 500). 위치 동의가 없으면 빈 목록 · resync null 이다.
       서버는 철회되지 않은 동의만 보고 약관 버전은 보지 않는다(outdated 도 목록을 받는다). "agreed 만 등록"은 앱 쪽 게이트다.
@@ -365,12 +363,12 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
       만료가 보이면 보내기 전에 미리 다시 받는다. 다시 받기가 통신 오류면 로그아웃하지 않고 원래 오류를 넘긴다. 거절(4xx)이면 세션을 지우고 00a(설치 id 는 남긴다).
     - 카카오 세션: 세션을 지우고 00b.
     - 클라이언트는 다시 받는 함수를 `setSessionRefresher` 로 주입받는다(App 시작 때 `login.ts` 가 등록). `client.ts` 는 `login.ts` 를 import 하지 않는다.
-- UI 단계의 화면들은 지금처럼 mock 에서 받는다. 클라이언트를 거치는 것은 인증 API 부터다.
+- 인증 · 저장물 · 동의 · 지오펜스 · 기기 · 알림 API 가 클라이언트를 거친다. 근처 탭 · 지도 탭은 아직 화면 목(`shared/api/mock/`)에서 받는다.
 
 ## 저장 보내기 대기열
 
 - 공유받은 링크는 바로 `savePersonalSave` 로 보낸다. 보내지 못하면 `runtime/background/pendingQueue.ts` 에 남겨 두고 나중에 다시 보낸다.
-  세션이 없거나 온보딩 중에 들어온 공유도 대기열에만 넣는다(공유 수신은 다음 작업).
+  세션이 없거나 온보딩 중에 들어온 공유도 대기열에만 넣는다.
 - 항목은 정규화된 url · videoId · 넣은 시각이다. 같은 videoId 는 한 번만 두고, 최대 20개(넘치면 가장 오래된 것부터 버린다).
 - 저장 수단은 `expo-file-system` 파일 하나(`Paths.document/pending-saves.json`)다. 링크는 비밀이 아니라 안전한 저장소를 쓰지 않는다.
   모듈은 처음 쓸 때 불러오고, 없거나 읽기 · 쓰기에 실패하면 이번 실행 동안 메모리에만 둔다.
@@ -462,21 +460,22 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 - 키 제한: Maps SDK for Android 만, 패키지 `com.remembrall.app` + SHA-1 두 개(EAS 개발 빌드 keystore, 로컬 debug keystore).
   debug keystore SHA-1 은 모든 RN 프로젝트 공용이라 개발용 키에만 등록한다.
 - 개발 빌드 딥링크 scheme 은 `remembrall://` 이다(`app.json` 의 `scheme`). 실행 · 키 설정 절차는 README 에 둔다.
-- 환경 변수: `KAKAO_NATIVE_APP_KEY`(카카오 네이티브 앱 키. `app.config.ts` 가 config plugin 과 `extra` 에 넣는다. SDK 초기화가 런타임에도 키를 쓴다),
+- 환경 변수: `KAKAO_NATIVE_APP_KEY`(카카오 네이티브 앱 키. 카카오를 다시 켤 때 `app.config.ts` 가 config plugin 과 `extra` 에 넣는다. 지금은 읽지 않는다),
   `EXPO_PUBLIC_API_BASE_URL`(API 기본 주소. 비밀이 아니라 번들에 들어간다). 저장소에 값을 넣지 않는다.
 
 ## 목 데이터
 
 - `shared/api/mock/` 은 화면 props 모양 그대로 둔다. 서버 응답 계약처럼 만들지 않는다.
   서버 계약 모양의 목(API 함수의 목 분기)은 API 모듈 안이나 옆에 둔다(`consents.ts`, `personalSavesMock.ts`).
-- UI 단계 동안 features 는 mock 에서 직접 받는다. `client.ts` 와 `mappers/` 를 거치지 않는다.
-  예외: 기억 탭 · 저장 결과 · 저장물로 연 08 은 저장물 API(`personalSaves.ts` · `usePersonalSaveDetail.ts`)와 `mappers/personalSaveMapper.ts` 를 쓴다. 목 모드에서는 API 의 목 분기(`personalSavesMock.ts`)가 답한다.
+- 화면 목을 쓰는 features(근처 탭 · 지도 탭 · 지도 · 근처에서 연 08)는 mock 에서 직접 받는다. `client.ts` 와 `mappers/` 를 거치지 않는다.
+  API 를 쓰는 화면: 기억 탭 · 저장 결과 · 저장물로 연 08 은 저장물 API(`personalSaves.ts` · `usePersonalSaveDetail.ts`)와 `mappers/personalSaveMapper.ts`,
+  00d · 설정(11)은 동의 API(`consents.ts`)와 `mappers/consentMapper.ts`, 알림으로 연 08 은 알림 API(`notifications.ts` · `useNotificationDetail.ts`)를 쓴다. 목 모드에서는 각 API 의 목 분기가 답한다.
 - mock 은 features 의 타입을 import 하지 않는다(shared → features 금지). 구조적 타입으로 맞춘다.
 - 목 이미지 URL(picsum 고정 id)은 이 폴더 안에만 둔다.
-- 세션과 로그인은 2 · 3번 커밋 전까지 목 플래그다. `MOCK_SCENARIO.signedIn`(시작 시 세션 여부, 기본 true) · `loginResult`(success · cancelled · failed).
+- 목 모드에서 세션과 로그인은 목 플래그다. `MOCK_SCENARIO.signedIn`(시작 시 세션 여부, 기본 false(개발 중에 팀원이 바꿈). true 면 근처 탭부터) · `loginResult`(success · cancelled · failed).
   온보딩 일러스트 사진은 목 이미지다(`mock/onboarding.ts`). 첫 실행은 오프라인일 수 있어 나중에 번들 이미지로 바꾼다.
-- 위치 권한과 현재 위치는 runtime 작업 전까지 목 플래그(`MOCK_SCENARIO`)와 목 좌표로 둔다.
-  설정(11)의 권한 표시는 실제 권한 상태를 읽는다. 지도(10 · 08)의 현재 위치 · denied 분기는 runtime 작업 때 실제 권한으로 바꾼다.
+- 지도(10 · 08)의 현재 위치와 denied 분기는 목 플래그(`MOCK_SCENARIO.locationPermission`)와 목 좌표(`mapViewMock`)다.
+  설정(11)과 지오펜스는 실제 권한 · 위치를 쓴다.
 - 위치기반서비스 동의는 목 모드에서 목 플래그다. `MOCK_SCENARIO.locationConsent`(시작 시 동의 상태, never · agreed · withdrawn, 기본 never) · `consentSaveResult`(동의 저장 결과, ok · fail, 기본 ok) ·
   `locationTermsVersion`(목 서버의 현재 약관 버전, v1 · v2, 기본 v1). 시작 상태의 동의 기록은 v1 이라 v2 + agreed 면 outdated 다.
   목 PUT 도 서버처럼 현재 버전이 아닌 동의를 400 으로 거절한다. 공용 후보 동의의 목 현재 버전은 v1 고정.
@@ -548,7 +547,7 @@ type FailureStage =
 - **분석 실패와 장소 후보 없음은 다른 화면이다.** 문서에 명시돼 있다.
   빈 `placeCandidates` + `SUCCESS` 와 `FAILED` 는 사용자가 할 행동이 다르다.
 - **`candidateId` 는 전역 장소 키가 아니다.** 한 추출 결과 안에서만 유효한 임시 ID다.
-  라우팅 파라미터나 캐시 키로 쓰면 안 된다. 전역 장소 엔티티는 아직 존재하지 않는다.
+  라우팅 파라미터나 캐시 키로 쓰면 안 된다. 전역 장소 키는 서버 Place 의 `placeId`(UUID)다.
 - **인증은 구현 완료다.** 카카오 로그인 · 로그아웃 · 세션(Bearer) · FCM 토큰 등록 API 가 코드에 있다("인증 · 세션" 절). 앱은 FCM 토큰 등록까지 연결했다.
 - **목록 필드는 빈 배열 보장**이 문서 규칙이나, validation 애노테이션이 코드에 0개라
   강제되지 않는다. 방어 코드를 둔다.
@@ -571,7 +570,7 @@ type AnalysisFailureCode =
 ```
 
 - **분석 진행 상태는 `analysisStatus` 다.** PENDING · ANALYZING 은 대기 UI(03 분석 중)로 본다.
-- **완료 통지는 따로 없다.** 앱이 상세 · 목록을 다시 읽어 확인한다(언제 다시 읽을지는 화면 연결 때 정한다).
+- **완료 통지는 따로 없다.** 앱이 상세 · 목록을 다시 읽어 확인한다(언제 다시 읽는지는 "내비게이션" 절의 기억 탭 · 저장 결과).
 - **PARTIAL 은 끝난 것으로 본다.** SUCCESS · PARTIAL 은 장소가 있으면 ready, 없으면 noPlace(`mappers/personalSaveMapper.ts`).
 - 실패 코드는 상세에만 있고 PARTIAL · FAILED 일 때만 채워진다. 같은 영상을 다시 저장하면 서버가 다시 분석하는 실패는
   `EXTRACTION_API_ERROR` 뿐이다(`VIDEO_UNAVAILABLE` 은 다시 분석해도 소용없다).
@@ -584,7 +583,7 @@ type AnalysisFailureCode =
 
 | 항목                                    | 현재 상태                                                                             | 영향                                                                                                                                                                                                                  |
 | --------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 장소 판정 결과 (확정 / 확인필요 / 없음) | 백엔드에 없음. `uncertainties: string[]` 자유 문자열뿐                                | 되묻기 화면(02 확인 필요 · 04 장소 없음) 의 근거                                                                                                                                                                      |
+| 장소 판정 결과 (확정 / 확인필요 / 없음) | 서버 상세에 `confirmCandidates` 가 있다. 앱은 되묻기 연결 전                          | 되묻기 화면(02 확인 필요 · 04 장소 없음) 의 근거                                                                                                                                                                      |
 | 카테고리                                | 팀 합의: 고정 enum 소수 + 분위기 태그 다수. enum 값은 미확정                          | 01 필터 칩 라벨(전체/식당/카페/가볼 곳)은 enum 확정 전까지 목 데이터 한정                                                                                                                                             |
 | 비공개·삭제 영상의 링크 보관 여부       | 서버 저장 정책 문제. 백엔드 합의 필요. 05 디자인은 "링크는 그대로 보관" 으로 안내한다 | (b) "다시 시도" 가 모든 실패에 똑같이 노출된다. 재시도가 의미 없는 비공개·삭제(`VIDEO_ACCESS`)에도 보인다. 재시도 가능 여부를 서버가 내려줘야 버튼 노출을 가를 수 있다. (07 실패 셀이 생겨 05 재진입 경로는 해결됐다) |
 | 꺼내기 제안 유형                        | 문서상 가설이 5개 (장소 1곳 / 코스 / 장소 없는 콘텐츠 재노출 / 공용 풀 보충 / 침묵)   | **SINGLE·COURSE 2분기로 부족하다.** 열린 형태로 둔다                                                                                                                                                                  |
@@ -600,7 +599,7 @@ type AnalysisFailureCode =
 | 경우                                         | 표현                                                                     |
 | -------------------------------------------- | ------------------------------------------------------------------------ |
 | 지원하지 않는 링크                           | 공유 받음 시트 NotShorts. 저장하지 않음                                  |
-| 비공개·삭제 영상 (`FAILED` / `VIDEO_ACCESS`) | 알림 문구. 저장 여부 미확정 (미확정 표 참조)                             |
+| 비공개·삭제 영상 (`FAILED` / `VIDEO_ACCESS`) | 05 저장 결과(볼 수 없는 영상 문구) + 기억 탭 실패 셀                     |
 | 분석 실패                                    | 05 저장 결과 모달 + 기억 탭 실패 셀 (제목을 모르면 "불러오지 못한 영상") |
 | 부분 성공 (`PARTIAL`)                        | 표현하지 않음 (배지 제거). 매핑은 미확정 표 참조                         |
 | 삭제·만료된 저장물 · 장소                    | 12 NotFound. "기억 목록으로" → 기억 탭                                   |
