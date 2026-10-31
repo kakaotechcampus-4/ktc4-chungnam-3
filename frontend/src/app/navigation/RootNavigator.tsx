@@ -26,6 +26,7 @@ import { useAuthState } from "../../shared/auth/session";
 import BottomNav, { type BottomNavKey } from "../../shared/ui/BottomNav";
 import { useGeofenceSync } from "../useGeofenceSync";
 import { usePendingSaveSender } from "../usePendingSaveSender";
+import { usePushTokenSync } from "../usePushTokenSync";
 import {
     type MainTabParamList,
     ROUTES,
@@ -111,6 +112,7 @@ export default function RootNavigator() {
     const auth = useAuthState();
     usePendingSaveSender(auth.status === "signedIn");
     useGeofenceSync(auth.status);
+    usePushTokenSync(auth.status === "signedIn");
 
     if (auth.status === "signedOut" || auth.status === "loading") {
         const hasLoginScreen = BUTTON_PROVIDERS.length > 0;

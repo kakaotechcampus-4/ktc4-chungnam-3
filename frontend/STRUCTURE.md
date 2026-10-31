@@ -49,6 +49,7 @@ frontend/
     │   ├── App.tsx
     │   ├── usePendingSaveSender.ts  저장 대기열 다시 보내기 시점(signedIn 직후 · 앞으로 돌아올 때)
     │   ├── useGeofenceSync.ts  지오펜스 (재)등록 시점(signedIn 직후 · 앞으로 돌아올 때 · 위치 설정 신호) · signedOut 때 해제
+    │   ├── usePushTokenSync.ts  FCM 토큰 등록 시점(signedIn 직후 · 앞으로 돌아올 때 · 토큰 변경)
     │   ├── demo/             설정의 "시연 도구" 묶음(DemoToolsSection). 개발 모드 · preview 빌드에서만 App 이 등록한다
     │   ├── share/            공유 받음 처리 흐름(shareReceiver) · 시트 호스트 · 개발용 진입(devShareLink)
     │   └── navigation/       RootNavigator, linking, routes, navigationRef(네비게이터 밖 이동)
@@ -70,7 +71,7 @@ frontend/
     │   ├── background/       pendingQueue(저장 보내기 대기열)
     │   ├── geofence/         지오펜스 이벤트 처리 · 도착 보고 대기열 · 상태 파일(geofenceManager · geofenceState), 등록 계획(registrationPlan),
     │   │                     (재)등록 · 해제(geofenceSync), 백그라운드 태스크(geofenceTask), expo-task-manager 지연 로더(taskManager)
-    │   ├── notifications/    channels, listener(발생원 은닉), router
+    │   ├── notifications/    channels, listener(발생원 은닉), router, FCM 토큰 등록 판단(pushTokenSync)
     │   ├── permissions/      권한 상시 감시 (자동 회수 대응)
     │   └── share/
     │       └── supportedLinks/   [확장 포인트] 플랫폼별 파서 레지스트리
@@ -101,7 +102,7 @@ frontend/
         │   ├── guest.ts          게스트 로그인(MVP). 설치 id 만들기 · 보관
         │   └── kakao.ts          카카오 로그인(MVP 이후. 지금은 목)
         ├── permissions/      알림 · 위치 권한 조회와 요청(온보딩 · 설정이 쓴다)
-        │   ├── notifications.ts  알림 권한 조회 · 요청 · 시스템 알림 설정 열기
+        │   ├── notifications.ts  알림 권한 조회 · 요청 · 시스템 알림 설정 열기 · 기기 FCM 토큰 받기 · 토큰 변경 구독
         │   ├── location.ts       위치 권한 조회(always · whileInUse · denied) · 앱 사용 중 · 백그라운드 요청 · 지오펜스 등록 · 해제 · 등록용 현재 위치
         │   ├── locationSettings.ts  위치 설정(동의 저장 · 권한 요청)이 바뀌었다는 신호. app 의 hook 이 받아 지오펜스를 다시 등록
         │   └── usePermissionStatus.ts  진입 · 앞으로 돌아올 때 다시 읽는 hook
@@ -114,6 +115,7 @@ frontend/
         │   ├── personalSavesMock.ts  저장물 목. 서버 규칙을 따르는 메모리 저장소(서버 계약 모양이라 mock/ 밖)
         │   ├── geofences.ts  지오펜스 API(등록 목록 · 장소 도착 보고)와 서버 타입 · 목 분기
         │   ├── geofencesMock.ts  지오펜스 목. 서버 규칙대로 저장물 목의 장소로 목록을 만들고, 도착 보고를 메모리에 남긴다
+        │   ├── devices.ts    기기 API(FCM 토큰 등록) · 목 분기(서버를 부르지 않고 성공)
         │   ├── usePersonalSaveDetail.ts  저장물 상세 hook. 포커스 · 앱 복귀 때 읽기, 분석 중 5초마다 다시 읽기
         │   ├── mappers/      ★ 서버 응답 -> 앱 모델 변환. 백엔드 변경 흡수 지점
         │   │   └── personalSaveMapper.ts  저장물 상세 · 목록 항목 -> SaveState
@@ -258,7 +260,15 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 - 시작할 때 `sessionExpiresAt` 이 지난 카카오 세션은 없는 것으로 본다. 기본 수명은 백엔드 설정(30일)이다.
 - 회원당 Device 는 1개다. 다른 폰으로 로그인하면 기존 폰의 세션이 바뀌어 다음 요청에서 401 이 난다.
 - 백엔드는 카카오 토큰의 `app_id` 를 자기 설정(`kakao.app-id`)과 대조한다. 앱은 백엔드와 같은 카카오 앱 키를 쓴다.
-- 아직 연결하지 않는 것: FCM 토큰 등록(`PUT /api/devices/fcm-token`)은 Firebase 프로젝트 설정(google-services.json)이 필요하다.
+- FCM 토큰 등록: `PUT /api/devices/fcm-token {fcmToken}` → 본문 없는 204(`shared/api/devices.ts`). 서버는 지금 세션의 기기에만 저장하고,
+  새 세션 발급(로그인 · 게스트 세션 다시 받기) · 로그아웃 때 토큰을 지운다. 토큰 해제 API 는 없고 앱도 해제하지 않는다.
+    - 토큰은 Expo 푸시 토큰이 아니라 기기 FCM 토큰(`getDevicePushTokenAsync`, `shared/permissions/notifications.ts` 의 `getFcmToken`)이다. 서버가 firebase-admin 으로 직접 보낸다.
+    - 조건: signedIn + 알림 권한 granted(위치 동의와 무관). 판단은 `runtime/notifications/pushTokenSync.ts` 의 `syncPushToken`,
+      부르는 때는 `app/usePushTokenSync.ts`(RootNavigator): signedIn 직후 · 앱이 앞으로 돌아올 때 · signedIn 동안 토큰 변경 리스너(`addFcmTokenListener`).
+    - (세션 토큰, FCM 토큰) 쌍을 메모리에만 기억하고 쌍이 바뀔 때만 보낸다(서버가 새 세션마다 토큰을 지우므로 세션도 비교). signedIn 이 아니게 되면 지운다.
+      실패는 조용히 넘기고 다음 호출이 다시 한다. 재시도 큐 · 백오프는 없다.
+    - Expo Go · 모듈 없는 빌드 · google-services.json 없이 만든 빌드(Firebase 초기화 안 됨)는 토큰을 받지 못해 건너뛴다(경고 한 번).
+    - 알려진 한계: 요청 도중 게스트 세션을 다시 받으면 서버는 토큰이 지워진 상태로 그 요청을 처리한다(예: 서버 초기화 뒤 첫 도착 알림이 오지 않는다). 다음에 앱이 앞으로 돌아올 때 다시 등록된다.
 - 동의 API 는 서버에 있다: `GET /api/me/consents`, `PUT /api/me/consents/{consentType}`(유형 `LOCATION_BASED_SERVICE` · `PUBLIC_CANDIDATE_CONTRIBUTION`). 클라이언트 · 목은 있고(`shared/api/consents.ts`, 약관 URL `consentTerms.ts`, 상태 계산 `mappers/consentMapper.ts`). 00d "위치 허용하기"에 연결됐다(동의하지 않았으면 `shared/ui/LocationConsentSheet` 로 동의를 받은 뒤 권한 요청)과 설정(11c · 11d, "기기 권한" 절)에 연결됐다. 06b 는 연결 전이다.
     - 거둬도(`agreed: false`) 지오펜스 해제는 아직 없다(지오펜스 런타임 작업). 서버 기록까지만 한다.
     - 서버는 철회되지 않은 `LOCATION_BASED_SERVICE` 동의가 없으면 위치 이벤트를 실행 없이 버리고 그대로 202 를 돌려준다. 지금은 버린 이유가 응답 · 로그 어디에도 없다.
@@ -418,6 +428,10 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 - `android/` 는 gitignore 대상이며 빌드 때마다 prebuild(CNG)로 새로 생성된다. 네이티브 설정은 `app.json` · `app.config.ts` 플러그인으로만 바꾼다.
 - Google Maps 키는 `GOOGLE_MAPS_ANDROID_API_KEY` 환경 변수로만 받는다. `EXPO_PUBLIC_` 접두어를 쓰지 않아 JS 번들에 들어가지 않는다.
   로컬은 `.env.local`, EAS 는 `development` 환경의 secret 변수다. 키가 없으면 경고만 하고 빌드는 막지 않는다.
+- Firebase 설정(`google-services.json`, 패키지 `com.remembrall.app`)은 공개 레포라 커밋하지 않는다(gitignore). `app.config.ts` 가 `android.googleServicesFile` 을 정한다:
+  EAS file 환경 변수 `GOOGLE_SERVICES_JSON`(경로) → 없으면 `frontend/google-services.json` 이 있을 때 그 파일 → 둘 다 없으면 설정하지 않고 경고(FCM 토큰을 받지 못하는 빌드).
+  환경 변수를 넣었는데 그 경로에 파일이 없으면 config 평가를 실패시킨다(FCM 없는 빌드가 조용히 나오지 않게).
+- expo-notifications 플러그인은 알림 색만 정한다(`color` 브랜드 자두색 #6B4E7A). small icon · 기본 채널은 아직 없다.
 - 키 제한: Maps SDK for Android 만, 패키지 `com.remembrall.app` + SHA-1 두 개(EAS 개발 빌드 keystore, 로컬 debug keystore).
   debug keystore SHA-1 은 모든 RN 프로젝트 공용이라 개발용 키에만 등록한다.
 - 개발 빌드 딥링크 scheme 은 `remembrall://` 이다(`app.json` 의 `scheme`). 실행 · 키 설정 절차는 README 에 둔다.
@@ -500,7 +514,7 @@ type FailureStage =
   빈 `placeCandidates` + `SUCCESS` 와 `FAILED` 는 사용자가 할 행동이 다르다.
 - **`candidateId` 는 전역 장소 키가 아니다.** 한 추출 결과 안에서만 유효한 임시 ID다.
   라우팅 파라미터나 캐시 키로 쓰면 안 된다. 전역 장소 엔티티는 아직 존재하지 않는다.
-- **인증은 구현 완료다.** 카카오 로그인 · 로그아웃 · 세션(Bearer) · FCM 토큰 등록 API 가 코드에 있다("인증 · 세션" 절).
+- **인증은 구현 완료다.** 카카오 로그인 · 로그아웃 · 세션(Bearer) · FCM 토큰 등록 API 가 코드에 있다("인증 · 세션" 절). 앱은 FCM 토큰 등록까지 연결했다.
 - **목록 필드는 빈 배열 보장**이 문서 규칙이나, validation 애노테이션이 코드에 0개라
   강제되지 않는다. 방어 코드를 둔다.
 
@@ -539,7 +553,7 @@ type AnalysisFailureCode =
 | 카테고리                                | 팀 합의: 고정 enum 소수 + 분위기 태그 다수. enum 값은 미확정                          | 01 필터 칩 라벨(전체/식당/카페/가볼 곳)은 enum 확정 전까지 목 데이터 한정                                                                                                                                             |
 | 비공개·삭제 영상의 링크 보관 여부       | 서버 저장 정책 문제. 백엔드 합의 필요. 05 디자인은 "링크는 그대로 보관" 으로 안내한다 | (b) "다시 시도" 가 모든 실패에 똑같이 노출된다. 재시도가 의미 없는 비공개·삭제(`VIDEO_ACCESS`)에도 보인다. 재시도 가능 여부를 서버가 내려줘야 버튼 노출을 가를 수 있다. (07 실패 셀이 생겨 05 재진입 경로는 해결됐다) |
 | 꺼내기 제안 유형                        | 문서상 가설이 5개 (장소 1곳 / 코스 / 장소 없는 콘텐츠 재노출 / 공용 풀 보충 / 침묵)   | **SINGLE·COURSE 2분기로 부족하다.** 열린 형태로 둔다                                                                                                                                                                  |
-| 알림 발생원 (FCM / 로컬)                | 백엔드에 FCM 의존성 없음                                                              | `runtime/notifications/notificationListener.ts` 안에서만 갈린다                                                                                                                                                       |
+| 알림 발생원 (FCM / 로컬)                | 백엔드가 firebase-admin 으로 FCM 을 보낸다(channelId 없음). 앱은 토큰을 등록한다      | `runtime/notifications/notificationListener.ts` 안에서만 갈린다                                                                                                                                                       |
 | API 서버 주소                           | 배포 주소 미정(백엔드 확인 중). 개발은 로컬 백엔드 `http://<PC LAN IP>:8080`          | `EXPO_PUBLIC_API_BASE_URL` 만 바꾼다                                                                                                                                                                                  |
 | 지오펜스 보고 엔드포인트                | 서버 코드 있음(늘 202). 클라이언트 `shared/api/geofences.ts`                          | 서버가 조용히 무시할 수 있어 프론트가 결과를 알 방법이 필요                                                                                                                                                           |
 

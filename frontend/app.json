@@ -46,6 +46,12 @@
                     "disableIOS": true,
                     "androidIntentFilters": ["text/plain"]
                 }
+            ],
+            [
+                "expo-notifications",
+                {
+                    "color": "#6B4E7A"
+                }
             ]
         ],
         "experiments": {

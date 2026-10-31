@@ -67,6 +67,25 @@ Google Cloud 콘솔에서 키를 제한한다.
 RN 기본 debug keystore 는 모든 프로젝트 공용이라 SHA-1 도 같다.
 이 SHA-1 은 개발용 API 키에만 등록하고, 출시용 키에는 릴리스(Play 앱 서명) SHA-1 만 등록한다.
 
+### google-services.json (FCM)
+
+푸시 알림을 받으려면 Firebase 설정 파일 `google-services.json`(패키지 `com.remembrall.app`)을 넣어 빌드해야 한다.
+공개 레포라 커밋하지 않는다(gitignore). 파일은 팀의 Firebase 프로젝트에서 받는다.
+
+`app.config.ts` 가 빌드 시점에 아래 순서로 파일을 고른다.
+
+1. 환경 변수 `GOOGLE_SERVICES_JSON`(파일 경로)이 있으면 그 파일. 그 경로에 파일이 없으면 경로를 담은 오류로 빌드가 멈춘다.
+2. 없으면 `frontend/google-services.json` 이 있을 때 그 파일.
+3. 둘 다 없으면 경고만 뜨고 빌드는 된다. 이 빌드는 FCM 토큰을 받지 못해 푸시 알림이 오지 않는다(앱은 그대로 쓴다).
+
+- EAS 빌드: file 환경 변수로 등록한다. EAS 가 빌드 서버에 파일을 내려받고 그 경로를 `GOOGLE_SERVICES_JSON` 에 넣는다.
+  `--value` 는 로컬 파일 경로다. 등록한 뒤에는 로컬 파일을 지워도 된다. preview 빌드 전에는 preview 환경에도 등록한다.
+    ```bash
+    npx eas-cli env:set development --name GOOGLE_SERVICES_JSON --type file --value ./google-services.json --visibility secret
+    npx eas-cli env:set preview --name GOOGLE_SERVICES_JSON --type file --value ./google-services.json --visibility secret
+    ```
+- 로컬 빌드(`npx expo run:android`): 파일을 `frontend/google-services.json` 에 둔다.
+
 ## 딥링크로 화면 열기
 
 저장 결과 모달(02~05)처럼 앱 안에서 바로 갈 수 없는 화면은 딥링크로 연다.
