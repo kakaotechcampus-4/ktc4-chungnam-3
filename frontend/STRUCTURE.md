@@ -60,7 +60,7 @@ frontend/
     │   ├── place.ts          앱 모델. 장소
     │   ├── proposal.ts       앱 모델. 꺼내기 결과
     │   ├── notification.ts   알림 페이로드 (발생원 무관)
-    │   ├── consent.ts        앱 모델. 동의 상태(never · agreed · withdrawn)
+    │   ├── consent.ts        앱 모델. 동의 상태(never · agreed · outdated · withdrawn)
     │   ├── saveState.ts      앱 모델. 저장물 상태(analyzing · failed · noPlace · ready)
     │   └── executionTrace.ts 에이전트 궤적
     │
@@ -105,7 +105,7 @@ frontend/
         │   ├── config.ts     API 기본 주소(EXPO_PUBLIC_API_BASE_URL). 비면 목 모드
         │   ├── client.ts     기본 주소 · Bearer 헤더 · ApiError · 401 처리
         │   ├── consents.ts   동의 API(조회 · 위치 동의 변경) · 목 분기
-        │   ├── consentTerms.ts   약관 버전 · 약관 URL 상수
+        │   ├── consentTerms.ts   약관 URL 상수(약관 버전은 서버가 준다)
         │   ├── personalSaves.ts  저장물 API(저장 · 상세 · 목록 · 삭제)와 서버 응답 타입 · 목 분기
         │   ├── personalSavesMock.ts  저장물 목. 서버 규칙을 따르는 메모리 저장소(서버 계약 모양이라 mock/ 밖)
         │   ├── usePersonalSaveDetail.ts  저장물 상세 hook. 포커스 · 앱 복귀 때 읽기, 분석 중 5초마다 다시 읽기
@@ -248,10 +248,16 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 - 회원당 Device 는 1개다. 다른 폰으로 로그인하면 기존 폰의 세션이 바뀌어 다음 요청에서 401 이 난다.
 - 백엔드는 카카오 토큰의 `app_id` 를 자기 설정(`kakao.app-id`)과 대조한다. 앱은 백엔드와 같은 카카오 앱 키를 쓴다.
 - 아직 연결하지 않는 것: FCM 토큰 등록(`PUT /api/devices/fcm-token`)은 Firebase 프로젝트 설정(google-services.json)이 필요하다.
-- 동의 API 는 서버에 있다: `GET /api/me/consents`, `PUT /api/me/consents/{consentType}`(유형 `LOCATION_BASED_SERVICE` · `PUBLIC_CANDIDATE_CONTRIBUTION`). 클라이언트 · 목은 있고(`shared/api/consents.ts`, 상수 `consentTerms.ts`, 상태 계산 `mappers/consentMapper.ts`). 00d "위치 허용하기"에 연결됐다(동의하지 않았으면 `shared/ui/LocationConsentSheet` 로 동의를 받은 뒤 권한 요청)과 설정(11c · 11d, "기기 권한" 절)에 연결됐다. 06b 는 연결 전이다.
+- 동의 API 는 서버에 있다: `GET /api/me/consents`, `PUT /api/me/consents/{consentType}`(유형 `LOCATION_BASED_SERVICE` · `PUBLIC_CANDIDATE_CONTRIBUTION`). 클라이언트 · 목은 있고(`shared/api/consents.ts`, 약관 URL `consentTerms.ts`, 상태 계산 `mappers/consentMapper.ts`). 00d "위치 허용하기"에 연결됐다(동의하지 않았으면 `shared/ui/LocationConsentSheet` 로 동의를 받은 뒤 권한 요청)과 설정(11c · 11d, "기기 권한" 절)에 연결됐다. 06b 는 연결 전이다.
     - 거둬도(`agreed: false`) 지오펜스 해제는 아직 없다(지오펜스 런타임 작업). 서버 기록까지만 한다.
     - 서버는 철회되지 않은 `LOCATION_BASED_SERVICE` 동의가 없으면 위치 이벤트를 실행 없이 버리고 그대로 202 를 돌려준다. 지금은 버린 이유가 응답 · 로그 어디에도 없다.
-    - PUT 으로 동의할 때(`agreed: true`) `termsVersion` 은 그 유형의 서버 설정 버전(`consent.*-terms-version`, 기본 v1)과 같아야 하고, 다르면 400 이다. 앱이 현재 버전을 조회할 방법은 아직 없다.
+    - PUT 으로 동의할 때(`agreed: true`) `termsVersion` 은 그 유형의 서버 설정 버전(`consent.*-terms-version`, 기본 v1)과 같아야 하고, 다르면 400 이다.
+      GET · PUT 응답의 `currentTermsVersion` 이 그 현재 버전이다(서버는 늘 채운다). 앱은 버전을 고정하지 않고 화면이 읽어 둔 `currentTermsVersion` 을 보낸다.
+      화면이 모르면(00d 미리 읽기 실패 등) `setLocationConsent` 가 PUT 전에 GET 을 한 번 해서 얻고, 그것도 실패하거나 값이 없으면 예외(시트 Error)다. 철회는 버전 없이 보낸다.
+    - 동의 중인데 `termsVersion` 이 `currentTermsVersion` 과 다르면 `outdated` 다(백엔드 합의: 동의한 버전이 현재 버전과 다르면 재동의를 받는다).
+      화면은 outdated 를 동의 없음과 같이 다룬다(근처 기능 꺼짐). 이후 근처 알림 · 지오펜스 게이트도 `agreed` 만 통과시킨다.
+      `currentTermsVersion` 이 없으면(필드가 없는 옛 서버) 비교할 수 없어 `agreed` 로 보지만, 이때 동의 PUT 은 버전을 얻지 못해 실패한다.
+    - 재동의는 00d 와 설정에서만 묻는다. 동의 시트는 outdated 에서 열 때 제목만 "위치 정보 약관이 바뀌었어요"다(`termsChanged`, 열 때의 값을 닫힐 때까지 유지).
     - 동의는 OS 위치 권한과 분리해 별도 동의 화면에서 명시적으로 받는다(설계 중).
 - 00b 의 약관 문구는 지금 링크 없이 문구만 있다. 이용약관 · 개인정보 처리방침 페이지가 생기면 링크로 연결한다.
 - 의존 방향: `shared/api/client.ts` → `shared/auth/session.ts`, `shared/auth/login.ts` → `client.ts` · `session.ts` · `providers.ts`.
@@ -337,6 +343,7 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   둘 다 화면에 들어올 때와 앱이 앞으로 돌아올 때 다시 읽는다.
 - 설정(11) 위치 정보 이용 동의(11c 2202:915 · 11c-off 2202:986): 화면에 포커스될 때 서버에서 읽는다(확인하고 있어요 · {M}월 {D}일에 동의했어요 · 동의하지 않았어요 · 확인하지 못했어요).
   동의 안 함이면 동의 행과 "근처에 오면 알려주기" 행(11b 보다 우선, 설명 "위치 정보 이용 동의가 필요해요. 눌러서 켜주세요")이 동의 시트를 띄운다. 설정에서는 동의만 기록하고 권한은 요청하지 않는다.
+  예전 약관 동의(outdated)는 동의 행 설명이 "약관이 바뀌어 다시 동의가 필요해요"이고, 동의 행 · 근처 알림 행이 동의 안 함과 같이 동의 시트를 띄운다(거두기 없음).
   동의함이면 동의 행이 11d 거두기 시트(2202:1049)를 띄운다. 동의 · 거두기가 성공하면 PUT 응답으로 바로 갱신하고, 실패하면 시트에 오류를 보인다. 읽기에 실패하면 행을 눌러 다시 읽는다.
 - 설정(11) 약관 및 정책: 웹 페이지(`TERMS_URLS.policies`)를 연다. URL 이 없는 동안은 오픈소스 라이선스처럼 눌리지 않는다.
 - 매니페스트 권한과 이유:
@@ -378,7 +385,9 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   온보딩 일러스트 사진은 목 이미지다(`mock/onboarding.ts`). 첫 실행은 오프라인일 수 있어 나중에 번들 이미지로 바꾼다.
 - 위치 권한과 현재 위치는 runtime 작업 전까지 목 플래그(`MOCK_SCENARIO`)와 목 좌표로 둔다.
   설정(11)의 권한 표시는 실제 권한 상태를 읽는다. 지도(10 · 08)의 현재 위치 · denied 분기는 runtime 작업 때 실제 권한으로 바꾼다.
-- 위치기반서비스 동의는 목 모드에서 목 플래그다. `MOCK_SCENARIO.locationConsent`(시작 시 동의 상태, never · agreed · withdrawn, 기본 never) · `consentSaveResult`(동의 저장 결과, ok · fail, 기본 ok).
+- 위치기반서비스 동의는 목 모드에서 목 플래그다. `MOCK_SCENARIO.locationConsent`(시작 시 동의 상태, never · agreed · withdrawn, 기본 never) · `consentSaveResult`(동의 저장 결과, ok · fail, 기본 ok) ·
+  `locationTermsVersion`(목 서버의 현재 약관 버전, v1 · v2, 기본 v1). 시작 상태의 동의 기록은 v1 이라 v2 + agreed 면 outdated 다.
+  목 PUT 도 서버처럼 현재 버전이 아닌 동의를 400 으로 거절한다. 공용 후보 동의의 목 현재 버전은 v1 고정.
 - 저장물 API 는 목 모드에서 메모리 저장소다. `MOCK_SCENARIO.archiveEmpty` 면 빈 저장소, 아니면 샘플 6개로 시작한다
   (장소 있는 성공 2 · 분석 중 1 · 실패(EXTRACTION_API_ERROR) 1 · 볼 수 없는 영상 1 · 장소 없음 1, 저장 시각은 오늘 · 3주 전 · 2달 전).
   샘플 영상 id 는 가짜(`mockSave001`~`006`)라 썸네일은 자리표시다. 분석 중 샘플은 앱을 켜고 약 5초 뒤 `analysisResult` 로 끝난다.
