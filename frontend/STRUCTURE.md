@@ -114,9 +114,12 @@ frontend/
         │   ├── personalSaves.ts  저장물 API(저장 · 상세 · 목록 · 삭제)와 서버 응답 타입 · 목 분기
         │   ├── personalSavesMock.ts  저장물 목. 서버 규칙을 따르는 메모리 저장소(서버 계약 모양이라 mock/ 밖)
         │   ├── geofences.ts  지오펜스 API(등록 목록 · 장소 도착 보고)와 서버 타입 · 목 분기
-        │   ├── geofencesMock.ts  지오펜스 목. 서버 규칙대로 저장물 목의 장소로 목록을 만들고, 도착 보고를 메모리에 남긴다
+        │   ├── geofencesMock.ts  지오펜스 목. 서버 규칙대로 저장물 목의 장소로 목록을 만들고, 도착 보고를 메모리에 남긴다(새 도착마다 알림 목이 알림을 만든다)
         │   ├── devices.ts    기기 API(FCM 토큰 등록) · 목 분기(서버를 부르지 않고 성공)
+        │   ├── notifications.ts  알림 API(상세 · 열람)와 서버 타입 · 목 분기
+        │   ├── notificationsMock.ts  알림 목. 목 도착마다 PLACE 알림 1개를 만들고, 상세는 읽을 때 저장물을 다시 확인한다
         │   ├── usePersonalSaveDetail.ts  저장물 상세 hook. 포커스 · 앱 복귀 때 읽기, 분석 중 5초마다 다시 읽기
+        │   ├── useNotificationDetail.ts  알림 상세 hook. 처음 그릴 때 한 번 읽고 열 화면(toNotificationTarget)을 정한다
         │   ├── mappers/      ★ 서버 응답 -> 앱 모델 변환. 백엔드 변경 흡수 지점
         │   │   └── personalSaveMapper.ts  저장물 상세 · 목록 항목 -> SaveState
         │   └── mock/         UI 개발용 목 데이터. 화면 props 모양. 서버 계약 아님
@@ -196,7 +199,12 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   권한 화면 도중 앱이 꺼지면 다음 실행은 세션이 있으므로 근처 탭으로 간다. 권한은 설정(11)에서 다시 바꿀 수 있다.
 - 게스트 세션의 401 은 조용히 다시 받는다("API 클라이언트" 절). 다시 받기가 거절되면 세션을 지우고 00a 부터, 카카오 세션의 401 은 00b 부터 보여준다. 로그아웃 상태에서는 Main 쪽 딥링크가 열리지 않는다.
 - linking prefix 는 `Linking.createURL('/')` 로 만든다. scheme 을 하드코딩하지 않는다.
-- SaveResult(02~05)는 알림 탭 또는 기억 항목 탭으로 진입한다. 실제 알림 연결은 runtime 작업 범위다.
+- SaveResult(02~05)는 기억 항목 탭으로 진입한다(저장물로 연 08 이 ready 가 아니어도 이리로 바뀐다). 알림은 08 을 연다(아래).
+- 알림으로 여는 08: `ContentDetail { notificationId }` 를 지금 화면 위에 push 한다(navigate 는 쓰지 않는다. 같은 이름이 스택에 있으면 그리로 돌아가 버린다).
+  화면은 알림 상세(`useNotificationDetail`)를 읽고, 읽으면 열람 처리(`openNotification`)를 한 번 보낸 뒤(기다리지 않고 실패는 무시, 서버는 멱등)
+  첫 항목으로 `replace(ContentDetail { personalSaveId, placeId })` 한다. 그래서 뒤로 가면 알림을 누르기 전 화면이고, 히스토리에 알림 08 이 남지 않는다.
+  장소가 없는 항목(CONTENT)은 `{ personalSaveId }` 만 넘긴다(ready 가 아니면 저장 결과로 바뀐다). 404 · 항목 없음 · PUBLIC(내 저장물 아님)은 12, 그 밖의 읽기 실패는 다시 불러오기.
+  여러 장소(COURSE)도 지금은 첫 항목만 연다. 알림 누름 처리(앞 · 뒤 · 종료, 게이트 signedIn)는 F2-2, 지금은 시연 도구 · 개발용 딥링크(`notification/:notificationId`)로 연다.
 - 02c 에서 저장하면 SaveResult 모달 하나만 닫아 흐름을 끝낸다. 뒤로 가기는 02c → 02 로 간다.
 - 08 "이 장소가 아니에요"는 SaveResult 모달에 PlaceSearch 하나만 올린 바꾸기 모드(placeId)다. 바꾸기 · 뒤로 가기 모두 모달을 닫고 08 로 돌아간다. 딥링크는 없다.
 - 08 "길 안내 시작"은 동작하지 않는다. 백엔드 협의 이슈 대기.
@@ -223,11 +231,11 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   "분석하는 중에 연결이 끊겼어요. 다시 시도하면 처음부터 찾아볼게요." + 다시 시도. videoUnavailable "볼 수 없는 영상이에요" /
   "비공개로 바뀌었거나 삭제된 영상이라 다시 분석할 수 없어요." analysisError "장소를 알아내지 못했어요" / "이 영상은 다시 분석해도 같은 결과가 나와요. 링크는 그대로 보관해둘게요."
   코드가 없으면(null) Figma 05 문구 + 다시 시도. 다시 시도는 상세의 sourceUrl 을 다시 저장하고 상세를 다시 읽는다(서버가 다시 분석하면 03, 아니면 05 에 머문다).
-- 저장물로 연 08 은 상세의 첫 장소를 그린다(`savedPlaceSheet`, 장소별 전환 전). 큰 글씨는 지난 시간, 바램은 저장 시각, 썸네일은 videoId.
+- 저장물로 연 08 은 `placeId` 파라미터와 같은 장소, 없으면 첫 장소를 그린다(`savedPlaceSheet` 의 `pickPlace`, 장소별 전환 전). 큰 글씨는 지난 시간, 바램은 저장 시각, 썸네일은 videoId.
   응답에 없는 값은 08b 규칙대로 비운다: 도보 시간 없음, 메모는 장소 설명 → 영상 요약 → 숨김, 태그는 카테고리 1개 → 숨김, 주소 · 도보 시간이 모두 없으면 메타 줄을 숨긴다.
   원본 영상 줄 둘째 줄은 "{영상 제목} · YouTube Shorts"(제목이 없으면 "YouTube Shorts"), 누르면 videoId 의 Shorts 주소를 연다(sourceUrl 은 watch 형식).
   미니 핀은 그리지 않는다. ready 가 아니면 저장 결과로 바꾸고, 404 는 12. 읽는 동안은 바탕과 뒤로가기만, 실패하면 "확인하지 못했어요. 눌러서 다시 불러와요".
-  "이 장소가 아니에요"는 지금처럼 02c 바꾸기 모드(첫 장소 placeId)를 연다. 02c 의 실제 저장 · 바꾸기는 아직 목이다.
+  "이 장소가 아니에요"는 지금처럼 02c 바꾸기 모드(그린 장소의 placeId)를 연다. 02c 의 실제 저장 · 바꾸기는 아직 목이다.
 - 02c 캡션의 영상 제목은 `sourceTitle` 파라미터로 받는다(04 · 저장물 08 에서). 넘겨받지 않으면(개발용 딥링크 · 목 08) 화면 목에서 찾는다.
 - 개발 모드(`__DEV__`)에서 저장 결과의 personalSaveId 가 화면 목(`saveResults`) 키면 API 대신 그 목을 그린다.
   02 · 02b(확인 필요)는 아직 이 경로로만 본다(되묻기 연결 전). 서버 id 는 UUID 라 목 키와 겹치지 않는다.
@@ -324,6 +332,7 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   묶음은 runtime 을 불러야 해서 app 이 만들어 `shared/demo/demoTools.ts` 자리에 등록하고, 설정(features)은 등록된 묶음을 그리기만 한다. 꺼진 빌드에서는 등록 · 렌더가 일어나지 않는다.
     - 줄: 지오펜스 등록 상태("등록된 곳 N곳 · HH:mm" 또는 "등록된 곳 없음 · {마지막 등록 결과}") · 보낼 도착 N건 · "지금 다시 등록"(`syncGeofences`, 결과를 설명에) ·
       저장한 장소별 "{장소}에 도착"(목록 API 중 장소가 있는 저장물만 상세를 하나씩 읽음, 묶음을 처음 그릴 때 한 번) · 목 모드면 목 서버가 받은 도착 기록(최근 순).
+      목 도착 기록은 목 서버가 만든 알림이 있으면 눌러서 연다(`ContentDetail { notificationId }` push, F2-2 에서 알림 누름 처리로 바꾼다).
     - 가상 도착(`simulateArrival`)은 **누르면 바로 보낸다.** RN Android 는 앱이 백그라운드면 JS 타이머가 멈춰(JavaTimerManager `onHostPause`) 예약하지 않는다. 보낸 뒤 홈으로 내리고 알림을 기다린다.
       등록된 장소면 `handleGeofenceEvent` 에 나감 → 들어옴(실제 이벤트와 같은 길, 반복해도 매번 보고), 등록 안 된 장소면 장소 상태는 그대로 두고 같은 대기열로 보낸다. 결과는 보냄 · 남김 · 버림.
 - 00b 의 약관 문구는 지금 링크 없이 문구만 있다. 이용약관 · 개인정보 처리방침 페이지가 생기면 링크로 연결한다.
@@ -462,6 +471,9 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 - 지오펜스 API 는 목 모드에서 `geofencesMock.ts` 가 답한다. 목록은 목 위치 동의(agreed, 버전 무관)와 저장물 목의 장소(분석 실패 제외)로 서버 규칙대로 만든다.
   도착 보고는 이번 실행 동안 메모리에 남는다(`getMockLocationEvents`). `MOCK_SCENARIO.locationEventResult`(ok · networkError · timeout, 기본 ok):
   networkError 는 기록하지 않고, timeout 은 기록한 뒤 timeout 을 돌려준다. 같은 triggerEventId 는 다시 기록하지 않고 sent.
+- 알림 API 는 목 모드에서 `notificationsMock.ts` 가 답한다. 새로 기록한 도착마다 목 위치 동의가 agreed 이고 그 장소를 가진 저장물(분석 실패 제외)이 있으면
+  PLACE 알림 1개(PERSONAL 항목, 그 장소)를 만든다. 서버의 꺼내기 판단 · 회원 쿨다운은 흉내 내지 않는다(시연에서 반복). 푸시는 보내지 않는다(F2-3 전).
+  상세는 읽을 때 저장물을 다시 확인해 지웠으면 items 가 빈다. 없는 id 는 404, 열람은 멱등. 이번 실행 동안 메모리에 남는다(`getMockNotifications`).
 - 저장물 API 는 목 모드에서 메모리 저장소다. `MOCK_SCENARIO.archiveEmpty` 면 빈 저장소, 아니면 샘플 6개로 시작한다
   (장소 있는 성공 2 · 분석 중 1 · 실패(EXTRACTION_API_ERROR) 1 · 볼 수 없는 영상 1 · 장소 없음 1, 저장 시각은 오늘 · 3주 전 · 2달 전).
   샘플 영상 id 는 가짜(`mockSave001`~`006`)라 썸네일은 자리표시다. 분석 중 샘플은 앱을 켜고 약 5초 뒤 `analysisResult` 로 끝난다.

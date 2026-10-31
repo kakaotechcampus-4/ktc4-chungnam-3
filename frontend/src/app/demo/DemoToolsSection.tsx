@@ -2,6 +2,8 @@
 // 지오펜스 등록 상태 · 보낼 도착 수 · "지금 다시 등록" · 저장한 장소별 가상 도착 · (목 모드) 목 서버가 받은 도착 기록.
 // 가상 도착은 누르면 바로 보낸다(RN Android 는 앱이 백그라운드면 JS 타이머가 멈춰 예약하지 않는다). 보낸 뒤 홈으로 내리고 알림을 기다린다.
 // 장소 목록은 묶음이 처음 그려질 때 한 번 읽는다. 목록(최대 100개) 중 장소가 있는 저장물만 상세를 하나씩 읽는다(시연용 N+1).
+// 목 도착 기록 줄은 목 서버가 그 도착으로 만든 알림이 있으면 눌러서 연다(알림을 누른 것처럼 08 을 지금 화면 위에 push).
+import { StackActions } from "@react-navigation/native";
 import { useCallback, useEffect, useState } from "react";
 
 import SettingsGroup from "../../features/settings/components/SettingsGroup";
@@ -20,10 +22,13 @@ import {
 import { isApiConfigured } from "../../shared/api/config";
 import { getMockLocationEvents } from "../../shared/api/geofencesMock";
 import { toSaveStateFromItem } from "../../shared/api/mappers/personalSaveMapper";
+import { getMockNotifications } from "../../shared/api/notificationsMock";
 import {
     fetchPersonalSave,
     fetchPersonalSaves,
 } from "../../shared/api/personalSaves";
+import { navigationRef } from "../navigation/navigationRef";
+import { ROUTES } from "../navigation/routes";
 
 const LIST_SIZE = 100;
 
@@ -102,6 +107,14 @@ async function readPlaces(): Promise<DemoPlace[]> {
     return places;
 }
 
+// F2-2 에서 알림 누름 처리(opener)로 바꾼다.
+function openNotificationDetail(notificationId: string): void {
+    if (!navigationRef.isReady()) return;
+    navigationRef.dispatch(
+        StackActions.push(ROUTES.ContentDetail, { notificationId }),
+    );
+}
+
 export default function DemoToolsSection() {
     const [summary, setSummary] = useState<GeofenceSummary | null>(null);
     const [syncLabel, setSyncLabel] = useState<string>();
@@ -109,10 +122,16 @@ export default function DemoToolsSection() {
     const [places, setPlaces] = useState<Places>({ status: "loading" });
     const [arrivals, setArrivals] = useState<Record<string, string>>({});
     const [mockEvents, setMockEvents] = useState(getMockLocationEvents());
+    const [mockNotifications, setMockNotifications] = useState(
+        getMockNotifications(),
+    );
 
     const refresh = useCallback(() => {
         getGeofenceSummary().then(setSummary);
-        if (!isApiConfigured) setMockEvents([...getMockLocationEvents()]);
+        if (!isApiConfigured) {
+            setMockEvents([...getMockLocationEvents()]);
+            setMockNotifications([...getMockNotifications()]);
+        }
     }, []);
 
     const loadPlaces = useCallback(() => {
@@ -163,6 +182,12 @@ export default function DemoToolsSection() {
             ? places.places.map((place) => [place.placeId, place.name])
             : [],
     );
+    const notificationIds = new Map(
+        mockNotifications.map((item) => [
+            item.triggerEventId,
+            item.notificationId,
+        ]),
+    );
 
     return (
         <SettingsGroup title="시연 도구" note="발표용 빌드에서만 보여요.">
@@ -210,15 +235,31 @@ export default function DemoToolsSection() {
                 (mockEvents.length === 0 ? (
                     <SettingsRow title="목 서버가 받은 도착 없음" />
                 ) : (
-                    [...mockEvents]
-                        .reverse()
-                        .map((event) => (
+                    [...mockEvents].reverse().map((event) => {
+                        const notificationId = notificationIds.get(
+                            event.triggerEventId,
+                        );
+                        return (
                             <SettingsRow
                                 key={event.triggerEventId}
                                 title={`${clock(event.eventOccurredAt, true)} · ${placeNames.get(event.placeId) ?? event.placeId}`}
-                                description="목 서버가 받은 도착"
+                                description={
+                                    notificationId == null
+                                        ? "목 서버가 받은 도착 · 알림이 없어요(위치 정보 이용 동의 없음 등)"
+                                        : "목 서버가 받은 도착 · 눌러서 알림을 열어요"
+                                }
+                                chevron={notificationId != null}
+                                onPress={
+                                    notificationId == null
+                                        ? undefined
+                                        : () =>
+                                              openNotificationDetail(
+                                                  notificationId,
+                                              )
+                                }
                             />
-                        ))
+                        );
+                    })
                 ))}
         </SettingsGroup>
     );

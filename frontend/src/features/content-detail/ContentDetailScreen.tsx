@@ -2,9 +2,11 @@
 // 현재 위치 · 경로는 위치 권한이 "denied" 일 때만 숨긴다. 경로는 경로 API 전까지 직선 자리표시다.
 // 시트 멈춤 지점: 기본(08, 메모 2줄 상태의 내용 높이를 처음 한 번 재서 고정) · 펼침(08c, 상태바 아래까지).
 // 뒤로가기 버튼은 Figma 레이어 순서대로 시트 아래에 있어 펼치면 가려진다.
-// 두 경로가 있다. placeId 로 열면(지도 · 근처) 장소 목을 그리고 다른 저장 장소를 미니 핀으로 그린다.
-// personalSaveId 로 열면(기억 탭 · 저장 결과) 저장물 상세 API 를 읽어 첫 장소를 그린다(savedPlaceSheet). 미니 핀은 없다.
+// 세 경로가 있다. placeId 로 열면(지도 · 근처) 장소 목을 그리고 다른 저장 장소를 미니 핀으로 그린다.
+// personalSaveId 로 열면(기억 탭 · 저장 결과) 저장물 상세 API 를 읽어 placeId 장소(없으면 첫 장소)를 그린다(savedPlaceSheet). 미니 핀은 없다.
 // 저장물이 ready 가 아니면(장소가 없어졌거나 다시 분석 중) 저장 결과(02~05)로 바꾼다. 404 는 12.
+// notificationId 로 열면(알림) 알림 상세를 읽고 열람 처리를 한 번 보낸 뒤(기다리지 않고 실패는 무시), 첫 항목의 저장물 08 로 바꾼다.
+// 404 · 항목 없음 · 내 저장물이 아닌 항목(PUBLIC)은 12, 그 밖의 읽기 실패는 다시 불러오기.
 // 읽는 동안은 바탕과 뒤로가기만, 읽기 실패는 그 위에 다시 불러오기 문구를 보인다.
 import BottomSheet, {
     type BottomSheetFooterProps,
@@ -39,6 +41,8 @@ import {
     mapViewMock,
     placeDetailsMock,
 } from "../../shared/api/mock";
+import { openNotification } from "../../shared/api/notifications";
+import { useNotificationDetail } from "../../shared/api/useNotificationDetail";
 import { usePersonalSaveDetail } from "../../shared/api/usePersonalSaveDetail";
 import { openExternalUrl } from "../../shared/external-links/openExternalUrl";
 import { youtubeShortsUrl } from "../../shared/external-links/youtubeLinks";
@@ -60,7 +64,7 @@ import {
 } from "../../shared/ui/theme";
 import DetailFooter, { footerHeight } from "./components/DetailFooter";
 import DetailSheet, { type DetailSheetProps } from "./components/DetailSheet";
-import { toSavedPlaceSheet } from "./savedPlaceSheet";
+import { pickPlace, toSavedPlaceSheet } from "./savedPlaceSheet";
 
 type Detail = DetailSheetProps & { coordinate: LatLng };
 type MiniPlace = {
@@ -87,11 +91,56 @@ export default function ContentDetailScreen() {
             >
         >();
     const params = route.params;
-    return "placeId" in params ? (
-        <MockPlaceDetail placeId={params.placeId} />
-    ) : (
-        <SavedPlaceDetail personalSaveId={params.personalSaveId} />
-    );
+    if ("notificationId" in params) {
+        return (
+            <NotificationPlaceDetail notificationId={params.notificationId} />
+        );
+    }
+    if ("personalSaveId" in params) {
+        return (
+            <SavedPlaceDetail
+                personalSaveId={params.personalSaveId}
+                placeId={params.placeId}
+            />
+        );
+    }
+    return <MockPlaceDetail placeId={params.placeId} />;
+}
+
+// 알림으로 여는 08. 알림 상세를 읽어 저장물 08 로 바꾼다(뒤로 가면 알림을 누르기 전 화면).
+function NotificationPlaceDetail({
+    notificationId,
+}: {
+    notificationId: string;
+}) {
+    const navigation = useNavigation();
+    const { view, reload } = useNotificationDetail(notificationId);
+    const loaded = view.status === "loaded";
+    const target = loaded ? view.target : null;
+    const opened = useRef(false);
+
+    // 상세를 읽은 뒤 한 번. 서버는 멱등이다.
+    useEffect(() => {
+        if (!loaded || opened.current) return;
+        opened.current = true;
+        openNotification(notificationId).catch(() => {});
+    }, [loaded, notificationId]);
+
+    useEffect(() => {
+        if (target?.kind !== "saved") return;
+        navigation.dispatch(
+            StackActions.replace("ContentDetail", {
+                personalSaveId: target.personalSaveId,
+                ...(target.placeId != null && { placeId: target.placeId }),
+            }),
+        );
+    }, [target, navigation]);
+
+    if (view.status === "notFound" || target?.kind === "notFound") {
+        return <PlaceNotFound />;
+    }
+    if (view.status === "failed") return <DetailPending onRetry={reload} />;
+    return <DetailPending />;
 }
 
 // 지도 · 근처에서 여는 08. 장소 목을 그린다.
@@ -117,8 +166,14 @@ function MockPlaceDetail({ placeId }: { placeId: string }) {
     );
 }
 
-// 기억 탭 · 저장 결과에서 여는 08. 저장물 상세 API 를 읽는다.
-function SavedPlaceDetail({ personalSaveId }: { personalSaveId: string }) {
+// 기억 탭 · 저장 결과 · 알림에서 여는 08. 저장물 상세 API 를 읽는다.
+function SavedPlaceDetail({
+    personalSaveId,
+    placeId,
+}: {
+    personalSaveId: string;
+    placeId?: string;
+}) {
     const navigation = useNavigation();
     const { view, reload } = usePersonalSaveDetail(personalSaveId, {
         pollWhileAnalyzing: false,
@@ -139,9 +194,13 @@ function SavedPlaceDetail({ personalSaveId }: { personalSaveId: string }) {
     if (view.status === "failed") return <DetailPending onRetry={reload} />;
     const sheet =
         view.status === "loaded"
-            ? toSavedPlaceSheet(view.detail, new Date())
+            ? toSavedPlaceSheet(view.detail, new Date(), placeId)
             : null;
-    if (view.status !== "loaded" || sheet == null) return <DetailPending />;
+    const place =
+        view.status === "loaded" ? pickPlace(view.detail, placeId) : undefined;
+    if (view.status !== "loaded" || sheet == null || place == null) {
+        return <DetailPending />;
+    }
 
     const { detail } = view;
     return (
@@ -152,7 +211,7 @@ function SavedPlaceDetail({ personalSaveId }: { personalSaveId: string }) {
                 navigation.navigate("SaveResult", {
                     screen: "PlaceSearch",
                     params: {
-                        placeId: detail.places[0].placeId,
+                        placeId: place.placeId,
                         sourceTitle: detail.title,
                     },
                 })
