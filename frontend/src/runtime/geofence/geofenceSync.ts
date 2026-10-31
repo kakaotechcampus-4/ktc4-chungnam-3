@@ -45,6 +45,8 @@ export type GeofenceSyncResult =
 type TaskManagerModule = NonNullable<ReturnType<typeof loadTaskManager>>;
 
 let running: Promise<GeofenceSyncResult> | undefined;
+// 이번 실행에서 마지막으로 끝난 결과. 시연 도구가 등록이 없는 이유를 보일 때 쓴다(앱을 다시 켜면 null).
+let lastResult: GeofenceSyncResult | null = null;
 let queued: Promise<GeofenceSyncResult> | undefined;
 
 // reason 은 부른 이유다(조건은 매번 새로 읽는다).
@@ -52,9 +54,14 @@ export function syncGeofences(
     reason: GeofenceSyncReason,
 ): Promise<GeofenceSyncResult> {
     if (running == null) {
-        running = sync().finally(() => {
-            running = undefined;
-        });
+        running = sync()
+            .then((result) => {
+                lastResult = result;
+                return result;
+            })
+            .finally(() => {
+                running = undefined;
+            });
         return running;
     }
     queued ??= running.then(() => {
@@ -63,6 +70,10 @@ export function syncGeofences(
         return syncGeofences(reason);
     });
     return queued;
+}
+
+export function getLastGeofenceSyncResult(): GeofenceSyncResult | null {
+    return lastResult;
 }
 
 async function sync(): Promise<GeofenceSyncResult> {

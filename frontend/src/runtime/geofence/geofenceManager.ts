@@ -8,6 +8,7 @@
 //   보내기 직전에 eventOccurredAt 이 30분을 넘었으면 버린다(서버가 버린다). 대기열은 최대 QUEUE_LIMIT 개, 넘치면 오래된 것부터 버린다.
 // 시간 예산: 태스크 예산 15초에서 상태 읽기 · 쓰기 여유를 뺀 FLUSH_BUDGET_MS. 첫 보내기는 늘 하고,
 //   다음 보내기는 경과 시간 + 보고 시간 제한(10초) ≤ 예산일 때만 시작한다. 못 보낸 것은 deferred 로 남는다.
+// 시연 도구(설정)는 simulateArrival · getGeofenceSummary 를 쓴다. 가상 도착도 같은 대기열 · 같은 규칙으로 보낸다.
 import {
     LOCATION_EVENT_TIMEOUT_MS,
     type LocationEventRequest,
@@ -42,9 +43,24 @@ export type FlushResult = {
     deferred: number;
 };
 
+// 시연 도구용 요약. registeredAt 은 마지막 등록 시각(ISO-8601 UTC), 등록한 적이 없으면 null.
+export type GeofenceSummary = {
+    places: number;
+    registeredAt: string | null;
+    queued: number;
+};
+
+// via: 등록된 장소면 geofence(나감 → 들어옴), 아니면 direct(장소 상태는 그대로). result: 이 도착 보고 하나의 결과.
+export type SimulatedArrival = {
+    via: "geofence" | "direct";
+    result: "sent" | "kept" | "dropped";
+};
+
 type CryptoModule = typeof import("expo-crypto");
 let cryptoModule: CryptoModule | null | undefined;
 let flushing: Promise<FlushResult> | undefined;
+// 보내기에서 지운 항목의 결과(triggerEventId → sent · dropped). 가상 도착이 자기 결과를 찾고 지운다.
+const settled = new Map<string, "sent" | "dropped">();
 
 // 등록을 마친 뒤 부른다. 장소 상태 · 재조회 id · 마지막 등록 정보를 계획대로 바꾼다(목록에서 빠진 장소의 상태는 지워진다).
 export async function applyRegistration(
@@ -92,14 +108,43 @@ export async function handleGeofenceEvent(
     }
     if (place.inside) return { kind: "ignored", reason: "alreadyInside" };
     place.inside = true;
-    enqueue(current, {
-        placeId: place.placeId,
-        triggerEventId: newTriggerEventId(),
-        eventType: "ENTER",
-        eventOccurredAt: now.toISOString(),
-    });
-    saveGeofenceState(current);
-    return { kind: "reported", flush: await flushLocationEvents() };
+    const { flush } = await queueArrival(current, place.placeId, now);
+    return { kind: "reported", flush };
+}
+
+export async function getGeofenceSummary(): Promise<GeofenceSummary> {
+    const current = await loadGeofenceState();
+    return {
+        places: Object.keys(current.places).length,
+        registeredAt: current.registration?.at ?? null,
+        queued: current.queue.length,
+    };
+}
+
+// 시연용 가상 도착. 등록된 장소면 handleGeofenceEvent 에 나감 → 들어옴을 넣어 실제 이벤트와 같은 길로 보고한다(반복해도 매번 보고).
+// 등록 안 된 장소(권한 · 동의 · 모듈 문제)면 장소 상태는 건드리지 않고 도착 보고만 대기열에 넣고 보낸다.
+export async function simulateArrival(
+    placeId: string,
+    now: Date,
+): Promise<SimulatedArrival> {
+    const current = await loadGeofenceState();
+    const geofenceId = Object.keys(current.places).find(
+        (id) => current.places[id].placeId === placeId,
+    );
+    if (geofenceId != null) {
+        await handleGeofenceEvent(
+            { identifier: geofenceId, kind: "exit" },
+            now,
+        );
+        current.places[geofenceId].inside = true;
+    }
+    const { triggerEventId } = await queueArrival(current, placeId, now);
+    const queued = (await loadGeofenceState()).queue.some(
+        (item) => item.triggerEventId === triggerEventId,
+    );
+    const result = queued ? "kept" : (settled.get(triggerEventId) ?? "sent");
+    settled.delete(triggerEventId);
+    return { via: geofenceId != null ? "geofence" : "direct", result };
 }
 
 // 이미 보내는 중이면 새로 시작하지 않고 그 결과를 같이 받는다(그 사이 넣은 항목도 이어서 보낸다).
@@ -110,6 +155,23 @@ export function flushLocationEvents(
         flushing = undefined;
     });
     return flushing;
+}
+
+// 도착 보고 하나를 대기열에 넣고 저장한 뒤 보낸다.
+async function queueArrival(
+    current: GeofenceState,
+    placeId: string,
+    now: Date,
+): Promise<{ triggerEventId: string; flush: FlushResult }> {
+    const triggerEventId = newTriggerEventId();
+    enqueue(current, {
+        placeId,
+        triggerEventId,
+        eventType: "ENTER",
+        eventOccurredAt: now.toISOString(),
+    });
+    saveGeofenceState(current);
+    return { triggerEventId, flush: await flushLocationEvents() };
 }
 
 // 동의 철회 · 로그아웃 때 부른다. 장소 상태 · 등록 정보 · 대기열을 모두 지운다. 보내는 중이던 결과는 반영하지 않는다.
@@ -127,6 +189,7 @@ async function sendQueued(clock: () => number): Promise<FlushResult> {
         const item = current.queue[0];
         if (clock() - Date.parse(item.eventOccurredAt) > MAX_EVENT_AGE_MS) {
             removeFromQueue(current, item);
+            settle(item, "dropped");
             result.dropped += 1;
             saveGeofenceState(current);
             continue;
@@ -142,8 +205,10 @@ async function sendQueued(clock: () => number): Promise<FlushResult> {
         // 보내는 사이 지워졌으면(clearGeofenceState) 아무것도 바꾸지 않는다.
         if ((await loadGeofenceState()) !== current) return result;
         if (outcome.kind === "sent") {
+            settle(item, "sent");
             result.sent += 1;
         } else if (outcome.kind === "rejected" && outcome.status !== 401) {
+            settle(item, "dropped");
             result.dropped += 1;
         } else {
             result.kept += 1;
@@ -159,6 +224,15 @@ async function sendQueued(clock: () => number): Promise<FlushResult> {
     );
     result.deferred = current.queue.length - (keptQueued ? 1 : 0);
     return result;
+}
+
+// 가상 도착만 결과를 찾아 간다. 실제 이벤트의 결과는 쌓이지 않게 최근 QUEUE_LIMIT 개만 둔다.
+function settle(item: LocationEventRequest, outcome: "sent" | "dropped"): void {
+    settled.set(item.triggerEventId, outcome);
+    if (settled.size > QUEUE_LIMIT) {
+        const oldest = settled.keys().next().value;
+        if (oldest != null) settled.delete(oldest);
+    }
 }
 
 function enqueue(current: GeofenceState, event: LocationEventRequest): void {

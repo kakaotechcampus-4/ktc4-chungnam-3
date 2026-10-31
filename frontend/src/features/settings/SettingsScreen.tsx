@@ -4,6 +4,7 @@
 // 권한 모듈이 없는 개발 빌드에서는 위치를 목 값으로 보이고 알림 상태는 확인하지 않는다.
 // 위치 정보 이용 동의(11c 2202:915 · 11c-off 2202:986)는 화면에 포커스될 때 서버에서 읽는다.
 // 동의 안 함이면 동의 시트(LocationConsentSheet), 동의함이면 거두기 시트(11d)를 띄운다. 저장이 성공하면 PUT 응답으로 바로 갱신한다.
+// 맨 아래 "시연 도구"는 개발 모드 · preview 빌드에서 app 이 등록한 묶음이다(shared/demo/demoTools). 등록이 없으면 그리지 않는다.
 // 예전 약관 동의(outdated)는 "약관이 바뀌어 다시 동의가 필요해요"이고 누르면 동의 시트(제목만 약관이 바뀌었다고 알림)다. 거두기는 없다.
 // 근처 알림 행은 outdated 도 동의 안 함과 같다. 동의할 때는 읽어 둔 서버 현재 약관 버전을 보낸다.
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
@@ -19,6 +20,7 @@ import {
     setLocationConsent,
 } from "../../shared/api/consents";
 import { TERMS_URLS } from "../../shared/api/consentTerms";
+import { getDemoToolsSection } from "../../shared/demo/demoTools";
 import {
     toConsentAgreedAt,
     toConsentState,
@@ -193,6 +195,7 @@ export default function SettingsScreen() {
                 ? readConsent
                 : undefined;
     const policiesUrl = TERMS_URLS.policies;
+    const DemoTools = getDemoToolsSection();
 
     return (
         <View style={styles.screen}>
@@ -270,6 +273,8 @@ export default function SettingsScreen() {
                     />
                     <SettingsRow title="오픈소스 라이선스" chevron disabled />
                 </SettingsGroup>
+
+                {DemoTools != null && <DemoTools />}
             </ScrollView>
 
             {/* 설정에서는 동의만 기록한다. 권한은 위치 권한 행이 따로 맡는다. */}

@@ -15,14 +15,22 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { registerSessionRefresher } from "../shared/auth/login";
+import {
+    isDemoToolsEnabled,
+    registerDemoToolsSection,
+} from "../shared/demo/demoTools";
 import { restoreSession, useAuthState } from "../shared/auth/session";
 import { colors, fontFamily } from "../shared/ui/theme";
+import DemoToolsSection from "./demo/DemoToolsSection";
 import { buildLinkingConfig } from "./navigation/linking";
 import { navigationRef } from "./navigation/navigationRef";
 import RootNavigator from "./navigation/RootNavigator";
 import ShareReceiverHost from "./share/ShareReceiverHost";
 
 SplashScreen.preventAutoHideAsync();
+
+// 설정의 시연 도구 묶음. 개발 모드 · preview 빌드(EXPO_PUBLIC_DEMO_TOOLS=1)에서만 등록한다.
+if (isDemoToolsEnabled) registerDemoToolsSection(DemoToolsSection);
 
 const linking = buildLinkingConfig();
 

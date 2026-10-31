@@ -16,6 +16,12 @@
         "preview": {
             "distribution": "internal",
             "node": "24.11.0",
+            "android": {
+                "buildType": "apk"
+            },
+            "env": {
+                "EXPO_PUBLIC_DEMO_TOOLS": "1"
+            },
             "environment": "preview"
         },
         "production": {

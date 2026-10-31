@@ -49,6 +49,7 @@ frontend/
     │   ├── App.tsx
     │   ├── usePendingSaveSender.ts  저장 대기열 다시 보내기 시점(signedIn 직후 · 앞으로 돌아올 때)
     │   ├── useGeofenceSync.ts  지오펜스 (재)등록 시점(signedIn 직후 · 앞으로 돌아올 때 · 위치 설정 신호) · signedOut 때 해제
+    │   ├── demo/             설정의 "시연 도구" 묶음(DemoToolsSection). 개발 모드 · preview 빌드에서만 App 이 등록한다
     │   ├── share/            공유 받음 처리 흐름(shareReceiver) · 시트 호스트 · 개발용 진입(devShareLink)
     │   └── navigation/       RootNavigator, linking, routes, navigationRef(네비게이터 밖 이동)
     │
@@ -117,6 +118,8 @@ frontend/
         │   ├── mappers/      ★ 서버 응답 -> 앱 모델 변환. 백엔드 변경 흡수 지점
         │   │   └── personalSaveMapper.ts  저장물 상세 · 목록 항목 -> SaveState
         │   └── mock/         UI 개발용 목 데이터. 화면 props 모양. 서버 계약 아님
+        ├── demo/
+        │   └── demoTools.ts      시연 도구 켜짐 여부(__DEV__ · EXPO_PUBLIC_DEMO_TOOLS) · 설정 묶음 자리(app 이 등록, 설정이 그림)
         ├── storage/
         │   ├── storage.ts        로컬 JSON 파일 저장소(키 하나 = Paths.document/{key}.json). 비밀이 아닌 값. 지오펜스 상태
         │   └── secureStore.ts    안전한 저장소(expo-secure-store) 지연 로더. 세션 · 설치 id
@@ -301,6 +304,12 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   태스크 매니저가 없으면 경고 한 번(앱은 그대로 뜬다). 태스크는 `registerSessionRefresher` → `ensureSessionRestored`(아직 읽기 전일 때만 복원) →
   signedOut 이면 해제, 온보딩 중이면 무시 → eventType(1 들어옴 · 2 나감)을 `handleGeofenceEvent` 로 → `resyncNeeded` 면 `syncGeofences("resync")` → `flushLocationEvents`.
   `restoreSession` 은 실제로 한 번만 돈다(App 과 태스크가 같은 결과를 기다린다. 다시 정하면 온보딩 중에 저장된 세션 때문에 온보딩을 건너뛴다).
+- **시연 도구**(설정 맨 아래 "시연 도구" 묶음, `app/demo/DemoToolsSection.tsx`): `__DEV__` 이거나 `EXPO_PUBLIC_DEMO_TOOLS === "1"`(eas.json preview 프로필 env)일 때만 보인다.
+  묶음은 runtime 을 불러야 해서 app 이 만들어 `shared/demo/demoTools.ts` 자리에 등록하고, 설정(features)은 등록된 묶음을 그리기만 한다. 꺼진 빌드에서는 등록 · 렌더가 일어나지 않는다.
+    - 줄: 지오펜스 등록 상태("등록된 곳 N곳 · HH:mm" 또는 "등록된 곳 없음 · {마지막 등록 결과}") · 보낼 도착 N건 · "지금 다시 등록"(`syncGeofences`, 결과를 설명에) ·
+      저장한 장소별 "{장소}에 도착"(목록 API 중 장소가 있는 저장물만 상세를 하나씩 읽음, 묶음을 처음 그릴 때 한 번) · 목 모드면 목 서버가 받은 도착 기록(최근 순).
+    - 가상 도착(`simulateArrival`)은 **누르면 바로 보낸다.** RN Android 는 앱이 백그라운드면 JS 타이머가 멈춰(JavaTimerManager `onHostPause`) 예약하지 않는다. 보낸 뒤 홈으로 내리고 알림을 기다린다.
+      등록된 장소면 `handleGeofenceEvent` 에 나감 → 들어옴(실제 이벤트와 같은 길, 반복해도 매번 보고), 등록 안 된 장소면 장소 상태는 그대로 두고 같은 대기열로 보낸다. 결과는 보냄 · 남김 · 버림.
 - 00b 의 약관 문구는 지금 링크 없이 문구만 있다. 이용약관 · 개인정보 처리방침 페이지가 생기면 링크로 연결한다.
 - 의존 방향: `shared/api/client.ts` → `shared/auth/session.ts`, `shared/auth/login.ts` → `client.ts` · `session.ts` · `providers.ts`.
   `session.ts` 는 클라이언트를 import 하지 않는다(순환 방지). 둘이 같이 읽는 API 주소는 `shared/api/config.ts` 에 둔다.
