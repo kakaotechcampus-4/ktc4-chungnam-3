@@ -88,6 +88,10 @@ export function addFcmTokenListener(
     return () => subscription.remove();
 }
 
+// "근처 알림" 채널 id. 바꾸지 않는다. app.json 의 expo-notifications 플러그인 "defaultChannel" 과 같아야 한다(app.config.ts 상단 주석).
+// 채널 정의(이름 · 설명 · 중요도)는 runtime/notifications/channels 에 있다. 목 로컬 알림(shared/api)도 이 id 를 쓰므로 여기에 둔다.
+export const NEARBY_CHANNEL_ID = "nearby";
+
 // importance 는 AndroidImportance 로 바꿔 넘긴다. 필요할 때 값을 늘린다.
 export type NotificationChannelSpec = {
     id: string;
@@ -120,6 +124,41 @@ export async function ensureNotificationChannel(
                 `알림 채널(${channel.id})을 만들지 못했습니다. 알림은 기본 채널로 올 수 있습니다.`,
                 error,
             );
+        }
+    }
+}
+
+let localFailureWarned = false;
+
+// 로컬 알림을 지금 띄운다(목 모드의 목 서버 알림). trigger 는 { channelId } 라 예약 없이 바로 그 채널로 표시된다.
+// 같은 identifier 로 다시 띄우면 새로 쌓지 않고 바꾼다. Android 가 아니거나 모듈이 없거나(Expo Go 포함) 권한이 granted 가 아니면 띄우지 않는다.
+// 실패는 경고 한 번이고 예외를 던지지 않는다.
+export async function presentLocalNotification(notification: {
+    identifier: string;
+    title: string;
+    body: string;
+    data: Record<string, string>;
+    channelId: string;
+}): Promise<void> {
+    if (Platform.OS !== "android") return;
+    const module = loadNotifications();
+    if (module == null) return;
+    try {
+        const { status } = await module.getPermissionsAsync();
+        if (status !== "granted") return;
+        await module.scheduleNotificationAsync({
+            identifier: notification.identifier,
+            content: {
+                title: notification.title,
+                body: notification.body,
+                data: notification.data,
+            },
+            trigger: { channelId: notification.channelId },
+        });
+    } catch (error) {
+        if (!localFailureWarned) {
+            localFailureWarned = true;
+            console.warn("로컬 알림을 띄우지 못했습니다.", error);
         }
     }
 }

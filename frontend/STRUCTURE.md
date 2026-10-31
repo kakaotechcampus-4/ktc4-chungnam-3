@@ -104,7 +104,8 @@ frontend/
         │   ├── guest.ts          게스트 로그인(MVP). 설치 id 만들기 · 보관
         │   └── kakao.ts          카카오 로그인(MVP 이후. 지금은 목)
         ├── permissions/      알림 · 위치 권한 조회와 요청(온보딩 · 설정이 쓴다)
-        │   ├── notifications.ts  알림 권한 조회 · 요청 · 시스템 알림 설정 열기 · 기기 FCM 토큰 받기 · 토큰 변경 구독
+        │   ├── notifications.ts  알림 권한 조회 · 요청 · 시스템 알림 설정 열기 · 기기 FCM 토큰 받기 · 토큰 변경 구독 ·
+        │   │                     채널 생성 · 근처 알림 채널 id · 앞에 있을 때 표시 · 누름 응답 · 로컬 알림 띄우기(목)
         │   ├── location.ts       위치 권한 조회(always · whileInUse · denied) · 앱 사용 중 · 백그라운드 요청 · 지오펜스 등록 · 해제 · 등록용 현재 위치
         │   ├── locationSettings.ts  위치 설정(동의 저장 · 권한 요청)이 바뀌었다는 신호. app 의 hook 이 받아 지오펜스를 다시 등록
         │   └── usePermissionStatus.ts  진입 · 앞으로 돌아올 때 다시 읽는 hook
@@ -119,7 +120,7 @@ frontend/
         │   ├── geofencesMock.ts  지오펜스 목. 서버 규칙대로 저장물 목의 장소로 목록을 만들고, 도착 보고를 메모리에 남긴다(새 도착마다 알림 목이 알림을 만든다)
         │   ├── devices.ts    기기 API(FCM 토큰 등록) · 목 분기(서버를 부르지 않고 성공)
         │   ├── notifications.ts  알림 API(상세 · 열람)와 서버 타입 · 목 분기
-        │   ├── notificationsMock.ts  알림 목. 목 도착마다 PLACE 알림 1개를 만들고, 상세는 읽을 때 저장물을 다시 확인한다
+        │   ├── notificationsMock.ts  알림 목. 목 도착마다 PLACE 알림 1개를 만들어 로컬 알림으로 띄우고, 상세는 읽을 때 저장물을 다시 확인한다
         │   ├── usePersonalSaveDetail.ts  저장물 상세 hook. 포커스 · 앱 복귀 때 읽기, 분석 중 5초마다 다시 읽기
         │   ├── useNotificationDetail.ts  알림 상세 hook. 처음 그릴 때 한 번 읽고 열 화면(toNotificationTarget)을 정한다
         │   ├── mappers/      ★ 서버 응답 -> 앱 모델 변환. 백엔드 변경 흡수 지점
@@ -288,6 +289,7 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
     - 알림 채널: "근처 알림"(id `nearby`, 중요도 DEFAULT, 소리 · 진동 · 표시 범위는 OS 기본값). `runtime/notifications/channels.ts` 의 `ensureChannels` 가
       `shared/permissions/notifications.ts` 의 `ensureNotificationChannel` 로 만들고, App 마운트 때 켤 때마다 부른다(헤드리스 태스크에서는 부르지 않는다).
       만든 뒤에는 이름 · 설명만 바뀌고 중요도 · 소리는 앱이 바꿀 수 없다. id 는 바꾸지 않는다(app.json 의 `defaultChannel` 과 같아야 한다).
+      id 상수 `NEARBY_CHANNEL_ID` 는 `shared/permissions/notifications.ts` 에 둔다. 목 로컬 알림(shared/api)도 쓰는데 shared 는 runtime 을 import 하지 않기 때문이다.
       서버가 channelId 없이 보내는 FCM 은 앱이 뒤에 있을 때 `defaultChannel`(manifest `default_notification_channel_id`)로 이 채널에 온다.
       앱이 앞에 있을 때는 expo 가 받아 JS 핸들러에 묻는다. 핸들러(`setForegroundPresentation`, App 마운트 때 채널과 같은 자리)는
       `{ shouldShowBanner: false, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }` 다(목록 · 소리, 배지 없음).
@@ -482,7 +484,12 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   도착 보고는 이번 실행 동안 메모리에 남는다(`getMockLocationEvents`). `MOCK_SCENARIO.locationEventResult`(ok · networkError · timeout, 기본 ok):
   networkError 는 기록하지 않고, timeout 은 기록한 뒤 timeout 을 돌려준다. 같은 triggerEventId 는 다시 기록하지 않고 sent.
 - 알림 API 는 목 모드에서 `notificationsMock.ts` 가 답한다. 새로 기록한 도착마다 목 위치 동의가 agreed 이고 그 장소를 가진 저장물(분석 실패 제외)이 있으면
-  PLACE 알림 1개(PERSONAL 항목, 그 장소)를 만든다. 서버의 꺼내기 판단 · 회원 쿨다운은 흉내 내지 않는다(시연에서 반복). 푸시는 보내지 않는다(F2-3 전).
+  PLACE 알림 1개(PERSONAL 항목, 그 장소)를 만든다. 서버의 꺼내기 판단 · 회원 쿨다운은 흉내 내지 않는다(시연에서 반복).
+  푸시 대신 로컬 알림(`presentLocalNotification`)을 "근처 알림" 채널로 바로 띄운다. data 는 FCM 과 같은 `{ notificationId }`, 식별자도 notificationId 라
+  같은 알림은 새로 쌓이지 않고 바뀌고, 누름은 실제 알림과 같은 길(notificationListener → opener)을 탄다. 목 모드에서만 띄운다(실제 모드는 목 서버가 불리지 않고, 띄우기 전에도 한 번 더 막는다).
+  알림 권한이 granted 가 아니거나 Expo Go · 모듈 없는 빌드면 띄우지 않고 알림만 만든다(시연 도구 기록 줄로는 연다).
+  문구: 제목은 장소 이름, 본문은 "{저장 시점}에 저장한 곳이 근처에 있어요"(기억 탭과 같은 `savedAgo`, "방금"이면 "방금 저장한 곳이 근처에 있어요"). 상세의 title · body 도 같다.
+  목 도착 보고에 목 지연(600ms, JS 타이머)이 있어, "도착"을 누르자마자 홈으로 내리면 앱으로 돌아올 때까지 알림이 뜨지 않는다(백그라운드에서 JS 타이머가 멈춘다).
   상세는 읽을 때 저장물을 다시 확인해 지웠으면 items 가 빈다. 없는 id 는 404, 열람은 멱등. 이번 실행 동안 메모리에 남는다(`getMockNotifications`).
 - 저장물 API 는 목 모드에서 메모리 저장소다. `MOCK_SCENARIO.archiveEmpty` 면 빈 저장소, 아니면 샘플 6개로 시작한다
   (장소 있는 성공 2 · 분석 중 1 · 실패(EXTRACTION_API_ERROR) 1 · 볼 수 없는 영상 1 · 장소 없음 1, 저장 시각은 오늘 · 3주 전 · 2달 전).

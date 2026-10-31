@@ -1,7 +1,7 @@
 import type { ConfigContext, ExpoConfig } from "expo/config";
 
 // app.json 은 JSON 이라 주석을 달 수 없어 여기에 적는다.
-// expo-notifications 플러그인의 "defaultChannel"(nearby)은 src/runtime/notifications/channels.ts 의 NEARBY_CHANNEL_ID 와 같아야 한다.
+// expo-notifications 플러그인의 "defaultChannel"(nearby)은 src/shared/permissions/notifications.ts 의 NEARBY_CHANNEL_ID 와 같아야 한다.
 
 // 설정 평가는 Node 에서 돈다. @types/node 가 프로젝트 타입에 없어 쓰는 함수에만 타입을 붙인다.
 const { existsSync } = require("node:fs") as {

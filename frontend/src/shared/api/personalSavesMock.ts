@@ -164,6 +164,7 @@ export function mockGeofencePlaces(): {
 export function mockSavedPlace(placeId: string): {
     personalSaveId: string;
     contentId: string;
+    savedAt: string;
     title: string | null;
     summary: string | null;
     place: PersonalSavePlaceResponse;
@@ -176,6 +177,7 @@ export function mockSavedPlace(placeId: string): {
         return {
             personalSaveId: save.personalSaveId,
             contentId: save.contentId,
+            savedAt: save.savedAt,
             title: save.title,
             summary: save.summary,
             place: { ...place },
