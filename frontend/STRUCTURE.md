@@ -284,6 +284,8 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
       부르는 때는 `app/usePushTokenSync.ts`(RootNavigator): signedIn 직후 · 앱이 앞으로 돌아올 때 · signedIn 동안 토큰 변경 리스너(`addFcmTokenListener`).
     - (세션 토큰, FCM 토큰) 쌍을 메모리에만 기억하고 쌍이 바뀔 때만 보낸다(서버가 새 세션마다 토큰을 지우므로 세션도 비교). signedIn 이 아니게 되면 지운다.
       실패는 조용히 넘기고 다음 호출이 다시 한다. 재시도 큐 · 백오프는 없다.
+      마지막 결과(결과 · 시각 · 마지막 등록 시각)를 메모리에 두고 `getLastPushTokenSync` · `subscribePushTokenSync` 로 내보낸다(시연 도구가 읽는다. 토큰 값은 두지 않는다).
+      알림 모듈이 없는 빌드(Expo Go 포함)는 권한 없음과 갈라 `skipped: unavailable` 이다.
     - Expo Go · 모듈 없는 빌드 · google-services.json 없이 만든 빌드(Firebase 초기화 안 됨)는 토큰을 받지 못해 건너뛴다(경고 한 번).
     - 알려진 한계: 요청 도중 게스트 세션을 다시 받으면 서버는 토큰이 지워진 상태로 그 요청을 처리한다(예: 서버 초기화 뒤 첫 도착 알림이 오지 않는다). 다음에 앱이 앞으로 돌아올 때 다시 등록된다.
     - 알림 채널: "근처 알림"(id `nearby`, 중요도 DEFAULT, 소리 · 진동 · 표시 범위는 OS 기본값). `runtime/notifications/channels.ts` 의 `ensureChannels` 가
@@ -348,7 +350,10 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   `restoreSession` 은 실제로 한 번만 돈다(App 과 태스크가 같은 결과를 기다린다. 다시 정하면 온보딩 중에 저장된 세션 때문에 온보딩을 건너뛴다).
 - **시연 도구**(설정 맨 아래 "시연 도구" 묶음, `app/demo/DemoToolsSection.tsx`): `__DEV__` 이거나 `EXPO_PUBLIC_DEMO_TOOLS === "1"`(eas.json preview 프로필 env)일 때만 보인다.
   묶음은 runtime 을 불러야 해서 app 이 만들어 `shared/demo/demoTools.ts` 자리에 등록하고, 설정(features)은 등록된 묶음을 그리기만 한다. 꺼진 빌드에서는 등록 · 렌더가 일어나지 않는다.
-    - 줄: 지오펜스 등록 상태("등록된 곳 N곳 · HH:mm" 또는 "등록된 곳 없음 · {마지막 등록 결과}") · 보낼 도착 N건 · "지금 다시 등록"(`syncGeofences`, 결과를 설명에) ·
+    - 줄: 연결("서버 {호스트:포트}"(경로 · 쿼리 · 사용자 정보 제외, 읽지 못하면 "서버(주소를 읽지 못했어요)") · "목 모드" · "목 모드(preview-mock)") ·
+      FCM(`pushTokenSync` 마지막 결과를 구독: "등록됨 · HH:mm"(목 모드면 "등록됨(목 서버)", 시각은 마지막 등록 성공) · "실패 · HH:mm" · "로그인 전이에요" ·
+      "건너뜀(알림 권한 없음)" · "이 빌드에서는 받지 않아요" · "토큰 없음(Firebase 설정 없는 빌드)" · "아직 확인하지 않았어요") ·
+      지오펜스 등록 상태("등록된 곳 N곳 · HH:mm" 또는 "등록된 곳 없음 · {마지막 등록 결과}") · 보낼 도착 N건 · "지금 다시 등록"(`syncGeofences`, 결과를 설명에) ·
       저장한 장소별 "{장소}에 도착"(목록 API 중 장소가 있는 저장물만 상세를 하나씩 읽음, 묶음을 처음 그릴 때 한 번) · 목 모드면 목 서버가 받은 도착 기록(최근 순).
       목 도착 기록은 목 서버가 만든 알림이 있으면 눌러서 연다(알림 누름과 같은 opener, `openFromNotification`).
     - 가상 도착(`simulateArrival`)은 **누르면 바로 보낸다.** RN Android 는 앱이 백그라운드면 JS 타이머가 멈춰(JavaTimerManager `onHostPause`) 예약하지 않는다. 보낸 뒤 홈으로 내리고 알림을 기다린다.

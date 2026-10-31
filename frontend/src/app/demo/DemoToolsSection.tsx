@@ -1,9 +1,11 @@
 // 설정의 "시연 도구" 묶음. 개발 모드 · preview 빌드에서만 App 이 등록한다(shared/demo/demoTools). 기존 설정 줄만 쓴다.
-// 지오펜스 등록 상태 · 보낼 도착 수 · "지금 다시 등록" · 저장한 장소별 가상 도착 · (목 모드) 목 서버가 받은 도착 기록.
+// 연결(서버 호스트 · 목 모드 · preview-mock) · FCM 토큰 등록 결과 · 지오펜스 등록 상태 · 보낼 도착 수 · "지금 다시 등록" ·
+// 저장한 장소별 가상 도착 · (목 모드) 목 서버가 받은 도착 기록.
+// 같은 패키지라 실서버 preview 와 preview-mock 이 겉으로 구분되지 않아 연결 줄을 맨 위에 둔다. FCM 줄은 pushTokenSync 의 마지막 결과를 구독한다.
 // 가상 도착은 누르면 바로 보낸다(RN Android 는 앱이 백그라운드면 JS 타이머가 멈춰 예약하지 않는다). 보낸 뒤 홈으로 내리고 알림을 기다린다.
 // 장소 목록은 묶음이 처음 그려질 때 한 번 읽는다. 목록(최대 100개) 중 장소가 있는 저장물만 상세를 하나씩 읽는다(시연용 N+1).
 // 목 도착 기록 줄은 목 서버가 그 도착으로 만든 알림이 있으면 눌러서 연다(알림을 누른 것과 같은 opener).
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 
 import SettingsGroup from "../../features/settings/components/SettingsGroup";
 import SettingsRow from "../../features/settings/components/SettingsRow";
@@ -18,7 +20,16 @@ import {
     getLastGeofenceSyncResult,
     syncGeofences,
 } from "../../runtime/geofence/geofenceSync";
-import { isApiConfigured } from "../../shared/api/config";
+import {
+    getLastPushTokenSync,
+    type LastPushTokenSync,
+    subscribePushTokenSync,
+} from "../../runtime/notifications/pushTokenSync";
+import {
+    API_BASE_URL,
+    isApiConfigured,
+    isMockForced,
+} from "../../shared/api/config";
 import { getMockLocationEvents } from "../../shared/api/geofencesMock";
 import { toSaveStateFromItem } from "../../shared/api/mappers/personalSaveMapper";
 import { getMockNotifications } from "../../shared/api/notificationsMock";
@@ -81,6 +92,49 @@ export function arrivalLabel(arrival: SimulatedArrival): string {
     }
 }
 
+// 서버 주소의 호스트(포트 포함). 경로 · 쿼리 · 사용자 정보는 보이지 않는다. 읽지 못하면 원문 대신 안내 문구.
+export function apiHostLabel(url: string): string {
+    try {
+        const { host } = new URL(url);
+        if (host !== "") return `서버 ${host}`;
+    } catch {
+        // 아래 안내 문구.
+    }
+    return "서버(주소를 읽지 못했어요)";
+}
+
+export function connectionLabel(): string {
+    if (isMockForced) return "목 모드(preview-mock)";
+    return API_BASE_URL == null ? "목 모드" : apiHostLabel(API_BASE_URL);
+}
+
+// mock: 목 모드면 등록 성공이 실서버 등록이 아니라는 것을 붙인다.
+export function pushTokenLabel(
+    last: LastPushTokenSync | null,
+    mock: boolean,
+): string {
+    if (last == null) return "아직 확인하지 않았어요";
+    const { result } = last;
+    switch (result.kind) {
+        case "registered":
+        case "unchanged":
+            return `${mock ? "등록됨(목 서버)" : "등록됨"} · ${clock(last.registeredAt ?? last.at, false)}`;
+        case "failed":
+            return `실패 · ${clock(last.at, false)}`;
+        case "skipped":
+            switch (result.reason) {
+                case "notSignedIn":
+                    return "로그인 전이에요";
+                case "permission":
+                    return "건너뜀(알림 권한 없음)";
+                case "unavailable":
+                    return "이 빌드에서는 받지 않아요";
+                case "noToken":
+                    return "토큰 없음(Firebase 설정 없는 빌드)";
+            }
+    }
+}
+
 function clock(iso: string, withSeconds: boolean): string {
     const date = new Date(iso);
     const parts = [date.getHours(), date.getMinutes()];
@@ -114,6 +168,10 @@ export default function DemoToolsSection() {
     const [mockEvents, setMockEvents] = useState(getMockLocationEvents());
     const [mockNotifications, setMockNotifications] = useState(
         getMockNotifications(),
+    );
+    const pushToken = useSyncExternalStore(
+        subscribePushTokenSync,
+        getLastPushTokenSync,
     );
 
     const refresh = useCallback(() => {
@@ -181,6 +239,11 @@ export default function DemoToolsSection() {
 
     return (
         <SettingsGroup title="시연 도구" note="발표용 빌드에서만 보여요.">
+            <SettingsRow title="연결" description={connectionLabel()} />
+            <SettingsRow
+                title="FCM"
+                description={pushTokenLabel(pushToken, !isApiConfigured)}
+            />
             <SettingsRow title="지오펜스" description={registered} />
             <SettingsRow
                 title="보낼 도착"

@@ -5,6 +5,9 @@
 // session.ts 와 client.ts 가 같이 읽는다. session.ts 가 client.ts 를 import 하지 않게 따로 둔다.
 const forceMock = process.env.EXPO_PUBLIC_FORCE_MOCK === "1";
 
+// 시연 도구가 "목 모드(preview-mock)" 를 가르는 데 쓴다.
+export const isMockForced = forceMock;
+
 export const API_BASE_URL = forceMock
     ? undefined
     : process.env.EXPO_PUBLIC_API_BASE_URL?.trim().replace(/\/+$/, "") ||
