@@ -12,6 +12,8 @@ import { mockFetchGeofences, mockReportLocationEvent } from "./geofencesMock";
 const PLATFORM = "ANDROID";
 // 도착 보고 시간 제한. 대기열이 시간 예산을 나눌 때도 쓴다.
 export const LOCATION_EVENT_TIMEOUT_MS = 10_000;
+// 목록 받기 시간 제한. 백그라운드 재조회가 태스크 예산(15초) 안에 끝나게 한다.
+const GEOFENCES_TIMEOUT_MS = 8_000;
 
 // 재조회용 지오펜스. 벗어나면 현재 위치로 목록을 다시 받는다. geofenceId 는 "resync".
 export type ResyncGeofence = {
@@ -70,7 +72,9 @@ export function fetchGeofences(position: {
         `longitude=${position.longitude}`,
         `platform=${PLATFORM}`,
     ].join("&");
-    return request<GeofenceResponse>(`/api/geofences?${query}`);
+    return request<GeofenceResponse>(`/api/geofences?${query}`, {
+        timeoutMs: GEOFENCES_TIMEOUT_MS,
+    });
 }
 
 // 예외를 던지지 않는다. 다시 보낼지는 결과로 호출자가 정한다(같은 triggerEventId 로 보내면 서버가 중복을 거른다).

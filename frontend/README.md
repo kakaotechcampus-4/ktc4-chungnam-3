@@ -124,6 +124,18 @@ Expo Go 와 그 전에 만든 개발 빌드에서는 경고("expo-share-intent �
     adb shell am start -a android.intent.action.SEND -t text/plain --es android.intent.extra.TEXT "https://youtube.com/shorts/kbWy8_UC0Z8" com.remembrall.app
     ```
 
+### 근처 도착(지오펜스)
+
+지오펜싱(expo-task-manager)은 네이티브 모듈이라 **이 모듈을 넣은 뒤 다시 만든 개발 빌드에서만** 동작한다.
+Expo Go 와 그 전에 만든 개발 빌드에서는 경고("expo-task-manager 네이티브 모듈이 없는 빌드입니다…")가 한 번 뜨고 등록하지 않는다. 앱은 그대로 쓴다.
+
+재빌드 뒤 확인:
+
+1. 온보딩에서 위치 '항상 허용'과 위치 정보 이용 동의를 마친다(설정에서도 바꿀 수 있다).
+2. 앱을 열면 등록된다(signedIn 직후 · 앱이 앞으로 올 때). 앱 안에서 등록 상태를 보는 화면은 아직 없다(G4).
+3. 저장한 장소 근처(반경 150m)로 가면 몇 분 안에 서버로 도착 보고가 간다. 서버의 꺼내기 실행 기록이나 백엔드 로그로 확인한다(알림은 FCM 작업 뒤).
+4. 모의 위치로 확인하려면 개발자 옵션의 모의 위치 앱이 Fused Location Provider 모의 모드(`setMockMode`)를 쓰는지 확인한다(그래야 지오펜싱에 반영된다).
+
 빈 상태(06 · 07b), 위치 권한, 깨진 썸네일은 `src/shared/api/mock/scenario.ts` 의 `MOCK_SCENARIO` 플래그를 바꾸고 reload 해서 본다.
 
 ## 로컬 백엔드 연결

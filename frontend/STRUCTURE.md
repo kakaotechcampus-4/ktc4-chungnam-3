@@ -29,7 +29,7 @@
 
 ```
 frontend/
-├── index.js                  RN 엔트리. 앱 등록 + (runtime 작업 때) 백그라운드 태스크 등록
+├── index.js                  RN 엔트리. 지오펜스 백그라운드 태스크 정의(앱보다 먼저) + 앱 등록
 ├── app.json                  정적 앱 설정. EAS projectId · owner 포함
 ├── app.config.ts             app.json 을 받아 빌드 시점 비밀값(Google Maps 키)을 플러그인에 넣는다
 ├── eas.json                  EAS 빌드 프로필. development = 개발 빌드(dev client) APK
@@ -48,6 +48,7 @@ frontend/
     ├── app/                  앱 셸
     │   ├── App.tsx
     │   ├── usePendingSaveSender.ts  저장 대기열 다시 보내기 시점(signedIn 직후 · 앞으로 돌아올 때)
+    │   ├── useGeofenceSync.ts  지오펜스 (재)등록 시점(signedIn 직후 · 앞으로 돌아올 때 · 위치 설정 신호) · signedOut 때 해제
     │   ├── share/            공유 받음 처리 흐름(shareReceiver) · 시트 호스트 · 개발용 진입(devShareLink)
     │   └── navigation/       RootNavigator, linking, routes, navigationRef(네비게이터 밖 이동)
     │
@@ -65,8 +66,9 @@ frontend/
     │   └── executionTrace.ts 에이전트 궤적
     │
     ├── runtime/              React 밖
-    │   ├── background/       headlessTask(자리표시), pendingQueue(저장 보내기 대기열)
-    │   ├── geofence/         지오펜스 이벤트 처리 · 도착 보고 대기열 · 상태 파일(geofenceManager · geofenceState), 등록 계획(registrationPlan). OS 등록은 G3
+    │   ├── background/       pendingQueue(저장 보내기 대기열)
+    │   ├── geofence/         지오펜스 이벤트 처리 · 도착 보고 대기열 · 상태 파일(geofenceManager · geofenceState), 등록 계획(registrationPlan),
+    │   │                     (재)등록 · 해제(geofenceSync), 백그라운드 태스크(geofenceTask), expo-task-manager 지연 로더(taskManager)
     │   ├── notifications/    channels, listener(발생원 은닉), router
     │   ├── permissions/      권한 상시 감시 (자동 회수 대응)
     │   └── share/
@@ -92,14 +94,15 @@ frontend/
     │
     └── shared/
         ├── auth/             로그인 · 세션
-        │   ├── session.ts        세션 저장(안전한 저장소) · 메모리 캐시 · 구독(useSession)
+        │   ├── session.ts        세션 저장(안전한 저장소) · 메모리 캐시 · 구독(useSession) · 복원은 한 번(백그라운드 태스크도 부름)
         │   ├── providers.ts      [확장 포인트] 로그인 제공자 목록(켜짐 · 버튼 · 엔드포인트 · 요청 바디)
         │   ├── login.ts          로그인 흐름 · 게스트 세션 조용히 다시 받기
         │   ├── guest.ts          게스트 로그인(MVP). 설치 id 만들기 · 보관
         │   └── kakao.ts          카카오 로그인(MVP 이후. 지금은 목)
         ├── permissions/      알림 · 위치 권한 조회와 요청(온보딩 · 설정이 쓴다)
         │   ├── notifications.ts  알림 권한 조회 · 요청 · 시스템 알림 설정 열기
-        │   ├── location.ts       위치 권한 조회(always · whileInUse · denied) · 앱 사용 중 · 백그라운드 요청
+        │   ├── location.ts       위치 권한 조회(always · whileInUse · denied) · 앱 사용 중 · 백그라운드 요청 · 지오펜스 등록 · 해제 · 등록용 현재 위치
+        │   ├── locationSettings.ts  위치 설정(동의 저장 · 권한 요청)이 바뀌었다는 신호. app 의 hook 이 받아 지오펜스를 다시 등록
         │   └── usePermissionStatus.ts  진입 · 앞으로 돌아올 때 다시 읽는 hook
         ├── api/
         │   ├── config.ts     API 기본 주소(EXPO_PUBLIC_API_BASE_URL). 비면 목 모드
@@ -271,17 +274,33 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
     - `POST /api/location-events` `{ placeId, triggerEventId, eventType: "ENTER", eventOccurredAt, location? }` → 본문 없는 202. 중복 triggerEventId · 30분 지난 이벤트 · 회원 쿨다운(2시간) · 동의 없음이어도 똑같이 202 다.
       서버가 요청 안에서 꺼내기 실행과 알림 발송까지 마친 뒤 응답하므로 이 요청에만 시간 제한 10초를 건다. `reportLocationEvent` 는 예외를 던지지 않고
       sent · timeout(서버는 받았을 수 있음) · networkError · serverError(5xx) · rejected(4xx, 401 포함)를 돌려준다. 다시 보낼지는 호출자가 정한다(같은 triggerEventId 로 보내면 서버가 중복을 거른다).
-- 지오펜스 판단 로직(`runtime/geofence`, ADR003 의 프론트 지침 기준). OS 등록 · 해제 · 태스크 · 권한 · 동의 게이트는 아직 없다(G3).
+- 지오펜스 판단 로직(`runtime/geofence`, ADR003 의 프론트 지침 기준).
     - 등록 계획(`planRegistration`, 순수): 장소 region 은 들어옴 · 나감을 모두, 재조회 region 은 나감만 받는다. identifier 는 서버 geofenceId 그대로다.
       장소 상태는 이전 상태가 있으면 그대로 두고, 새로 목록에 들어온 장소만 현재 위치에서 반경 안이면 inside 다. 목록에서 빠진 장소의 상태는 지운다.
     - **초기 트리거 거르기**: Android expo-location 은 초기 트리거(ENTER | EXIT)를 켜고 등록한다. inside 인 장소의 ENTER 는 무시하고,
       이전 outside 인데 지금 안에 있는 장소(등록 직전에 들어옴)는 초기 ENTER 로 보고된다. 앱을 처음 쓸 때 이미 안에 있는 장소는 보고하지 않는다.
     - 이벤트(`handleGeofenceEvent`): 장소 들어옴 → outside 였으면 inside 로 바꾸고 도착 보고(새 triggerEventId, eventOccurredAt = 처리 시각, location 없음)를 대기열에 넣고 바로 보낸다.
-      장소 나감 → outside. 재조회 나감 → `resyncNeeded`(재조회 · 재등록은 G3). 모르는 id 는 무시. 가상 도착(G4)도 같은 함수를 부른다(나감 → 들어옴이면 매번 보고된다).
+      장소 나감 → outside. 재조회 나감 → `resyncNeeded`(태스크가 다시 등록한다). 모르는 id 는 무시. 가상 도착(G4)도 같은 함수를 부른다(나감 → 들어옴이면 매번 보고된다).
     - **대기열**(`flushLocationEvents`): 앞에서부터 하나씩 보낸다. sent 는 지우고 401 이 아닌 4xx 는 버린다. timeout · networkError · serverError · 401 은 남기고 이번 보내기를 멈춘다(다음에 같은 triggerEventId).
       보내기 직전에 30분 넘은 이벤트는 버린다. 최대 20개. 시간 예산 12초(태스크 예산 15초에서 여유를 뺌): 첫 보내기는 늘 하고, 다음은 경과 + 10초 ≤ 12초일 때만.
-      동시에 부르면 하나로 합친다. `clearGeofenceState`(동의 철회 · 로그아웃, 부르는 곳은 G3)가 지우면 보내는 중이던 결과는 반영하지 않는다.
+      동시에 부르면 하나로 합친다. `clearGeofenceState`(등록 조건이 안 맞을 때 `syncGeofences` 가 부름)가 지우면 보내는 중이던 결과는 반영하지 않는다.
     - 상태 파일 하나(`storage` 키 `geofence-state`): 장소 상태 · 재조회 id · 마지막 등록(시각 · 중심 · id 목록) · 대기열. 깨졌거나 모양이 다르면 빈 상태로 시작한다.
+- 지오펜스 등록 · 해제(`runtime/geofence/geofenceSync.ts` 의 `syncGeofences`). 지오펜싱은 expo-task-manager(네이티브)가 있는 개발 빌드에서만 동작한다.
+    - **등록 조건**: signedIn, 위치 권한 '항상 허용', 위치 동의 `agreed`(outdated · withdrawn · never 는 안 됨, 서버는 버전을 보지 않으므로 앱 게이트).
+      맞으면 현재 위치 → `fetchGeofences`(8초 제한) → `planRegistration`(이전 장소 상태) → `startGeofencingAsync`(목록이 비면 해제) → `applyRegistration` → `flushLocationEvents`.
+      조건이 확실히 안 맞으면 해제하고 `clearGeofenceState`. 권한 · 동의 읽기 · 위치 · 목록 · 등록이 실패하면 지금 등록을 그대로 두고 failed.
+      태스크 매니저 · expo-location 이 없는 빌드(Expo Go · 그 전 개발 빌드)에서는 아무것도 하지 않는다(skipped, 상태도 그대로).
+    - 해제: 등록된 태스크가 있을 때만 `stopGeofencingAsync`. 백그라운드 위치 권한이 없으면 이것이 예외를 던져 `TaskManager.unregisterTaskAsync` 로 해제한다.
+    - 위치: 마지막 위치(2분 이내 · 정확도 200m 이하) → 없으면 현재 위치(Balanced, 설정 대화상자 없음, 5초 제한) → 그래도 없으면 failed.
+    - 실행 중에 또 불리면 하나로 합치고, 끝난 뒤 한 번 더 돈다.
+    - **부르는 때**(`app/useGeofenceSync.ts`, RootNavigator): signedIn 이 된 직후, 앱이 앞으로 돌아올 때, 위치 설정 신호(`shared/permissions/locationSettings.ts`) —
+      `setLocationConsent` 성공 · 위치 권한 요청 뒤에 shared 안에서 낸다. features 는 runtime 을 부르지 않는다. signedOut 이 되면 해제 · 지우기. 읽는 중 · 온보딩 중에는 부르지 않는다.
+      OS 설정에서 바꾼 권한은 앱이 앞으로 돌아올 때 반영된다. 백그라운드 태스크의 재조회 지오펜스 나감에서도 부른다.
+- **헤드리스 흐름**(`runtime/geofence/geofenceTask.ts`): `index.js` 가 번들 최상위에서 `defineGeofenceTask` 를 `registerRootComponent` 보다 먼저 부른다
+  (백그라운드로 깨어나면 컴포넌트가 마운트되지 않고, 이벤트가 왔을 때 정의가 없으면 태스크 매니저가 태스크를 해제한다).
+  태스크 매니저가 없으면 경고 한 번(앱은 그대로 뜬다). 태스크는 `registerSessionRefresher` → `ensureSessionRestored`(아직 읽기 전일 때만 복원) →
+  signedOut 이면 해제, 온보딩 중이면 무시 → eventType(1 들어옴 · 2 나감)을 `handleGeofenceEvent` 로 → `resyncNeeded` 면 `syncGeofences("resync")` → `flushLocationEvents`.
+  `restoreSession` 은 실제로 한 번만 돈다(App 과 태스크가 같은 결과를 기다린다. 다시 정하면 온보딩 중에 저장된 세션 때문에 온보딩을 건너뛴다).
 - 00b 의 약관 문구는 지금 링크 없이 문구만 있다. 이용약관 · 개인정보 처리방침 페이지가 생기면 링크로 연결한다.
 - 의존 방향: `shared/api/client.ts` → `shared/auth/session.ts`, `shared/auth/login.ts` → `client.ts` · `session.ts` · `providers.ts`.
   `session.ts` 는 클라이언트를 import 하지 않는다(순환 방지). 둘이 같이 읽는 API 주소는 `shared/api/config.ts` 에 둔다.
