@@ -335,6 +335,12 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
     - **부르는 때**(`app/useGeofenceSync.ts`, RootNavigator): signedIn 이 된 직후, 앱이 앞으로 돌아올 때, 위치 설정 신호(`shared/permissions/locationSettings.ts`) —
       `setLocationConsent` 성공 · 위치 권한 요청 뒤에 shared 안에서 낸다. features 는 runtime 을 부르지 않는다. signedOut 이 되면 해제 · 지우기. 읽는 중 · 온보딩 중에는 부르지 않는다.
       OS 설정에서 바꾼 권한은 앱이 앞으로 돌아올 때 반영된다. 백그라운드 태스크의 재조회 지오펜스 나감에서도 부른다.
+    - **재부팅 · 앱 업데이트**: Play 서비스는 재부팅 때 지오펜스를 지운다. expo-task-manager 의 `TaskBroadcastReceiver` 가 `BOOT_COMPLETED` · `MY_PACKAGE_REPLACED` 를 받아
+      SharedPreferences 에 저장해 둔 태스크를 복원하고, expo-location 의 지오펜싱 consumer 가 마지막으로 등록한 regions 로 다시 등록한다(앱을 열지 않아도 된다).
+      부팅 때 위치가 꺼져 있으면 이 재등록을 건너뛴다. 장소 상태 · 대기열은 상태 파일에 남아 초기 트리거 거르기가 그대로 동작한다.
+    - **알려진 한계**(앱을 열거나 앞으로 가져올 때까지 공백): 위치를 껐다 켬(Play 서비스가 지오펜스를 지우고 GEOFENCE_NOT_AVAILABLE 을 보내는데,
+      태스크는 오류 이벤트를 무시하고 다시 켜도 재등록하는 곳이 없다) · 강제 종료(stopped 상태에서는 지오펜스 · 부팅 브로드캐스트를 받지 못한다, OS 정책) ·
+      앱 데이터 삭제 · 재설치(세션 · 설치 id 도 지워져 새 게스트로 다시 시작한다) · Play 서비스 데이터 삭제. 재부팅 · 앱 업데이트는 공백이 없다.
 - **헤드리스 흐름**(`runtime/geofence/geofenceTask.ts`): `index.js` 가 번들 최상위에서 `defineGeofenceTask` 를 `registerRootComponent` 보다 먼저 부른다
   (백그라운드로 깨어나면 컴포넌트가 마운트되지 않고, 이벤트가 왔을 때 정의가 없으면 태스크 매니저가 태스크를 해제한다).
   태스크 매니저가 없으면 경고 한 번(앱은 그대로 뜬다). 태스크는 `registerSessionRefresher` → `ensureSessionRestored`(아직 읽기 전일 때만 복원) →
@@ -440,7 +446,9 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
     - `ACCESS_FINE_LOCATION` · `ACCESS_COARSE_LOCATION`(expo-location): 지오펜스 진입 판정. 안드로이드 12+ 는 둘을 함께 선언한다.
     - `ACCESS_BACKGROUND_LOCATION`(expo-location plugin `isAndroidBackgroundLocationEnabled`): 앱이 닫혀 있어도 OS 지오펜스가 진입 이벤트를 받는다.
     - `POST_NOTIFICATIONS`(expo-notifications): 안드로이드 13+ 알림 허용.
-    - `RECEIVE_BOOT_COMPLETED`(expo-notifications 기본): 재부팅 후 예약 알림 복원 · 지오펜스 재등록.
+    - `RECEIVE_BOOT_COMPLETED`(expo-notifications 가 선언): 재부팅 후 예약 알림 복원 · 지오펜스 재등록.
+      지오펜스 재등록은 expo-task-manager 의 `TaskBroadcastReceiver` 가 `BOOT_COMPLETED` · `MY_PACKAGE_REPLACED` 를 받아 마지막 regions 로 다시 등록한다
+      ("지오펜스 등록 · 해제" 절). expo-task-manager 는 이 권한을 스스로 선언하지 않으므로 expo-notifications 를 빼면 부팅 뒤 재등록이 멈춘다.
     - 포그라운드 서비스 권한은 넣지 않는다(`isAndroidForegroundServiceEnabled: false`). 지오펜싱에는 필요 없다.
 - Play 정책상 백그라운드 위치는 사용 전 고지가 필요하다. 00d · 00e 가 그 역할이다.
 
