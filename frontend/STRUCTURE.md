@@ -212,7 +212,8 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   id 는 `router.ts` 의 `toNotificationId`(data.notificationId, 문자열이 아니거나 비면 무시)로 꺼내고, 이번 실행에서 넘긴 id 는 다시 넘기지 않는다.
   여는 것은 app 의 `app/notifications/notificationOpener.ts`: 대기 칸 한 칸(마지막 것만)에 두고, signedIn 이고 네비게이터가 준비돼 ContentDetail 이 등록돼 있으면 push 하고 비운다.
   비우는 때는 넘겨받은 즉시 · NavigationContainer `onReady` · signedIn 이 된 직후 · signedIn 동안 내비게이션 상태가 바뀔 때(화면 등록이 늦게 반영되는 경우)다.
-  signedOut 이 되면 버린다. 위치 동의는 조건이 아니다. 시연 도구의 "알림 열기"도 같은 opener 를 부른다(중복 거르기는 거치지 않아 다시 누르면 다시 연다).
+  signedIn → signedOut 으로 바뀔 때만 버린다(이번 실행에서 signedIn 이 된 적 있는지 플래그). 앱 실행 직후의 첫 signedOut 은 버리지 않고
+  로그인 · 온보딩을 마쳐 signedIn 이 되면 연다(종료 상태에서 누른 알림으로 로그인 전 화면이 뜬 경우). 위치 동의는 조건이 아니다. 시연 도구의 "알림 열기"도 같은 opener 를 부른다(중복 거르기는 거치지 않아 다시 누르면 다시 연다).
 - 02c 에서 저장하면 SaveResult 모달 하나만 닫아 흐름을 끝낸다. 뒤로 가기는 02c → 02 로 간다.
 - 08 "이 장소가 아니에요"는 SaveResult 모달에 PlaceSearch 하나만 올린 바꾸기 모드(placeId)다. 바꾸기 · 뒤로 가기 모두 모달을 닫고 08 로 돌아간다. 딥링크는 없다.
 - 08 "길 안내 시작"은 동작하지 않는다. 백엔드 협의 이슈 대기.
