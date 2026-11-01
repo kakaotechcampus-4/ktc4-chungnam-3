@@ -10,7 +10,7 @@
 | --- | --- |
 | Backend build | Java 21과 저장소의 Gradle Wrapper로 테스트 코드 컴파일·실행 JAR 생성 |
 | Backend JUnit | 기존 `test` 태스크 전체 실행. `live` 태그는 기존 설정대로 제외 |
-| Bruno API regression | 빌드한 JAR와 임시 PostgreSQL/pgvector로 `test/bruno` 전체 실행 |
+| Bruno API regression | 빌드한 JAR와 임시 PostgreSQL/pgvector로 `test/bruno`의 기본 회귀 폴더 실행 |
 
 빌드와 JUnit은 별도 작업이다. JUnit 실패 시에도 빌드가 성공했다면 Bruno 결과를 확인할 수 있다.
 세 검사 모두 성공해야 전체 CI가 성공한다. 실패를 무시하거나 테스트를 임의로 제외하지 않는다.
@@ -24,7 +24,7 @@ FCM 인증 파일은 사용하지 않으며 꺼내기 에이전트는 기존 stu
 초기 CI에 GitHub Secrets를 등록할 필요는 없다.
 
 기본 Bruno 컬렉션은 유효한 영상 분석 요청을 보내지 않는다.
-실제 분석용 `test/bruno-live`, 저장·분석 데이터가 필요한 `test/bruno-geofence`, Gradle `liveTest`,
+실제 분석용 `test/bruno/07-save-confirm-flow`, `test/bruno-live`, 저장·분석 데이터가 필요한 `test/bruno-geofence`, Gradle `liveTest`,
 `recallEval`, `recallJudge`는 이번 CI에 포함하지 않는다.
 더미 키는 외부 API의 테스트 대역이 아니다. 실제 연동 동작이나 FCM 기기 수신이 검증됐다는 뜻은 아니다.
 
@@ -39,12 +39,12 @@ FCM 인증 파일은 사용하지 않으며 꺼내기 에이전트는 기존 stu
 세션 토큰이 출력되므로 CLI에 `--verbose`나 응답 출력 스크립트를 추가하지 않는다.
 Bruno CLI 버전을 변경할 때는 기본 컬렉션을 다시 실행한다.
 
-## 현재 알려진 선행 문제
+## 실행 범위 관리
 
-`JudgeCriteriaTest.canonicalDocumentHasReadableMarkdownAndExcludesItsScoringSection`는
-`backend/docs/에이전트 평가 기준.md`를 읽지만 CI 도입 시점의 저장소에는 이 문서가 없다.
-팀의 실제 기준 문서를 해당 경로에 복원하거나 담당자와 올바른 참조 경로를 정해야 한다.
-내용을 임의로 만들거나 해당 테스트를 제외해 통과시키지 않는다. 해결 전에는 JUnit 검사가 실패한다.
+Bruno 실행 폴더는 `.github/ci/run-bruno.sh`에 명시한다. 실제 키가 필요한 요청이 컬렉션에 추가돼도
+일반 PR CI가 실수로 호출하지 않도록 기본 회귀 폴더만 선택한다. 새 기본 폴더를 추가하면 이 목록도 함께 수정한다.
+`JudgeCriteriaTest`가 사용하는 `backend/docs/에이전트 평가 기준.md`는 최신 develop에 포함되어 있다.
+평가 기준 문서를 삭제하거나 경로를 변경하면 해당 테스트도 함께 확인한다.
 
 ## 로컬에서 같은 구성 실행
 

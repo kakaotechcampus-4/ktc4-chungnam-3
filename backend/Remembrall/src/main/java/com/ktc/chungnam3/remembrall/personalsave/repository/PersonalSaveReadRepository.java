@@ -60,7 +60,7 @@ public class PersonalSaveReadRepository {
                         row.getString("video_id"), PersonalSaveAnalysisService.sourceUrl(row.getString("video_id")),
                         row.getString("title"), row.getString("summary"), row.getString("category"),
                         ContentAnalysisStatus.valueOf(row.getString("analysis_status")), row.getString("failure_code"),
-                        row.getTimestamp("saved_at").toInstant(), List.of())).stream().findFirst();
+                        row.getTimestamp("saved_at").toInstant(), List.of(), List.of())).stream().findFirst();
     }
 
     public List<PersonalSaveResponse.Place> findPlaces(UUID contentId) {

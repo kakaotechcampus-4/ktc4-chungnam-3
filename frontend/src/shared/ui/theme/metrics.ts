@@ -200,6 +200,10 @@ export const metrics = {
         termsPaddingHorizontal: 16,
         termsPaddingVertical: 14,
     },
+    // C/ShareReceivedSheet 2212:1109. 썸네일 72 × 128(9:16).
+    shareReceivedSheet: {
+        thumbWidth: 72,
+    },
     // C/Switch 2101:424. 손잡이는 트랙 안쪽 3 떨어져 있다. 켜짐·꺼짐 전환은 150ms 슬라이드.
     settingsSwitch: {
         width: 48,

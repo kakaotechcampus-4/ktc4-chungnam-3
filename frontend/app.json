@@ -39,6 +39,20 @@
                     "isAndroidBackgroundLocationEnabled": true,
                     "isAndroidForegroundServiceEnabled": false
                 }
+            ],
+            [
+                "expo-share-intent",
+                {
+                    "disableIOS": true,
+                    "androidIntentFilters": ["text/plain"]
+                }
+            ],
+            [
+                "expo-notifications",
+                {
+                    "color": "#6B4E7A",
+                    "defaultChannel": "nearby"
+                }
             ]
         ],
         "experiments": {

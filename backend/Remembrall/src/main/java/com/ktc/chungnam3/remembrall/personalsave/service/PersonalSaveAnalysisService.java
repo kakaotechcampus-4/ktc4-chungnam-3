@@ -53,7 +53,7 @@ public class PersonalSaveAnalysisService {
             if (!Integer.valueOf(1).equals(started)) {
                 return;
             }
-            pipeline.saveAndPersist(contentId, new SavePipelineRequestDto(sourceUrl(videoId), false));
+            pipeline.saveAndPersist(contentId, new SavePipelineRequestDto(sourceUrl(videoId)));
         } catch (Exception exception) {
             log.error("Analysis task failed: contentId={}", contentId, exception);
         }

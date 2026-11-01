@@ -64,6 +64,9 @@ fi
 cd "$collection_dir"
 # Run sequentially: login, consent changes, isolation checks, and logout share runtime variables.
 # Do not add --bail: cleanup requests should also run when an earlier assertion fails.
-bru run --env ci --noproxy \
+# Explicitly select basic folders: 07-save-confirm-flow needs real AI credentials.
+bru run 00-health 01-auth-public 02-auth-session 03-consent \
+  04-location-event 06-auth-consent 07-personal-save-basic 99-auth-cleanup \
+  --env ci --noproxy \
   --reporter-junit "$reports_dir/ci.xml" \
   --reporter-skip-all-headers --reporter-skip-body
