@@ -1,0 +1,27 @@
+meta {
+  name: SAVE-BASIC-05 세션 없는 저장 요청 - 401
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/api/personal-saves
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {}
+}
+
+tests {
+  test("HTTP 401 및 INVALID_SESSION", function () {
+    expect(res.status).to.equal(401);
+    expect(res.body.code).to.equal("INVALID_SESSION");
+    expect(res.body.message).to.be.a("string").and.not.empty;
+  });
+}
