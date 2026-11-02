@@ -55,6 +55,7 @@ frontend/
     │   ├── demo/             설정의 "시연 도구" 묶음(DemoToolsSection). 개발 모드 · preview 빌드에서만 App 이 등록한다
     │   ├── share/            공유 받음 처리 흐름(shareReceiver) · 시트 호스트 · 개발용 진입(devShareLink)
     │   ├── notifications/    알림을 눌러 08 열기(notificationOpener). 대기 칸 · signedIn 게이트 · navigationRef 로 push
+    │   ├── launch/           실행 모션 오버레이(LaunchSplash). 네이티브 스플래시를 이어받아 3000ms 1회 재생하고 숨긴다
     │   └── navigation/       RootNavigator, linking, routes, navigationRef(네비게이터 밖 이동)
     │
     ├── domain/
@@ -128,6 +129,8 @@ frontend/
         │   ├── mappers/      ★ 서버 응답 -> 앱 모델 변환. 백엔드 변경 흡수 지점
         │   │   └── personalSaveMapper.ts  저장물 상세 · 목록 항목 -> SaveState
         │   └── mock/         UI 개발용 목 데이터. 화면 props 모양. 서버 계약 아님
+        ├── launch/
+        │   └── launchTarget.ts   실행 모션의 앞장이 내려앉을 자리(S2). 도착 화면이 보고하고 App 이 읽는다. 이번 실행의 첫 보고만
         ├── demo/
         │   └── demoTools.ts      시연 도구 켜짐 여부(__DEV__ · EXPO_PUBLIC_DEMO_TOOLS) · 설정 묶음 자리(app 이 등록, 설정이 그림)
         ├── storage/
@@ -194,6 +197,11 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 
 - 진입: 저장된 세션이 있으면 바로 근처 탭, 없으면 00a 부터. 로그인 없이 쓰는 모드는 없다.
   세션을 읽는 동안은 스플래시를 유지한다(폰트와 같은 방식). 00a 가 잠깐 비치지 않게 한다.
+- 실행 모션(`docs/design/c-launch-motion.md`): 폰트 · 세션이 준비되면 도착 화면(근처 탭 또는 00a)을 그리고, 그 위에 `app/launch/LaunchSplash` 를 덮는다.
+  LaunchSplash 는 네이티브 스플래시와 같은 화면(자두색 + 글리프)으로 시작해, 도착 화면이 앞장이 내려앉을 자리를 보고하면(`shared/launch/launchTarget`)
+  다음 프레임에 네이티브 스플래시를 숨기고 3000ms 모션을 1회 재생한 뒤 언마운트한다. 보고가 1000ms 안에 없으면 대상 없음으로 시작한다.
+  재생하는 동안은 화면 전체를 덮어 아래 화면이 눌리지 않는다. 앞으로 돌아올 때는 재생하지 않는다.
+  애니메이션 줄이기가 켜져 있거나, 세션이 있고 종료 상태에서 누른 알림으로 켜졌으면(08 로 바로 간다) 200ms 크로스페이드만 한다.
 - MVP(게스트 세션) 흐름: 00a → 00c → 00d → 00e → 00f → 근처 탭. 00b 는 건너뛴다(등록하지 않는다).
   00a "시작하기"가 설치 id 로 게스트 세션을 조용히 받고 00c 로 간다. 실패하면 00a-err(버튼 위 오류 상자, 상자와 버튼 사이 8).
   설정의 "계정" 묶음은 숨긴다. (Figma 메모 2175:1066 MVP 줄)
