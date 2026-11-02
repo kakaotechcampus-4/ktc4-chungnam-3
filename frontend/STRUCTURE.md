@@ -36,13 +36,21 @@ frontend/
 ├── .prettierignore           포맷하지 않는 생성물(package-lock.json, android/ 등)
 ├── .editorconfig             prettier 를 쓰지 않는 에디터용. .prettierrc 와 같은 값
 ├── .gitattributes            frontend 텍스트 파일을 LF 로 받는다
+├── android/                  커밋하지 않는다(EAS 가 prebuild 로 만든다). 공유 수신은 expo-share-intent 플러그인이
+│                             MainActivity 에 SEND(text/plain) intent-filter 를 붙여 앱을 앞으로 띄운다(흐름 메모 1). 별도 액티비티 없음
 ├── assets/
 │   ├── fonts/                Noto Sans KR 서브셋 ttf + OFL.txt
-│   └── images/providers/     로그인 제공자 공식 심볼. 공식 에셋에서 심볼 경로만 남긴 파일(직접 그리지 않는다)
+│   └── images/
+│       ├── splash-glyph.png  네이티브 스플래시 글리프(C안). viewBox 100 전체를 담은 1024px 투명 PNG("개발 빌드" 절)
+│       ├── icon.png          앱 아이콘(C안, 자두색 정사각 + 글리프 1024px). 구형 런처 · 스토어용
+│       ├── android-icon-foreground.png  적응형 아이콘 전경(108dp 캔버스, 글리프는 안전 영역 66dp). 바탕은 app.json 색
+│       ├── android-icon-monochrome.png  테마 아이콘(Android 13+). 흰 글리프, 점은 구멍
+│       ├── notification-icon.png  알림 small icon(96px 흰색 + 투명, 점은 구멍)
+│       ├── onboarding/       00a 일러스트 사진 4장(picsum 360×640 jpg 를 그대로 번들. 오프라인 첫 실행 · 실행 모션 도착 자리)
+│       ├── providers/        로그인 제공자 공식 심볼. 공식 에셋에서 심볼 경로만 남긴 파일(직접 그리지 않는다)
+│       └── *.png             그 밖은 Expo 템플릿 그대로(파비콘, 쓰지 않는 파일 포함)
 ├── scripts/
 │   └── subset-fonts.py       폰트 서브셋 생성 (원본 출처 · 범위 · 실행 방법은 파일 상단)
-│                             android/ 는 커밋하지 않는다(EAS 가 prebuild 로 만든다). 공유 수신은 expo-share-intent 플러그인이
-│                             MainActivity 에 SEND(text/plain) intent-filter 를 붙여 앱을 앞으로 띄운다(흐름 메모 1). 별도 액티비티 없음
 └── src/
     ├── app/                  앱 셸
     │   ├── App.tsx
@@ -52,6 +60,7 @@ frontend/
     │   ├── demo/             설정의 "시연 도구" 묶음(DemoToolsSection). 개발 모드 · preview 빌드에서만 App 이 등록한다
     │   ├── share/            공유 받음 처리 흐름(shareReceiver) · 시트 호스트 · 개발용 진입(devShareLink)
     │   ├── notifications/    알림을 눌러 08 열기(notificationOpener). 대기 칸 · signedIn 게이트 · navigationRef 로 push
+    │   ├── launch/           실행 모션 오버레이(LaunchSplash). 네이티브 스플래시를 이어받아 준비 동안 훑고, 준비되면 첫 화면으로 펼쳐진다
     │   └── navigation/       RootNavigator, linking, routes, navigationRef(네비게이터 밖 이동)
     │
     ├── domain/
@@ -125,6 +134,9 @@ frontend/
         │   ├── mappers/      ★ 서버 응답 -> 앱 모델 변환. 백엔드 변경 흡수 지점
         │   │   └── personalSaveMapper.ts  저장물 상세 · 목록 항목 -> SaveState
         │   └── mock/         UI 개발용 목 데이터. 화면 props 모양. 서버 계약 아님
+        ├── launch/
+        │   └── launchTarget.ts   실행 모션의 앞장이 내려앉을 자리(S2). 도착 화면이 창 좌표로 재서 보고(useLaunchTargetMeasure)하고
+        │                         App 이 읽는다. 이번 실행의 첫 보고만. 보고하는 곳: 근처 첫 카드(NearbyCard) · 00a 맨 앞 사진(PhotoStack)
         ├── demo/
         │   └── demoTools.ts      시연 도구 켜짐 여부(__DEV__ · EXPO_PUBLIC_DEMO_TOOLS) · 설정 묶음 자리(app 이 등록, 설정이 그림)
         ├── storage/
@@ -190,7 +202,16 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 ```
 
 - 진입: 저장된 세션이 있으면 바로 근처 탭, 없으면 00a 부터. 로그인 없이 쓰는 모드는 없다.
-  세션을 읽는 동안은 스플래시를 유지한다(폰트와 같은 방식). 00a 가 잠깐 비치지 않게 한다.
+  세션을 읽는 동안은 실행 모션이 화면을 덮고 있다(폰트와 같은 방식). 00a 가 잠깐 비치지 않게 한다.
+- 실행 모션(`docs/design/c-launch-motion.md`): `app/launch/LaunchSplash` 는 앱이 켜지자마자(폰트 · 세션을 기다리지 않고) 네이티브 스플래시와
+  같은 화면(자두색 + 글리프)으로 떠서, 다음 프레임에 네이티브 스플래시를 페이드 없이 숨기고 세 장을 훑는다(1200ms 주기 반복, 최소 한 바퀴).
+  폰트 · 세션이 준비되면 도착 화면(근처 탭 또는 00a)을 그 아래에 그린다(오버레이는 같은 자리라 다시 마운트되지 않는다).
+  도착 화면이 앞장이 펼쳐질 자리를 보고하면(`shared/launch/launchTarget`) 끝맺음(뾱 → 뒷장 가라앉음 → 펼치기 → 배경 걷힘, 1728ms)을 1회 재생하고 언마운트한다.
+  보고가 1000ms 안에 없으면 대상 없음으로 끝맺는다(펼치지 않고 1224ms).
+  보고하는 곳은 근처 첫 카드(`launchTarget` prop, 카드가 없으면 대상 없음)와 00a 맨 앞 사진(PhotoStack `launchTarget`, 기울기 포함)이다.
+  기울어진 사진은 재면 회전된 꼭짓점이 나오므로 기울지 않은 일러스트 틀을 재고 그릴 때와 같은 식으로 자리를 구한다.
+  재생하는 동안은 화면 전체를 덮어 아래 화면이 눌리지 않는다. 앞으로 돌아올 때는 재생하지 않는다.
+  애니메이션 줄이기가 켜져 있거나, 세션이 있고 종료 상태에서 누른 알림으로 켜졌으면(08 로 바로 간다) 200ms 크로스페이드만 한다.
 - MVP(게스트 세션) 흐름: 00a → 00c → 00d → 00e → 00f → 근처 탭. 00b 는 건너뛴다(등록하지 않는다).
   00a "시작하기"가 설치 id 로 게스트 세션을 조용히 받고 00c 로 간다. 실패하면 00a-err(버튼 위 오류 상자, 상자와 버튼 사이 8).
   설정의 "계정" 묶음은 숨긴다. (Figma 메모 2175:1066 MVP 줄)
@@ -473,7 +494,14 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 - Firebase 설정(`google-services.json`, 패키지 `com.remembrall.app`)은 공개 레포라 커밋하지 않는다(gitignore). `app.config.ts` 가 `android.googleServicesFile` 을 정한다:
   EAS file 환경 변수 `GOOGLE_SERVICES_JSON`(경로) → 없으면 `frontend/google-services.json` 이 있을 때 그 파일 → 둘 다 없으면 설정하지 않고 경고(FCM 토큰을 받지 못하는 빌드).
   환경 변수를 넣었는데 그 경로에 파일이 없으면 config 평가를 실패시킨다(FCM 없는 빌드가 조용히 나오지 않게).
-- expo-notifications 플러그인은 알림 색(`color` 브랜드 자두색 #6B4E7A)과 FCM 기본 채널(`defaultChannel` `nearby`, "인증 · 세션" 절의 알림 채널)을 정한다. small icon 은 아직 없다.
+- expo-notifications 플러그인은 알림 색(`color` 브랜드 자두색 #6B4E7A)과 FCM 기본 채널(`defaultChannel` `nearby`, "인증 · 세션" 절의 알림 채널)과
+  small icon(`icon`, `assets/images/notification-icon.png`)을 정한다. FCM 알림과 로컬 알림이 같은 아이콘을 쓴다.
+- 네이티브 스플래시(expo-splash-screen 플러그인)는 브랜드 자두색 배경(#6B4E7A) 가운데에 C안 글리프(`assets/images/splash-glyph.png`, `imageWidth` 96)를 둔다.
+  플러그인은 288dp 투명 캔버스 가운데에 이미지를 `imageWidth` dp 로 contain 배치한다. 그래서 PNG 는 글리프만 잘라내지 않고 viewBox 100×100 전체(투명 여백 포함)를 정사각으로 둔다.
+  그래야 실행 모션의 글리프 박스(96dp, 화면 정중앙)와 겹친다. PNG 는 `docs/design/c-launch-motion.md` §2.3 수치로 그렸다(일회용 스크립트, 커밋하지 않음). 수치가 바뀌면 다시 만든다.
+- 앱 아이콘(C안)도 같은 §2.3 수치로 그렸다(디자인 문서 §5.1.1). 적응형 아이콘은 바탕을 색(`adaptiveIcon.backgroundColor` #6B4E7A)으로만 두고,
+  전경은 108dp 캔버스 가운데에 viewBox 100 = 66dp(안전 영역 지름)로 글리프를 둔다. 가장 먼 모서리가 중심에서 31.25dp 라 원형 등 어떤 마스크에서도 잘리지 않는다.
+  `icon.png` 는 보이는 영역(72dp)에 해당하는 정사각 전체를 자두색으로 채우고 같은 비율(66/72)로 글리프를 둔다. 런처는 아이콘을 캐시하므로 바꾼 뒤 예전 아이콘이 보이면 앱을 지우고 다시 설치한다.
 - 키 제한: Maps SDK for Android 만, 패키지 `com.remembrall.app` + SHA-1 두 개(EAS 개발 빌드 keystore, 로컬 debug keystore).
   debug keystore SHA-1 은 모든 RN 프로젝트 공용이라 개발용 키에만 등록한다.
 - 개발 빌드 딥링크 scheme 은 `remembrall://` 이다(`app.json` 의 `scheme`). 실행 · 키 설정 절차는 README 에 둔다.
@@ -490,7 +518,8 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 - mock 은 features 의 타입을 import 하지 않는다(shared → features 금지). 구조적 타입으로 맞춘다.
 - 목 이미지 URL(picsum 고정 id)은 이 폴더 안에만 둔다.
 - 목 모드에서 세션과 로그인은 목 플래그다. `MOCK_SCENARIO.signedIn`(시작 시 세션 여부, 기본 false(개발 중에 팀원이 바꿈). true 면 근처 탭부터) · `loginResult`(success · cancelled · failed).
-  온보딩 일러스트 사진은 목 이미지다(`mock/onboarding.ts`). 첫 실행은 오프라인일 수 있어 나중에 번들 이미지로 바꾼다.
+  온보딩 일러스트 사진은 목 이미지다(`mock/onboarding.ts`). 00a 4장은 첫 실행이 오프라인일 수 있고 실행 모션이 맨 앞 사진에 내려앉으므로
+  같은 picsum 사진을 번들했다(`assets/images/onboarding/`, Thumb `image` prop). 00b · 00c 는 아직 원격 목 이미지다.
 - 지도(10 · 08)의 현재 위치와 denied 분기는 목 플래그(`MOCK_SCENARIO.locationPermission`)와 목 좌표(`mapViewMock`)다.
   설정(11)과 지오펜스는 실제 권한 · 위치를 쓴다.
 - 위치기반서비스 동의는 목 모드에서 목 플래그다. `MOCK_SCENARIO.locationConsent`(시작 시 동의 상태, never · agreed · withdrawn, 기본 never) · `consentSaveResult`(동의 저장 결과, ok · fail, 기본 ok) ·

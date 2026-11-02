@@ -267,6 +267,24 @@ export const metrics = {
             ],
         },
     },
+    // 실행 모션 docs/design/c-launch-motion.md §2.3 · §3. 글리프 요소 · liftY · sink.y 는 viewBox 100 기준이라 glyphSize / viewBox 를 곱해 쓴다.
+    // glyphSize 는 네이티브 스플래시(app.json imageWidth · splash-glyph.png)와 같아야 한다. 점은 앞장 기준 비율 위치.
+    // bump 는 훑기에서 들릴 때의 배율, sink 는 끝맺음에서 뒷장이 가라앉는 거리 · 배율, ring 은 앞장 "뾱"의 테두리 링(두께 dp).
+    // targetWaitMs 는 준비된 뒤 도착 자리 보고를 기다리는 최대 시간(§6).
+    launch: {
+        glyphSize: 96,
+        viewBox: 100,
+        backPlates: [
+            { x: 12, y: 52, size: 30, radius: 6.6, opacity: 0.22, bump: 1.08 },
+            { x: 27, y: 34, size: 34, radius: 7.5, opacity: 0.48, bump: 1.08 },
+        ],
+        frontPlate: { x: 46, y: 14, size: 40, radius: 8.8, bump: 1.06 },
+        dot: { x: 0.7, y: 0.3, radius: 5 },
+        liftY: -3,
+        sink: { y: 14, scale: 0.8 },
+        ring: { width: 1.5, opacity: 0.7, scaleFrom: 0.9 },
+        targetWaitMs: 1000,
+    },
     // 03 분석 중 스켈레톤 2061:831.
     skeleton: {
         padding: 16,

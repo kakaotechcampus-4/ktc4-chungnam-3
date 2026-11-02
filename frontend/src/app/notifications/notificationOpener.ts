@@ -20,6 +20,11 @@ export function openFromNotification(notificationId: string): void {
     flushPendingNotification();
 }
 
+// 실행 모션(App)이 읽는다. 종료 상태에서 누른 알림으로 켜져 08 을 열 참인지. onReady 에서 비우기 전에 읽어야 한다.
+export function hasPendingNotification(): boolean {
+    return pending != null;
+}
+
 export function flushPendingNotification(): void {
     if (pending == null) return;
     if (getAuthState().status !== "signedIn" || !navigationRef.isReady()) {
