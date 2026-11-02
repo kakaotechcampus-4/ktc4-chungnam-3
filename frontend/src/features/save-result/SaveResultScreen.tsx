@@ -1,21 +1,29 @@
 // 저장 결과 모달. 분석 중(03) / 확인 필요(02 · 02b) / 장소 없음(04) / 실패(05) 상태별로 렌더한다.
-// 저장물 상세 API 를 읽는다(usePersonalSaveDetail). 분석 중이면 5초마다 다시 읽고, 끝나면 그 상태로 바뀐다.
+// 저장물 상세 API 를 읽는다(usePersonalSaveDetail). 분석 중이면 5초마다 다시 읽고, 끝나면 그 상태로 바뀐다(03 → 02 도 이 길이다).
 // ready 가 되면 이 모달을 장소 상세(08)로 바꾼다(뒤로 가면 기억 탭). 404 는 12, 읽기 실패는 Figma 05 문구 + 다시 읽기.
 // 05 문구와 "다시 시도"는 실패 종류로 가른다(failedMessage). 다시 시도는 같은 링크를 다시 저장하고 상세를 다시 읽는다.
+// 02 · 02b(ConfirmResult): 상세의 답하지 않은 되묻기 후보를 하나씩 보이고 confirmPlace 로 답한다(confirmView).
+// 다 답하면 상세를 다시 읽고, 장소가 생겼으면 고른 선택지에 가장 가까운 장소로 08 을 연다. "직접 찾을게요" 행은 숨긴다(02c 실제 저장 전).
 // 개발 모드에서 personalSaveId 가 화면 목(saveResults) 키면 그 목을 그린다(개발용 딥링크 · 02 · 02b). 이때 버튼은 목 동작이다.
-// "직접 찾을게요" · "장소 직접 붙이기" 는 02c 로 간다. 저장 · 보관 · 나중에 계열 버튼은 모두 모달을 닫는다.
+// "직접 찾을게요"(화면 목) · "장소 직접 붙이기" 는 02c 로 간다. 저장 · 보관 · 나중에 계열 버튼은 모두 모달을 닫는다.
 import {
     type RouteProp,
     StackActions,
     useNavigation,
     useRoute,
 } from "@react-navigation/native";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { ApiError } from "../../shared/api/client";
 import { saveResultsMock } from "../../shared/api/mock";
-import { savePersonalSave } from "../../shared/api/personalSaves";
+import {
+    type ConfirmCandidateResponse,
+    confirmPlace,
+    type PersonalSaveDetailResponse,
+    savePersonalSave,
+} from "../../shared/api/personalSaves";
 import { usePersonalSaveDetail } from "../../shared/api/usePersonalSaveDetail";
 import {
     youtubeShortsUrl,
@@ -38,6 +46,12 @@ import PlaceOption from "./components/PlaceOption";
 import SourceHeader, {
     type SourceHeaderProps,
 } from "./components/SourceHeader";
+import {
+    type ConfirmOptionView,
+    pendingCandidate,
+    placeIdFor,
+    toOptionViews,
+} from "./confirmView";
 import { failedMessage } from "./failedMessage";
 import { withRo } from "./particle";
 
@@ -116,16 +130,23 @@ function SavedResult({ personalSaveId }: { personalSaveId: string }) {
     });
     const [retrying, setRetrying] = useState(false);
     const ready = view.status === "loaded" && view.state.kind === "ready";
+    // 02 · 02b 에서 마지막으로 고른 선택지. 다 답한 뒤 08 이 그 장소를 연다.
+    const chosen = useRef<ConfirmOptionView | undefined>(undefined);
+    const readyPlaceId =
+        ready && chosen.current != null
+            ? placeIdFor(view.detail, chosen.current)
+            : undefined;
 
     // 분석이 끝나 장소가 있으면 모달을 08 로 바꾼다. 뒤로 가면 모달 아래의 기억 탭이다.
     useEffect(() => {
         if (!ready) return;
-        navigation
-            .getParent()
-            ?.dispatch(
-                StackActions.replace("ContentDetail", { personalSaveId }),
-            );
-    }, [ready, navigation, personalSaveId]);
+        navigation.getParent()?.dispatch(
+            StackActions.replace("ContentDetail", {
+                personalSaveId,
+                ...(readyPlaceId != null && { placeId: readyPlaceId }),
+            }),
+        );
+    }, [ready, readyPlaceId, navigation, personalSaveId]);
 
     const close = () => navigation.goBack();
 
@@ -150,7 +171,6 @@ function SavedResult({ personalSaveId }: { personalSaveId: string }) {
         title: detail.title ?? undefined,
         url: youtubeShortsUrl(detail.videoId).replace(SHORTS_URL_PREFIX, ""),
     };
-    // 02 · 02b 는 상세 응답에 없어 이 경로에서는 나오지 않는다(되묻기 연결 전).
     const openSearch = () =>
         navigation.navigate("SaveResult", {
             screen: "PlaceSearch",
@@ -187,6 +207,20 @@ function SavedResult({ personalSaveId }: { personalSaveId: string }) {
             </ResultFrame>
         );
     }
+    if (state.kind === "needsConfirmation") {
+        return (
+            <ConfirmResult
+                personalSaveId={personalSaveId}
+                detail={detail}
+                source={source}
+                reload={reload}
+                onClose={close}
+                onChosen={(option) => {
+                    chosen.current = option;
+                }}
+            />
+        );
+    }
     if (state.kind === "noPlace") {
         return (
             <ResultFrame
@@ -214,6 +248,153 @@ function SavedResult({ personalSaveId }: { personalSaveId: string }) {
             }
         >
             <Message heading={message.heading} body={message.body} />
+        </ResultFrame>
+    );
+}
+
+// 02 · 02b. 답하지 않은 후보를 하나씩 보인다. 답한 후보는 화면 안에 기억해 두고(다시 읽기 전에도 다음 후보로) 마지막 뒤에만 다시 읽는다.
+// 404 면 상세를 다시 읽고(후보가 이미 처리됐을 수 있음), 같은 후보가 남아 있으면 실패 문구를 보인다
+// (서버는 고른 장소를 카카오에서 확인하지 못해도 404 다).
+function ConfirmResult({
+    personalSaveId,
+    detail,
+    source,
+    reload,
+    onClose,
+    onChosen,
+}: {
+    personalSaveId: string;
+    detail: PersonalSaveDetailResponse;
+    source: Source;
+    reload: () => void;
+    onClose: () => void;
+    onChosen: (option: ConfirmOptionView) => void;
+}) {
+    const [answered, setAnswered] = useState<ReadonlySet<string>>(
+        () => new Set(),
+    );
+    const [failedFor, setFailedFor] = useState<string>();
+    const candidate = pendingCandidate(detail, answered);
+    // 마지막 후보에 답하고 다시 읽는 동안.
+    if (candidate == null) return <ResultFrame onClose={onClose} />;
+
+    const answer = (option: ConfirmOptionView) => {
+        onChosen(option);
+        const next = new Set(answered).add(candidate.candidateId);
+        setAnswered(next);
+        setFailedFor(undefined);
+        if (pendingCandidate(detail, next) == null) reload();
+    };
+    return (
+        <ConfirmCandidate
+            key={candidate.candidateId}
+            personalSaveId={personalSaveId}
+            candidate={candidate}
+            source={source}
+            failed={failedFor === candidate.candidateId}
+            onClose={onClose}
+            onAnswered={answer}
+            onFailed={(notFound) => {
+                setFailedFor(candidate.candidateId);
+                if (notFound) reload();
+            }}
+        />
+    );
+}
+
+// 후보 하나. 처음에는 첫 선택지가 골라져 있다. 저장하는 동안 Primary 문구는 "저장하고 있어요"이고 두 버튼을 막는다
+// (위치 정보 이용 동의 시트와 같은 모양). 실패 문구는 버튼 위(동의 시트 · ModalSheetActions 와 같은 스타일).
+function ConfirmCandidate({
+    personalSaveId,
+    candidate,
+    source,
+    failed,
+    onClose,
+    onAnswered,
+    onFailed,
+}: {
+    personalSaveId: string;
+    candidate: ConfirmCandidateResponse;
+    source: Source;
+    failed: boolean;
+    onClose: () => void;
+    onAnswered: (option: ConfirmOptionView) => void;
+    onFailed: (notFound: boolean) => void;
+}) {
+    const options = toOptionViews(candidate);
+    const [selectedId, setSelectedId] = useState(options[0]?.id);
+    const [saving, setSaving] = useState(false);
+    const pending = useRef(false);
+    const selected =
+        options.find((option) => option.id === selectedId) ?? options[0];
+    const copy = confirmCopy(options.length);
+
+    const save = async () => {
+        if (pending.current || selected == null) return;
+        pending.current = true;
+        setSaving(true);
+        try {
+            await confirmPlace(
+                personalSaveId,
+                candidate.candidateId,
+                selected.id,
+            );
+        } catch (error) {
+            pending.current = false;
+            setSaving(false);
+            onFailed(error instanceof ApiError && error.status === 404);
+            return;
+        }
+        // 답하면 부모가 다음 후보로 바꾸며 이 화면을 내린다.
+        onAnswered(selected);
+    };
+
+    return (
+        <ResultFrame
+            onClose={onClose}
+            source={{ ...source, status: BADGE.needsConfirmation }}
+            actions={
+                selected && (
+                    <View>
+                        {failed && !saving && (
+                            <Text style={styles.error}>
+                                저장하지 못했어요. 다시 눌러 주세요.
+                            </Text>
+                        )}
+                        <View style={styles.buttons}>
+                            <Button
+                                kind="primary"
+                                label={
+                                    saving
+                                        ? "저장하고 있어요"
+                                        : `${withRo(selected.name)} 저장`
+                                }
+                                disabled={saving}
+                                onPress={save}
+                            />
+                            <Button
+                                kind="text"
+                                label={copy.later}
+                                disabled={saving}
+                                onPress={onClose}
+                            />
+                        </View>
+                    </View>
+                )
+            }
+        >
+            <Message heading={copy.heading} body={copy.body} />
+            <View style={styles.options} accessibilityRole="radiogroup">
+                {options.map((option) => (
+                    <PlaceOption
+                        key={option.id}
+                        name={option.name}
+                        address={option.address}
+                        selected={option.id === selected?.id}
+                        onPress={() => setSelectedId(option.id)}
+                    />
+                ))}
+            </View>
         </ResultFrame>
     );
 }
@@ -481,6 +662,15 @@ const styles = StyleSheet.create({
     directLabel: {
         ...typography.labelButton,
         color: colors.text.onSubtle,
+    },
+    // 동의 시트(ModalSheetActions)의 오류 문구 · 버튼 묶음과 같다.
+    error: {
+        ...typography.captionMeta,
+        color: colors.status.dangerFg,
+        paddingBottom: spacing.sm,
+    },
+    buttons: {
+        gap: spacing.xs,
     },
     spacer: {
         flex: 1,

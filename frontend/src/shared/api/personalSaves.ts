@@ -1,4 +1,5 @@
-// 저장물 API. POST · GET /api/personal-saves, GET /api/personal-saves/places, GET · DELETE /api/personal-saves/{personalSaveId}.
+// 저장물 API. POST · GET /api/personal-saves, GET /api/personal-saves/places, GET · DELETE /api/personal-saves/{personalSaveId},
+// POST /api/personal-saves/{personalSaveId}/places/{candidateId}/confirm(되묻기 답변).
 // 응답은 백엔드 PersonalSaveResponse 그대로. 실패는 클라이언트의 ApiError 를 그대로 던진다.
 // 저장은 새로 저장하면 201, 이미 저장한 영상이면 200 이고 본문은 같다. 링크에서 영상 id 를 못 뽑으면 400 INVALID_REQUEST.
 // 분석은 서버에서 비동기로 진행된다. 결과는 상세 · 목록을 다시 읽어 확인한다(완료 통지 없음).
@@ -6,6 +7,7 @@
 import { request, requestWithStatus } from "./client";
 import { isApiConfigured } from "./config";
 import {
+    mockConfirmPlace,
     mockDeletePersonalSave,
     mockFetchPersonalSave,
     mockFetchPersonalSaves,
@@ -66,8 +68,30 @@ export type PersonalSavePlaceResponse = {
     description: string | null;
 };
 
-// sourceUrl 은 항상 watch 형식(https://www.youtube.com/watch?v=…). 장소가 없으면 places 는 빈 배열.
-// analysisFailureCode 는 PARTIAL · FAILED 일 때만 채워진다.
+// 되묻기 후보의 선택지. candidateId 는 답할 때 selectedOptionId 로 보낸다.
+// name 은 영상에서 뽑은 이름이라 선택지끼리 같을 수 있다(주소만 다름). branchName · address 는 경로에 따라 비어 있다.
+// address 는 출처마다 형식이 다르다(LocationIQ 는 "이름, 도로, 동, 구, 시, 우편번호, 대한민국").
+export type ConfirmOptionResponse = {
+    candidateId: string;
+    name: string | null;
+    branchName: string | null;
+    address: string | null;
+    lat: number;
+    lng: number;
+    geocodingProvider: string;
+    geocodingPlaceId: string | null;
+    verificationPlaceId: string | null;
+};
+
+// 답하지 않은(PENDING) 되묻기 후보. candidateId 는 답변 경로의 {candidateId}. question 은 화면이 쓰지 않는다(고정 문구).
+export type ConfirmCandidateResponse = {
+    candidateId: string;
+    question: string | null;
+    options: ConfirmOptionResponse[];
+};
+
+// sourceUrl 은 항상 watch 형식(https://www.youtube.com/watch?v=…). 장소 · 되묻기 후보가 없으면 각각 빈 배열.
+// analysisFailureCode 는 PARTIAL · FAILED 일 때만 채워진다. confirmCandidates 는 답하지 않은 후보만 온다.
 export type PersonalSaveDetailResponse = {
     personalSaveId: string;
     contentId: string;
@@ -80,6 +104,7 @@ export type PersonalSaveDetailResponse = {
     analysisFailureCode: AnalysisFailureCode | null;
     savedAt: string;
     places: PersonalSavePlaceResponse[];
+    confirmCandidates: ConfirmCandidateResponse[];
 };
 
 // 내 장소 목록 항목. 장소와 저장물 한 쌍마다 한 항목이라 같은 placeId 가 여러 번 올 수 있다.
@@ -131,6 +156,22 @@ export function fetchPersonalSaves(
 export function fetchSavedPlaces(): Promise<SavedPlacePinResponse[]> {
     if (!isApiConfigured) return mockFetchSavedPlaces();
     return request<SavedPlacePinResponse[]>("/api/personal-saves/places");
+}
+
+// 되묻기 후보에 답한다. 204. 서버가 고른 선택지를 카카오로 확인한 뒤 장소를 붙이고 후보를 닫는다.
+// 404: 내 저장물이 아니거나 후보가 이미 처리됐거나 고른 장소를 카카오에서 확인하지 못함. 400: 그 후보의 선택지가 아님. 502: 카카오 호출 실패.
+export function confirmPlace(
+    personalSaveId: string,
+    candidateId: string,
+    selectedOptionId: string,
+): Promise<void> {
+    if (!isApiConfigured) {
+        return mockConfirmPlace(personalSaveId, candidateId, selectedOptionId);
+    }
+    return request<void>(
+        `/api/personal-saves/${encodeURIComponent(personalSaveId)}/places/${encodeURIComponent(candidateId)}/confirm`,
+        { method: "POST", body: { selectedOptionId } },
+    );
 }
 
 export function deletePersonalSave(personalSaveId: string): Promise<void> {

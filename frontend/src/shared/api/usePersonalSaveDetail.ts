@@ -7,11 +7,9 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useRef, useState } from "react";
 import { AppState } from "react-native";
 
+import type { SaveState } from "../../domain/saveState";
 import { ApiError } from "./client";
-import {
-    type DetailSaveState,
-    toSaveState,
-} from "./mappers/personalSaveMapper";
+import { toSaveState } from "./mappers/personalSaveMapper";
 import {
     fetchPersonalSave,
     type PersonalSaveDetailResponse,
@@ -26,7 +24,7 @@ export type PersonalSaveDetailView =
     | {
           status: "loaded";
           detail: PersonalSaveDetailResponse;
-          state: DetailSaveState;
+          state: SaveState;
       };
 
 export function usePersonalSaveDetail(

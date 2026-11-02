@@ -18,6 +18,9 @@ export type MockLocationEventResult = "ok" | "networkError" | "timeout";
 // failed 는 다시 저장하면 다시 분석되는 실패(EXTRACTION_API_ERROR), videoUnavailable(VIDEO_UNAVAILABLE) ·
 // analysisError(EXTRACTION_RESULT_ERROR) 는 다시 분석되지 않는다.
 export type MockSaveResult = "ok" | "networkError" | "invalid";
+// 되묻기 답변(POST …/confirm) 결과. notFound: 404(서버에서는 후보가 이미 처리됐거나 고른 장소를 카카오에서 확인하지 못함).
+// networkError: 응답 없음(ApiError status null).
+export type MockConfirmResult = "ok" | "notFound" | "networkError";
 export type MockAnalysisResult =
     | "success"
     | "noPlace"
@@ -31,7 +34,7 @@ export const MOCK_SCENARIO: {
     loginResult: MockLoginResult;
     // true 면 목 지금 위치를 봉명동(nearbyMock.empty)으로 옮긴다. 저장 장소가 모두 1km 밖이라 근처가 06(빈 상태)이 된다.
     nearbyEmpty: boolean;
-    // 저장물 목(personalSavesMock)의 시작 상태. true 면 빈 저장소(07b), false 면 샘플 8개.
+    // 저장물 목(personalSavesMock)의 시작 상태. true 면 빈 저장소(07b), false 면 샘플 10개.
     archiveEmpty: boolean;
     locationPermission: MockLocationPermission;
     // true 면 목 썸네일 URL 을 깨뜨려 로드 실패(bg/placeholder) 를 본다.
@@ -42,6 +45,7 @@ export const MOCK_SCENARIO: {
     locationEventResult: MockLocationEventResult;
     saveResult: MockSaveResult;
     analysisResult: MockAnalysisResult;
+    confirmResult: MockConfirmResult;
 } = {
     signedIn: false, // 현재는 개발 과정이므로 false로 두었음. 설계 문서에는 true가 기본 값이라고 명시해두었음.
     loginResult: "success",
@@ -55,4 +59,5 @@ export const MOCK_SCENARIO: {
     locationEventResult: "ok",
     saveResult: "ok",
     analysisResult: "success",
+    confirmResult: "ok",
 };

@@ -1,13 +1,16 @@
 // 저장물 API 의 목. 서버 계약 모양이라 화면 props 모양인 mock/ 폴더가 아니라 API 모듈 옆에 둔다(consents.ts 의 목과 같은 자리).
 // 서버(PersonalSaveService · ContentRepository)와 같은 규칙을 따른다. 이번 실행 동안 메모리에 남는다.
-// 시작 상태: MOCK_SCENARIO.archiveEmpty 면 빈 저장소, 아니면 샘플 8개(seedSaves). 공유로 저장한 것도 같은 저장소에 쌓인다.
-// 저장 결과는 MOCK_SCENARIO.saveResult, 분석 결과는 analysisResult 로 바꾼다.
+// 시작 상태: MOCK_SCENARIO.archiveEmpty 면 빈 저장소, 아니면 샘플 10개(seedSaves). 공유로 저장한 것도 같은 저장소에 쌓인다.
+// 저장 결과는 MOCK_SCENARIO.saveResult, 분석 결과는 analysisResult, 되묻기 답변 결과는 confirmResult 로 바꾼다.
+// 되묻기 후보는 답하지 않은 것만 저장물에 두고(서버 PENDING), 답하면 고른 선택지로 장소를 붙이고 후보를 지운다.
 // 새로 저장하면 ANALYZING 이고, 분석을 시작하고 ANALYSIS_MS 가 지난 뒤 상세 · 목록을 읽으면 그때의 analysisResult 로 끝난다.
 import { ApiError } from "./client";
 import { MOCK_SCENARIO } from "./mock";
 import type {
     AnalysisFailureCode,
     AnalysisStatus,
+    ConfirmCandidateResponse,
+    ConfirmOptionResponse,
     PersonalSaveDetailResponse,
     PersonalSaveItemResponse,
     PersonalSavePageResponse,
@@ -35,6 +38,7 @@ type MockSave = {
     summary: string | null;
     category: string | null;
     places: PersonalSavePlaceResponse[];
+    confirmCandidates: ConfirmCandidateResponse[];
 };
 
 const saves: MockSave[] = MOCK_SCENARIO.archiveEmpty ? [] : seedSaves();
@@ -78,6 +82,7 @@ export async function mockSavePersonalSave(
         summary: null,
         category: null,
         places: [],
+        confirmCandidates: [],
     };
     saves.push(save);
     return { save: toResponse(save), created: true };
@@ -103,6 +108,10 @@ export async function mockFetchPersonalSave(
             : null,
         savedAt: save.savedAt,
         places: save.places.map((place) => ({ ...place })),
+        confirmCandidates: save.confirmCandidates.map((candidate) => ({
+            ...candidate,
+            options: candidate.options.map((option) => ({ ...option })),
+        })),
     };
 }
 
@@ -151,6 +160,46 @@ export async function mockFetchSavedPlaces(): Promise<SavedPlacePinResponse[]> {
             }),
         );
     });
+}
+
+// 서버(ConfirmAnswerService)와 같은 규칙. 내 저장물이 아니거나 후보가 없으면(이미 답함) 404, 그 후보의 선택지가 아니면 400.
+// 성공하면 고른 선택지로 장소를 붙이고(좌표 · 이름 · 주소 그대로) 후보를 지운다. 카카오 확인은 흉내 내지 않는다.
+// MOCK_SCENARIO.confirmResult: notFound 면 404(후보는 그대로 남는다, 서버의 카카오 확인 실패와 같은 모양), networkError 면 응답 없음.
+export async function mockConfirmPlace(
+    personalSaveId: string,
+    candidateId: string,
+    selectedOptionId: string,
+): Promise<void> {
+    await mockDelay();
+    if (MOCK_SCENARIO.confirmResult === "networkError") {
+        throw new ApiError(
+            null,
+            "NETWORK_ERROR",
+            "서버에 연결하지 못했습니다.",
+        );
+    }
+    const save = findSave(personalSaveId);
+    const candidate = save.confirmCandidates.find(
+        (item) => item.candidateId === candidateId,
+    );
+    if (candidate == null || MOCK_SCENARIO.confirmResult === "notFound") {
+        throw notFound();
+    }
+    const option = candidate.options.find(
+        (item) => item.candidateId === selectedOptionId,
+    );
+    if (option == null) throw invalidRequest();
+    save.places.push({
+        placeId: mockUuid(),
+        name: option.name ?? "",
+        address: option.address,
+        latitude: option.lat,
+        longitude: option.lng,
+        description: null,
+    });
+    save.confirmCandidates = save.confirmCandidates.filter(
+        (item) => item !== candidate,
+    );
 }
 
 export async function mockDeletePersonalSave(
@@ -221,11 +270,13 @@ function invalidRequest(): ApiError {
     return new ApiError(400, "INVALID_REQUEST", "요청 값이 올바르지 않습니다.");
 }
 
+function notFound(): ApiError {
+    return new ApiError(404, "NOT_FOUND", "요청한 경로를 찾을 수 없습니다.");
+}
+
 function findSave(personalSaveId: string): MockSave {
     const save = saves.find((item) => item.personalSaveId === personalSaveId);
-    if (save == null) {
-        throw new ApiError(404, "NOT_FOUND", "요청한 경로를 찾을 수 없습니다.");
-    }
+    if (save == null) throw notFound();
     return save;
 }
 
@@ -283,6 +334,7 @@ function mockPlaces(): PersonalSavePlaceResponse[] {
 
 // 기억 탭 · 지도 · 근처 샘플. 저장 시각을 오늘 · 2주 전 · 3주 전 · 2달 전 · 5달 전으로 나눠 바램 세 단계가 보이게 한다.
 // 장소는 지도 목(mock/mapView)과 같은 대전 7곳 · 좌표다. 성심당 본점은 두 저장물에 있다(장소 목록에 두 항목, 가장 최근은 오늘).
+// 되묻기(확인 필요) 샘플 둘: 선택지 2곳(02, 같은 이름 · LocationIQ 형식 주소만 다름)과 선택지 1곳(02b, 도로명 주소). 답하기 전에는 장소가 없다.
 // 영상 id 는 가짜(i.ytimg.com 404)라 썸네일은 자리표시다. 같은 id 를 공유하면 이미 저장한 영상이 된다.
 // 분석 중 샘플은 앱을 켜고 ANALYSIS_MS 뒤에 analysisResult 로 끝난다.
 function seedSaves(): MockSave[] {
@@ -303,6 +355,7 @@ function seedSaves(): MockSave[] {
         analysisFailureCode: AnalysisFailureCode | null,
         title: string | null,
         places: PersonalSavePlaceResponse[],
+        confirmCandidates: ConfirmCandidateResponse[] = [],
     ): MockSave => ({
         personalSaveId: mockUuid(),
         contentId: mockUuid(),
@@ -315,6 +368,33 @@ function seedSaves(): MockSave[] {
         summary: title == null ? null : `${title} 영상이에요.`,
         category: title == null ? null : "여행",
         places,
+        confirmCandidates,
+    });
+    // 서버처럼 선택지 id 는 "{후보 id}-{순번}" 이다.
+    const candidate = (
+        options: Omit<ConfirmOptionResponse, "candidateId">[],
+    ): ConfirmCandidateResponse => ({
+        candidateId: "p1",
+        question: "어느 장소가 맞을까요?",
+        options: options.map((option, index) => ({
+            ...option,
+            candidateId: `p1-${index + 1}`,
+        })),
+    });
+    const option = (
+        name: string,
+        address: string,
+        lat: number,
+        lng: number,
+    ): Omit<ConfirmOptionResponse, "candidateId"> => ({
+        name,
+        branchName: null,
+        address,
+        lat,
+        lng,
+        geocodingProvider: "LOCATIONIQ",
+        geocodingPlaceId: mockUuid(),
+        verificationPlaceId: null,
     });
     const place = (
         name: string,
@@ -352,6 +432,48 @@ function seedSaves(): MockSave[] {
             "EXTRACTION_API_ERROR",
             null,
             [],
+        ),
+        seed(
+            "mockSave009",
+            daysAgo(3),
+            "SUCCESS",
+            null,
+            "대전역 앞 칼국수 한 그릇",
+            [],
+            [
+                candidate([
+                    option(
+                        "역전칼국수",
+                        "역전칼국수, 중앙로, 정동, 동구, 대전, 34573, 대한민국",
+                        36.3318,
+                        127.4335,
+                    ),
+                    option(
+                        "역전칼국수",
+                        "역전칼국수, 둔산로, 둔산동, 서구, 대전, 35233, 대한민국",
+                        36.3515,
+                        127.378,
+                    ),
+                ]),
+            ],
+        ),
+        seed(
+            "mockSave010",
+            daysAgo(5),
+            "SUCCESS",
+            null,
+            "유성 온천 족욕 산책",
+            [],
+            [
+                candidate([
+                    option(
+                        "유성온천 족욕체험장",
+                        "대전 유성구 봉명동 574",
+                        36.3553,
+                        127.3443,
+                    ),
+                ]),
+            ],
         ),
         seed("mockSave004", daysAgo(14), "SUCCESS", null, "대흥동 골목 산책", [
             place("오후 네시", "대전 중구 대흥동", 36.3244, 127.4246),
@@ -424,8 +546,7 @@ function toItem(save: MockSave): PersonalSaveItemResponse {
             : null,
         placeCount: save.places.length,
         representativePlaceName: representativePlace(save)?.name ?? null,
-        // 목에는 되묻기 후보가 없다.
-        pendingConfirmCount: 0,
+        pendingConfirmCount: save.confirmCandidates.length,
         savedAt: save.savedAt,
     };
 }

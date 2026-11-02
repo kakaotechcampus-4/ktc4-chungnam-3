@@ -125,6 +125,8 @@ Expo Go 에서는:
 
 `save-result/<키>` 는 개발 모드(`__DEV__`)에서만 화면 목(`saveResults`)을 그린다. 키가 목에 없으면 저장물 상세 API 를 읽는다.
 실제 저장물은 `save-result/<personalSaveId>` 로 열린다(분석 중이면 03, 끝나면 그 상태 · 장소가 있으면 08 로 바뀐다).
+실제 되묻기(02 · 02b)는 목 모드 기억 탭의 "확인 필요" 셀 두 개("대전역 앞 칼국수 한 그릇" · "유성 온천 족욕 산책")를 눌러 본다.
+저장 실패 · 404 는 `MOCK_SCENARIO.confirmResult` 를 networkError · notFound 로 바꿔 본다.
 목 모드의 personalSaveId 는 실행마다 새로 만들어져서, 저장물 화면은 기억 탭에서 눌러 여는 것이 쉽다.
 `detail/<placeId>` 는 지도 · 근처와 같은 장소 목이다.
 `notification/<notificationId>` 는 알림을 누른 것처럼 08 을 연다(알림 상세를 읽고 그 장소의 저장물 08 로 바뀐다).

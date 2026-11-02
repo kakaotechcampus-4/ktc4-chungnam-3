@@ -2,6 +2,7 @@
 export {
     MOCK_SCENARIO,
     type MockAnalysisResult,
+    type MockConfirmResult,
     type MockConsentSaveResult,
     type MockLocationEventResult,
     type MockLocationConsent,
