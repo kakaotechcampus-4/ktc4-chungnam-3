@@ -1,4 +1,4 @@
-// 실행 모션(app/launch/LaunchSplash)의 앞장이 내려앉을 자리. docs/design/c-launch-motion.md §3.3 의 S2.
+// 실행 모션(app/launch/LaunchSplash)의 앞장이 내려앉을 자리. docs/design/c-launch-motion.md §3.5 의 S2.
 // 도착 화면(근처 첫 카드 · 00a 맨 앞 사진)이 창 좌표로 재서 보고하고, App 이 읽어 LaunchSplash 에 넘긴다.
 // undefined: 아직 보고 전, null: 도착 대상 없음(빈 근처 등). 이번 실행의 첫 보고만 받고, 모션이 끝나면 더 받지 않는다.
 import { useRef, useSyncExternalStore } from "react";

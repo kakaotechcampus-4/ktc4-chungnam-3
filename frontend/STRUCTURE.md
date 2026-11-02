@@ -60,7 +60,7 @@ frontend/
     │   ├── demo/             설정의 "시연 도구" 묶음(DemoToolsSection). 개발 모드 · preview 빌드에서만 App 이 등록한다
     │   ├── share/            공유 받음 처리 흐름(shareReceiver) · 시트 호스트 · 개발용 진입(devShareLink)
     │   ├── notifications/    알림을 눌러 08 열기(notificationOpener). 대기 칸 · signedIn 게이트 · navigationRef 로 push
-    │   ├── launch/           실행 모션 오버레이(LaunchSplash). 네이티브 스플래시를 이어받아 3000ms 1회 재생하고 숨긴다
+    │   ├── launch/           실행 모션 오버레이(LaunchSplash). 네이티브 스플래시를 이어받아 준비 동안 훑고, 준비되면 첫 화면으로 펼쳐진다
     │   └── navigation/       RootNavigator, linking, routes, navigationRef(네비게이터 밖 이동)
     │
     ├── domain/
@@ -202,10 +202,12 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 ```
 
 - 진입: 저장된 세션이 있으면 바로 근처 탭, 없으면 00a 부터. 로그인 없이 쓰는 모드는 없다.
-  세션을 읽는 동안은 스플래시를 유지한다(폰트와 같은 방식). 00a 가 잠깐 비치지 않게 한다.
-- 실행 모션(`docs/design/c-launch-motion.md`): 폰트 · 세션이 준비되면 도착 화면(근처 탭 또는 00a)을 그리고, 그 위에 `app/launch/LaunchSplash` 를 덮는다.
-  LaunchSplash 는 네이티브 스플래시와 같은 화면(자두색 + 글리프)으로 시작해, 도착 화면이 앞장이 내려앉을 자리를 보고하면(`shared/launch/launchTarget`)
-  다음 프레임에 네이티브 스플래시를 숨기고 3000ms 모션을 1회 재생한 뒤 언마운트한다. 보고가 1000ms 안에 없으면 대상 없음으로 시작한다.
+  세션을 읽는 동안은 실행 모션이 화면을 덮고 있다(폰트와 같은 방식). 00a 가 잠깐 비치지 않게 한다.
+- 실행 모션(`docs/design/c-launch-motion.md`): `app/launch/LaunchSplash` 는 앱이 켜지자마자(폰트 · 세션을 기다리지 않고) 네이티브 스플래시와
+  같은 화면(자두색 + 글리프)으로 떠서, 다음 프레임에 네이티브 스플래시를 페이드 없이 숨기고 세 장을 훑는다(1200ms 주기 반복, 최소 한 바퀴).
+  폰트 · 세션이 준비되면 도착 화면(근처 탭 또는 00a)을 그 아래에 그린다(오버레이는 같은 자리라 다시 마운트되지 않는다).
+  도착 화면이 앞장이 펼쳐질 자리를 보고하면(`shared/launch/launchTarget`) 끝맺음(뾱 → 뒷장 가라앉음 → 펼치기 → 배경 걷힘, 1728ms)을 1회 재생하고 언마운트한다.
+  보고가 1000ms 안에 없으면 대상 없음으로 끝맺는다(펼치지 않고 1224ms).
   보고하는 곳은 근처 첫 카드(`launchTarget` prop, 카드가 없으면 대상 없음)와 00a 맨 앞 사진(PhotoStack `launchTarget`, 기울기 포함)이다.
   기울어진 사진은 재면 회전된 꼭짓점이 나오므로 기울지 않은 일러스트 틀을 재고 그릴 때와 같은 식으로 자리를 구한다.
   재생하는 동안은 화면 전체를 덮어 아래 화면이 눌리지 않는다. 앞으로 돌아올 때는 재생하지 않는다.

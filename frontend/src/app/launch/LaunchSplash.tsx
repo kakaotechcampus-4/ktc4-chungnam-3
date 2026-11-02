@@ -1,6 +1,7 @@
 // 실행 모션 오버레이. docs/design/c-launch-motion.md §3 · §5.
-// 네이티브 스플래시(자두색 + 글리프 완성 상태)와 같은 화면으로 시작해, 네이티브 스플래시를 숨기고 그 위에서 3000ms 1회 재생한다.
-// 도착 화면은 이 아래에 이미 그려져 있다. 분기(세션 유무)는 모르고 앞장이 내려앉을 자리(target)만 받는다.
+// 네이티브 스플래시(자두색 + 글리프 완성 상태)와 같은 화면으로 시작해 첫 프레임에 네이티브 스플래시를 숨긴다.
+// 준비(폰트 · 세션 · 도착 자리 보고)를 기다리는 동안 세 장을 아래에서 위로 훑고(1단계, 반복),
+// 준비되면 앞장이 "뾱" 튀어나와 도착 자리로 펼쳐진다(2단계, 1회). 분기(세션 유무)는 모르고 앞장이 펼쳐질 자리(target)만 받는다.
 // 끝날 때까지 화면 전체를 덮어 아래 화면은 눌리지 않는다(00a 시작하기 포함).
 
 // special thanks to @seolmango !!
@@ -9,13 +10,17 @@ import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useRef, useState } from "react";
 import { type LayoutChangeEvent, StyleSheet, View } from "react-native";
 import Animated, {
+    cancelAnimation,
     Easing,
+    type SharedValue,
     useAnimatedStyle,
     useReducedMotion,
     useSharedValue,
     withDelay,
+    withRepeat,
     withSequence,
     withTiming,
+    type WithTimingConfig,
 } from "react-native-reanimated";
 
 import type { LaunchRect } from "../../shared/launch/launchTarget";
@@ -27,42 +32,59 @@ const {
     backPlates,
     frontPlate,
     dot,
-    frontStep,
-    pileShift,
+    liftY,
+    sink: sinkTo,
+    ring: ringStyle,
 } = metrics.launch;
 const unit = glyphSize / viewBox;
 
-// §2.2. 구간마다 따로 건다.
+// §2.2. 자리를 옮기는 구간(링 · 가라앉기 · 펼치기)에 쓴다.
 const EASE = Easing.bezier(0.22, 0.7, 0.2, 1);
+// 훑기 · 뾱의 되튀기.
+const IN_OUT = Easing.inOut(Easing.ease);
+// 투명도만 바꾸는 구간(점 · 배경 · 앞장 사라짐). Reanimated withTiming 기본값과 같다.
+const FADE = Easing.inOut(Easing.quad);
+
+// §3.3 1단계 훑기(ms). 장마다 stagger 만큼 늦게 시작해 period 마다 rise 동안 들렸다가 fall 동안 내려온다.
+const SCAN = { stagger: 160, rise: 264, fall: 312, period: 1200 } as const;
+// 빠른 기기에서도 한 바퀴는 보인다. 이 시각에는 세 장이 모두 내려와 있다.
+const SCAN_MIN_MS = 1200;
 
 type Segment = readonly [start: number, end: number];
 
-// §3.4 타임라인(ms). 주석의 # 은 표의 행 번호. 표에 없는 구간은 값이 그대로다.
-const TIMELINE = {
-    pileOut: [450, 1140], // #2 · #3 뒷장 묶음이 흐려지며 왼쪽 아래로
-    frontStep: [450, 960], // #5 앞장 S0 → S1
-    dotOut: [660, 1140], // #6 점 사라짐
-    frontLand: [960, 1920], // #7 앞장 S1 → S2
-    backgroundOut: [1500, 2100], // #8 자두색 배경 걷힘
-    screenIn: [1860, 2460], // #9 도착 화면 드러남
-    frontOut: [2520, 2880], // #11 앞장 사라짐
-} as const satisfies Record<string, Segment>;
-const END_MS = 3000; // #12 언마운트
+// §3.4 2단계 끝맺음(ms). 준비된 시각(또는 SCAN_MIN_MS)부터 잰다.
+const FINISH = {
+    settle: 120, // 훑기 멈추고 제자리로
+    ring: [0, 396], // 앞장 둘레 링이 퍼지며 사라짐
+    sink: [0, 540], // 뒷장 둘이 가라앉으며 사라짐
+    dotOut: [540, 756], // 점 사라짐
+    morph: [612, 1152], // 앞장 → 도착 자리
+    backgroundOut: [864, 1224], // 자두색 배경 걷힘
+    frontOut: [1512, 1728], // 앞장 사라짐(도착 자리에 있을 때)
+    frontOutAlone: [864, 1224], // 앞장 사라짐(도착 대상 없음, 펼치지 않음)
+} as const satisfies Record<string, number | Segment>;
+// 뾱: [배율, ms] 를 차례로. 첫 구간만 빠르게 튀어나오고 나머지는 되튄다.
+const POP = [
+    [1.24, 144],
+    [0.92, 108],
+    [1.05, 108],
+    [1, 108],
+] as const;
 // §5.4 애니메이션 줄이기(와 종료 상태 알림 누름)에서는 모션 없이 크로스페이드만.
 const CROSSFADE_MS = 200;
 
-// 한 구간 = withDelay + withTiming 하나. after 는 withSequence 에서 앞 구간이 끝난 시각.
-function segment([start, end]: Segment, to: number, after = 0) {
-    return withDelay(
-        start - after,
-        withTiming(to, { duration: end - start, easing: EASE }),
-    );
+function segment(
+    [start, end]: Segment,
+    to: number,
+    easing: WithTimingConfig["easing"] = EASE,
+) {
+    return withDelay(start, withTiming(to, { duration: end - start, easing }));
 }
 
 type Props = {
-    // undefined 면 보고를 기다리며 시작 상태로 멈춰 있다(네이티브 스플래시가 덮고 있다).
+    // undefined 면 아직 준비 전이라 훑기를 반복한다. null 이면 도착 대상 없음(펼치지 않고 사라짐).
     target: LaunchRect | null | undefined;
-    // 도착 화면이 근처 · 00a 가 아닐 때(종료 상태에서 누른 알림으로 08 이 열림).
+    // 도착 화면이 근처 · 00a 가 아닐 때(종료 상태에서 누른 알림으로 08 이 열림). 준비된 뒤에만 true 가 된다.
     skipMotion: boolean;
     onFinish: () => void;
 };
@@ -92,7 +114,68 @@ export default function LaunchSplash(props: Props) {
     );
 }
 
-// 화면 크기를 안 뒤에 마운트해 첫 프레임부터 S0 에 그린다.
+// 훑기에서 한 장이 들렸다 내려오는 반복.
+function scanLoop(index: number) {
+    return withDelay(
+        index * SCAN.stagger,
+        withRepeat(
+            withSequence(
+                withTiming(1, { duration: SCAN.rise, easing: IN_OUT }),
+                withTiming(0, { duration: SCAN.fall, easing: IN_OUT }),
+                withTiming(0, {
+                    duration: SCAN.period - SCAN.rise - SCAN.fall,
+                }),
+            ),
+            -1,
+        ),
+    );
+}
+
+// 뒷장 한 장. 훑기(lift)로 진해지며 들리고, 끝맺음(sink)에서 가라앉으며 사라진다.
+function BackPlate({
+    plate,
+    left,
+    top,
+    lift,
+    sink,
+}: {
+    plate: (typeof backPlates)[number];
+    left: number;
+    top: number;
+    lift: SharedValue<number>;
+    sink: SharedValue<number>;
+}) {
+    const style = useAnimatedStyle(() => ({
+        opacity:
+            (plate.opacity + (1 - plate.opacity) * lift.value) *
+            (1 - sink.value),
+        transform: [
+            { translateY: (liftY * lift.value + sinkTo.y * sink.value) * unit },
+            {
+                scale:
+                    (1 + (plate.bump - 1) * lift.value) *
+                    (1 - (1 - sinkTo.scale) * sink.value),
+            },
+        ],
+    }));
+    return (
+        <Animated.View
+            style={[
+                styles.plate,
+                {
+                    left,
+                    top,
+                    width: plate.size * unit,
+                    height: plate.size * unit,
+                    borderRadius: plate.radius * unit,
+                },
+                style,
+            ]}
+        />
+    );
+}
+
+// 화면 크기를 안 뒤에 마운트해 첫 프레임부터 시작 상태로 그린다.
 function LaunchMotion({
     target: windowTarget,
     skipMotion,
@@ -108,9 +191,8 @@ function LaunchMotion({
                   top: windowTarget.top - screen.y,
               };
     const reducedMotion = useReducedMotion();
-    const crossfadeOnly = skipMotion || reducedMotion;
 
-    // §3.3 글리프 박스는 화면 정중앙. 네이티브 스플래시도 창 정중앙에 그린다.
+    // §3.1 글리프 박스는 화면 정중앙. 네이티브 스플래시도 창 정중앙에 그린다.
     const glyphLeft = (screen.width - glyphSize) / 2;
     const glyphTop = (screen.height - glyphSize) / 2;
     const s0 = {
@@ -121,121 +203,140 @@ function LaunchMotion({
     };
 
     const overlayOpacity = useSharedValue(1);
-    const screenVeil = useSharedValue(1);
     const backgroundOpacity = useSharedValue(1);
-    const pileOpacity = useSharedValue(1);
-    const pileX = useSharedValue(0);
-    const pileY = useSharedValue(0);
-    const frontLeft = useSharedValue(s0.left);
-    const frontTop = useSharedValue(s0.top);
-    const frontWidth = useSharedValue(s0.size);
-    const frontHeight = useSharedValue(s0.size);
-    const frontRadius = useSharedValue(s0.radius);
-    const frontRotate = useSharedValue(0);
+    const backLift0 = useSharedValue(0);
+    const backLift1 = useSharedValue(0);
+    const frontLift = useSharedValue(0);
+    const sink = useSharedValue(0);
+    const pop = useSharedValue(1);
+    const ring = useSharedValue(0);
+    const morph = useSharedValue(0);
+    const land = useSharedValue<LaunchRect | null>(null);
     const frontOpacity = useSharedValue(1);
     const dotOpacity = useSharedValue(1);
+    const lifts = [backLift0, backLift1, frontLift];
 
-    // 시작은 한 번. 시작한 뒤 target 이 바뀌어도(대기 시간이 지나 null 로 시작한 뒤 늦게 온 보고) 무시하고,
-    // 프레임 · 종료 타이머는 언마운트 때만 거둔다(deps 가 바뀔 때 거두면 끝나지 않는다).
-    const started = useRef(false);
+    const scanStartedAt = useRef(0);
+    const finishing = useRef(false);
     const frame = useRef<number | undefined>(undefined);
-    const finishTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
-        undefined,
-    );
+    const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-    useEffect(
-        () => () => {
-            if (frame.current != null) cancelAnimationFrame(frame.current);
-            if (finishTimer.current != null) clearTimeout(finishTimer.current);
-        },
-        [],
-    );
-
+    // 첫 프레임: 네이티브 스플래시를 페이드 없이 걷고 훑기를 시작한다.
+    // 이 오버레이가 같은 화면이라 바로 바꿔도 티가 나지 않는다. 페이드를 두면 정지된 글리프가 들리는 장 위에 겹쳐 보인다.
     useEffect(() => {
-        if (started.current) return;
-        if (!crossfadeOnly && target === undefined) return;
-        started.current = true;
-
-        // 크로스페이드는 이 오버레이가 맡으므로 네이티브 스플래시는 바로 걷는다.
-        // 모션은 기본 페이드(400ms)를 둔다. 0–450ms 정지 구간 안에서 끝나고, 두 글리프의 작은 어긋남을 가린다.
-        if (crossfadeOnly) SplashScreen.setOptions({ duration: 0 });
-
-        // 시작 상태가 화면에 그려진 다음 프레임에 숨기고, 같은 프레임에 타임라인을 시작한다.
+        SplashScreen.setOptions({ duration: 0 });
+        scanStartedAt.current = Date.now();
         frame.current = requestAnimationFrame(() => {
             SplashScreen.hide();
-            if (crossfadeOnly) {
-                overlayOpacity.value = segment([0, CROSSFADE_MS], 0);
-                finishTimer.current = setTimeout(onFinish, CROSSFADE_MS);
-                return;
-            }
-
-            const t = TIMELINE;
-            const s1 = {
-                left: s0.left + frontStep.x,
-                top: s0.top + frontStep.y,
-            };
-
-            pileOpacity.value = segment(t.pileOut, 0);
-            pileX.value = segment(t.pileOut, pileShift.x);
-            pileY.value = segment(t.pileOut, pileShift.y);
-            dotOpacity.value = segment(t.dotOut, 0);
-            backgroundOpacity.value = segment(t.backgroundOut, 0);
-            screenVeil.value = segment(t.screenIn, 0);
-            frontOpacity.value = segment(t.frontOut, 0);
-
-            // 도착 대상이 없으면 S1 에 머물다 #11 에 사라진다(§6).
-            if (target == null) {
-                frontLeft.value = segment(t.frontStep, s1.left);
-                frontTop.value = segment(t.frontStep, s1.top);
-            } else {
-                const after = t.frontStep[1];
-                frontLeft.value = withSequence(
-                    segment(t.frontStep, s1.left),
-                    segment(t.frontLand, target.left, after),
-                );
-                frontTop.value = withSequence(
-                    segment(t.frontStep, s1.top),
-                    segment(t.frontLand, target.top, after),
-                );
-                frontWidth.value = segment(t.frontLand, target.width);
-                frontHeight.value = segment(t.frontLand, target.height);
-                frontRadius.value = segment(t.frontLand, target.radius);
-                frontRotate.value = segment(t.frontLand, target.rotate);
-            }
-            finishTimer.current = setTimeout(onFinish, END_MS);
+            if (reducedMotion) return;
+            lifts.forEach((lift, index) => {
+                lift.value = scanLoop(index);
+            });
         });
-    }, [target, crossfadeOnly]);
+        return () => {
+            if (frame.current != null) cancelAnimationFrame(frame.current);
+            timers.current.forEach(clearTimeout);
+        };
+    }, []);
+
+    // 준비되면 끝맺음을 한 번. 시작한 뒤 target 이 바뀌어도(대기 시간이 지나 null 로 시작한 뒤 늦게 온 보고) 무시한다.
+    useEffect(() => {
+        if (finishing.current) return;
+        if (!skipMotion && target === undefined) return;
+        finishing.current = true;
+        const later = (run: () => void, ms: number) => {
+            timers.current.push(setTimeout(run, ms));
+        };
+
+        if (skipMotion || reducedMotion) {
+            lifts.forEach((lift) => cancelAnimation(lift));
+            overlayOpacity.value = withTiming(0, {
+                duration: CROSSFADE_MS,
+                easing: EASE,
+            });
+            later(onFinish, CROSSFADE_MS);
+            return;
+        }
+
+        const landing = target ?? null;
+        const elapsed = Date.now() - scanStartedAt.current;
+        later(
+            () => {
+                const f = FINISH;
+                lifts.forEach((lift) => {
+                    cancelAnimation(lift);
+                    lift.value = withTiming(0, {
+                        duration: f.settle,
+                        easing: IN_OUT,
+                    });
+                });
+                pop.value = withSequence(
+                    ...POP.map(([scale, duration], index) =>
+                        withTiming(scale, {
+                            duration,
+                            easing:
+                                index === 0 ? Easing.out(Easing.quad) : IN_OUT,
+                        }),
+                    ),
+                );
+                ring.value = segment(f.ring, 1);
+                sink.value = segment(f.sink, 1);
+                dotOpacity.value = segment(f.dotOut, 0, FADE);
+                backgroundOpacity.value = segment(f.backgroundOut, 0, FADE);
+                if (landing != null) {
+                    land.value = landing;
+                    morph.value = segment(f.morph, 1);
+                    frontOpacity.value = segment(f.frontOut, 0, FADE);
+                    later(onFinish, f.frontOut[1]);
+                } else {
+                    frontOpacity.value = segment(f.frontOutAlone, 0, FADE);
+                    later(onFinish, f.frontOutAlone[1]);
+                }
+            },
+            Math.max(0, SCAN_MIN_MS - elapsed),
+        );
+    }, [target, skipMotion, reducedMotion]);
 
     const overlayStyle = useAnimatedStyle(() => ({
         opacity: overlayOpacity.value,
     }));
-    const veilStyle = useAnimatedStyle(() => ({ opacity: screenVeil.value }));
     const backgroundStyle = useAnimatedStyle(() => ({
         opacity: backgroundOpacity.value,
     }));
-    const pileStyle = useAnimatedStyle(() => ({
-        opacity: pileOpacity.value,
-        transform: [{ translateX: pileX.value }, { translateY: pileY.value }],
+    const ringAnimated = useAnimatedStyle(() => ({
+        opacity: ring.value > 0 ? ringStyle.opacity * (1 - ring.value) : 0,
+        transform: [{ scale: ringStyle.scaleFrom + ring.value }],
     }));
-    const frontStyle = useAnimatedStyle(() => ({
-        left: frontLeft.value,
-        top: frontTop.value,
-        width: frontWidth.value,
-        height: frontHeight.value,
-        borderRadius: frontRadius.value,
-        opacity: frontOpacity.value,
-        transform: [{ rotate: `${frontRotate.value}deg` }],
-    }));
+    // 앞장: 훑기 · 뾱은 scale, 펼치기는 자리 · 크기 · 라운드 · 기울기를 직접 바꾼다(scale 이면 라운드가 찌그러진다).
+    const frontStyle = useAnimatedStyle(() => {
+        const m = morph.value;
+        const to = land.value;
+        const lerp = (from: number, end: number | undefined) =>
+            end == null ? from : from + (end - from) * m;
+        return {
+            left: lerp(s0.left, to?.left),
+            top: lerp(s0.top, to?.top),
+            width: lerp(s0.size, to?.width),
+            height: lerp(s0.size, to?.height),
+            borderRadius: lerp(s0.radius, to?.radius),
+            opacity: frontOpacity.value,
+            transform: [
+                { translateY: liftY * frontLift.value * unit },
+                {
+                    scale:
+                        pop.value *
+                        (1 + (frontPlate.bump - 1) * frontLift.value),
+                },
+                { rotate: `${lerp(0, to?.rotate)}deg` },
+            ],
+        };
+    });
     const dotStyle = useAnimatedStyle(() => ({ opacity: dotOpacity.value }));
 
     const dotSize = dot.radius * 2 * unit;
 
     return (
         <Animated.View style={[StyleSheet.absoluteFill, overlayStyle]}>
-            {/* #9 도착 화면 0 → 1 은 그 위를 bg/screen 으로 덮었다 걷는 것과 같다. */}
-            <Animated.View
-                style={[StyleSheet.absoluteFill, styles.veil, veilStyle]}
-            />
             <Animated.View
                 style={[
                     StyleSheet.absoluteFill,
@@ -243,31 +344,30 @@ function LaunchMotion({
                     backgroundStyle,
                 ]}
             />
+            {backPlates.map((plate, index) => (
+                <BackPlate
+                    key={plate.x}
+                    plate={plate}
+                    left={glyphLeft + plate.x * unit}
+                    top={glyphTop + plate.y * unit}
+                    lift={lifts[index]}
+                    sink={sink}
+                />
+            ))}
             <Animated.View
                 style={[
-                    styles.glyph,
-                    { left: glyphLeft, top: glyphTop },
-                    pileStyle,
+                    styles.ring,
+                    {
+                        left: s0.left,
+                        top: s0.top,
+                        width: s0.size,
+                        height: s0.size,
+                        borderRadius: s0.radius,
+                    },
+                    ringAnimated,
                 ]}
-            >
-                {backPlates.map((plate) => (
-                    <View
-                        key={plate.x}
-                        style={[
-                            styles.plate,
-                            {
-                                left: plate.x * unit,
-                                top: plate.y * unit,
-                                width: plate.size * unit,
-                                height: plate.size * unit,
-                                borderRadius: plate.radius * unit,
-                                opacity: plate.opacity,
-                            },
-                        ]}
-                    />
-                ))}
-            </Animated.View>
-            <Animated.View style={[styles.plate, frontStyle]}>
+            />
+            <Animated.View style={[styles.plate, styles.front, frontStyle]}>
                 <Animated.View
                     style={[
                         styles.dot,
@@ -287,20 +387,20 @@ function LaunchMotion({
 }
 
 const styles = StyleSheet.create({
-    veil: {
-        backgroundColor: colors.bg.screen,
-    },
     background: {
         backgroundColor: colors.brand.primary,
-    },
-    glyph: {
-        position: "absolute",
-        width: glyphSize,
-        height: glyphSize,
     },
     plate: {
         position: "absolute",
         backgroundColor: colors.bg.surface,
+    },
+    front: {
+        overflow: "hidden",
+    },
+    ring: {
+        position: "absolute",
+        borderWidth: ringStyle.width,
+        borderColor: colors.bg.surface,
     },
     dot: {
         position: "absolute",
