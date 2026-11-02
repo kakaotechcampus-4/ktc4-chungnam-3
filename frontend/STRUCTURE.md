@@ -36,13 +36,16 @@ frontend/
 ├── .prettierignore           포맷하지 않는 생성물(package-lock.json, android/ 등)
 ├── .editorconfig             prettier 를 쓰지 않는 에디터용. .prettierrc 와 같은 값
 ├── .gitattributes            frontend 텍스트 파일을 LF 로 받는다
+├── android/                  커밋하지 않는다(EAS 가 prebuild 로 만든다). 공유 수신은 expo-share-intent 플러그인이
+│                             MainActivity 에 SEND(text/plain) intent-filter 를 붙여 앱을 앞으로 띄운다(흐름 메모 1). 별도 액티비티 없음
 ├── assets/
 │   ├── fonts/                Noto Sans KR 서브셋 ttf + OFL.txt
-│   └── images/providers/     로그인 제공자 공식 심볼. 공식 에셋에서 심볼 경로만 남긴 파일(직접 그리지 않는다)
+│   └── images/
+│       ├── splash-glyph.png  네이티브 스플래시 글리프(C안). viewBox 100 전체를 담은 1024px 투명 PNG("개발 빌드" 절)
+│       ├── providers/        로그인 제공자 공식 심볼. 공식 에셋에서 심볼 경로만 남긴 파일(직접 그리지 않는다)
+│       └── *.png             그 밖은 Expo 템플릿 그대로(앱 아이콘 · 적응형 아이콘 · 파비콘, 쓰지 않는 파일 포함)
 ├── scripts/
 │   └── subset-fonts.py       폰트 서브셋 생성 (원본 출처 · 범위 · 실행 방법은 파일 상단)
-│                             android/ 는 커밋하지 않는다(EAS 가 prebuild 로 만든다). 공유 수신은 expo-share-intent 플러그인이
-│                             MainActivity 에 SEND(text/plain) intent-filter 를 붙여 앱을 앞으로 띄운다(흐름 메모 1). 별도 액티비티 없음
 └── src/
     ├── app/                  앱 셸
     │   ├── App.tsx
@@ -474,6 +477,9 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   EAS file 환경 변수 `GOOGLE_SERVICES_JSON`(경로) → 없으면 `frontend/google-services.json` 이 있을 때 그 파일 → 둘 다 없으면 설정하지 않고 경고(FCM 토큰을 받지 못하는 빌드).
   환경 변수를 넣었는데 그 경로에 파일이 없으면 config 평가를 실패시킨다(FCM 없는 빌드가 조용히 나오지 않게).
 - expo-notifications 플러그인은 알림 색(`color` 브랜드 자두색 #6B4E7A)과 FCM 기본 채널(`defaultChannel` `nearby`, "인증 · 세션" 절의 알림 채널)을 정한다. small icon 은 아직 없다.
+- 네이티브 스플래시(expo-splash-screen 플러그인)는 브랜드 자두색 배경(#6B4E7A) 가운데에 C안 글리프(`assets/images/splash-glyph.png`, `imageWidth` 96)를 둔다.
+  플러그인은 288dp 투명 캔버스 가운데에 이미지를 `imageWidth` dp 로 contain 배치한다. 그래서 PNG 는 글리프만 잘라내지 않고 viewBox 100×100 전체(투명 여백 포함)를 정사각으로 둔다.
+  그래야 실행 모션의 글리프 박스(96dp, 화면 정중앙)와 겹친다. PNG 는 `docs/design/c-launch-motion.md` §2.3 수치로 그렸다(일회용 스크립트, 커밋하지 않음). 수치가 바뀌면 다시 만든다.
 - 키 제한: Maps SDK for Android 만, 패키지 `com.remembrall.app` + SHA-1 두 개(EAS 개발 빌드 keystore, 로컬 debug keystore).
   debug keystore SHA-1 은 모든 RN 프로젝트 공용이라 개발용 키에만 등록한다.
 - 개발 빌드 딥링크 scheme 은 `remembrall://` 이다(`app.json` 의 `scheme`). 실행 · 키 설정 절차는 README 에 둔다.
