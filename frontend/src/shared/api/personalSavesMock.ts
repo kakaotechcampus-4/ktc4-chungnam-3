@@ -396,13 +396,16 @@ function seedSaves(): MockSave[] {
         geocodingPlaceId: mockUuid(),
         verificationPlaceId: null,
     });
+    // 샘플 장소 placeId 는 고정이다(실행마다 대표 장소명이 바뀌지 않게). 서버 대표 장소는 placeId 가 가장 작은 장소라서,
+    // 각 저장물의 첫 장소가 가장 작게 골라 대표 장소 = 첫 장소(08 이 그리는 장소)가 되게 한다. 끝자리 순서가 그 순서다.
     const place = (
+        placeId: string,
         name: string,
         address: string | null,
         latitude: number,
         longitude: number,
     ): PersonalSavePlaceResponse => ({
-        placeId: mockUuid(),
+        placeId,
         name,
         address,
         latitude,
@@ -410,6 +413,7 @@ function seedSaves(): MockSave[] {
         description: null,
     });
     const sungsimdang = place(
+        "00000000-0000-4000-8000-000000000004",
         "성심당 본점",
         "대전 중구 은행동",
         36.3277,
@@ -476,9 +480,21 @@ function seedSaves(): MockSave[] {
             ],
         ),
         seed("mockSave004", daysAgo(14), "SUCCESS", null, "대흥동 골목 산책", [
-            place("오후 네시", "대전 중구 대흥동", 36.3244, 127.4246),
+            place(
+                "00000000-0000-4000-8000-000000000002",
+                "오후 네시",
+                "대전 중구 대흥동",
+                36.3244,
+                127.4246,
+            ),
             // 주소가 없는 장소(08b 빈 필드).
-            place("대흥동 성당", null, 36.3256, 127.4222),
+            place(
+                "00000000-0000-4000-8000-000000000005",
+                "대흥동 성당",
+                null,
+                36.3256,
+                127.4222,
+            ),
         ]),
         seed(
             "mockSave005",
@@ -497,8 +513,20 @@ function seedSaves(): MockSave[] {
             [],
         ),
         seed("mockSave007", monthsAgo(2), "SUCCESS", null, "원도심 밤 산책", [
-            place("으능정이 스카이로드", "대전 중구 은행동", 36.3292, 127.4282),
-            place("옛 충남도청", "대전 중구 선화동", 36.3275, 127.4204),
+            place(
+                "00000000-0000-4000-8000-000000000003",
+                "으능정이 스카이로드",
+                "대전 중구 은행동",
+                36.3292,
+                127.4282,
+            ),
+            place(
+                "00000000-0000-4000-8000-000000000006",
+                "옛 충남도청",
+                "대전 중구 선화동",
+                36.3275,
+                127.4204,
+            ),
         ]),
         seed(
             "mockSave008",
@@ -507,8 +535,20 @@ function seedSaves(): MockSave[] {
             null,
             "중앙시장 노포 점심",
             [
-                place("한밭 손칼국수", "대전 중구 대흥동", 36.3229, 127.4263),
-                place("대전 중앙시장", "대전 동구 원동", 36.3289, 127.4331),
+                place(
+                    "00000000-0000-4000-8000-000000000001",
+                    "한밭 손칼국수",
+                    "대전 중구 대흥동",
+                    36.3229,
+                    127.4263,
+                ),
+                place(
+                    "00000000-0000-4000-8000-000000000007",
+                    "대전 중앙시장",
+                    "대전 동구 원동",
+                    36.3289,
+                    127.4331,
+                ),
                 sungsimdang,
             ],
         ),
