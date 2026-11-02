@@ -1,4 +1,4 @@
-// 저장물 API. POST · GET /api/personal-saves, GET · DELETE /api/personal-saves/{personalSaveId}.
+// 저장물 API. POST · GET /api/personal-saves, GET /api/personal-saves/places, GET · DELETE /api/personal-saves/{personalSaveId}.
 // 응답은 백엔드 PersonalSaveResponse 그대로. 실패는 클라이언트의 ApiError 를 그대로 던진다.
 // 저장은 새로 저장하면 201, 이미 저장한 영상이면 200 이고 본문은 같다. 링크에서 영상 id 를 못 뽑으면 400 INVALID_REQUEST.
 // 분석은 서버에서 비동기로 진행된다. 결과는 상세 · 목록을 다시 읽어 확인한다(완료 통지 없음).
@@ -9,6 +9,7 @@ import {
     mockDeletePersonalSave,
     mockFetchPersonalSave,
     mockFetchPersonalSaves,
+    mockFetchSavedPlaces,
     mockSavePersonalSave,
 } from "./personalSavesMock";
 
@@ -34,7 +35,8 @@ export type PersonalSaveResponse = {
     savedAt: string;
 };
 
-// 목록 항목. summary 는 서버가 200자에서 자른다. 실패 코드는 없다.
+// 목록 항목. summary 는 서버가 200자에서 자른다. analysisFailureCode 는 PARTIAL · FAILED 일 때만 채워진다.
+// representativePlaceName 은 연결된 장소 중 하나의 이름(장소가 없으면 null), pendingConfirmCount 는 답하지 않은 되묻기 후보 수.
 export type PersonalSaveItemResponse = {
     personalSaveId: string;
     contentId: string;
@@ -42,7 +44,10 @@ export type PersonalSaveItemResponse = {
     title: string | null;
     summary: string | null;
     analysisStatus: AnalysisStatus;
+    analysisFailureCode: AnalysisFailureCode | null;
     placeCount: number;
+    representativePlaceName: string | null;
+    pendingConfirmCount: number;
     savedAt: string;
 };
 
@@ -75,6 +80,16 @@ export type PersonalSaveDetailResponse = {
     analysisFailureCode: AnalysisFailureCode | null;
     savedAt: string;
     places: PersonalSavePlaceResponse[];
+};
+
+// 내 장소 목록 항목. 장소와 저장물 한 쌍마다 한 항목이라 같은 placeId 가 여러 번 올 수 있다.
+export type SavedPlacePinResponse = {
+    placeId: string;
+    name: string;
+    address: string | null;
+    latitude: number;
+    longitude: number;
+    personalSaveId: string;
 };
 
 // created: 새로 저장했다(201). false 면 이미 저장한 영상이다(200).
@@ -110,6 +125,12 @@ export function fetchPersonalSaves(
     }
     const suffix = query.length > 0 ? `?${query.join("&")}` : "";
     return request<PersonalSavePageResponse>(`/api/personal-saves${suffix}`);
+}
+
+// 내 저장물의 모든 장소. 최신 저장순, 페이지 없음. 썸네일 · 저장 시각은 없어 목록과 personalSaveId 로 묶는다.
+export function fetchSavedPlaces(): Promise<SavedPlacePinResponse[]> {
+    if (!isApiConfigured) return mockFetchSavedPlaces();
+    return request<SavedPlacePinResponse[]>("/api/personal-saves/places");
 }
 
 export function deletePersonalSave(personalSaveId: string): Promise<void> {

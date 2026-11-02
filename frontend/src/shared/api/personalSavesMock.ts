@@ -1,6 +1,6 @@
 // 저장물 API 의 목. 서버 계약 모양이라 화면 props 모양인 mock/ 폴더가 아니라 API 모듈 옆에 둔다(consents.ts 의 목과 같은 자리).
 // 서버(PersonalSaveService · ContentRepository)와 같은 규칙을 따른다. 이번 실행 동안 메모리에 남는다.
-// 시작 상태: MOCK_SCENARIO.archiveEmpty 면 빈 저장소, 아니면 샘플 6개(seedSaves). 공유로 저장한 것도 같은 저장소에 쌓인다.
+// 시작 상태: MOCK_SCENARIO.archiveEmpty 면 빈 저장소, 아니면 샘플 8개(seedSaves). 공유로 저장한 것도 같은 저장소에 쌓인다.
 // 저장 결과는 MOCK_SCENARIO.saveResult, 분석 결과는 analysisResult 로 바꾼다.
 // 새로 저장하면 ANALYZING 이고, 분석을 시작하고 ANALYSIS_MS 가 지난 뒤 상세 · 목록을 읽으면 그때의 analysisResult 로 끝난다.
 import { ApiError } from "./client";
@@ -13,6 +13,7 @@ import type {
     PersonalSavePageResponse,
     PersonalSavePlaceResponse,
     PersonalSaveResponse,
+    SavedPlacePinResponse,
 } from "./personalSaves";
 
 const MOCK_DELAY_MS = 600;
@@ -134,6 +135,24 @@ export async function mockFetchPersonalSaves(params: {
     };
 }
 
+// 서버(findAllPlaces)와 같은 규칙. 분석 상태로 거르지 않고 장소와 저장물 한 쌍마다 한 항목, 최신 저장순(같으면 id 순).
+export async function mockFetchSavedPlaces(): Promise<SavedPlacePinResponse[]> {
+    await mockDelay();
+    return [...saves].sort(compareSaves).flatMap((save) => {
+        finishIfDue(save);
+        return save.places.map(
+            ({ placeId, name, address, latitude, longitude }) => ({
+                placeId,
+                name,
+                address,
+                latitude,
+                longitude,
+                personalSaveId: save.personalSaveId,
+            }),
+        );
+    });
+}
+
 export async function mockDeletePersonalSave(
     personalSaveId: string,
 ): Promise<void> {
@@ -144,19 +163,27 @@ export async function mockDeletePersonalSave(
 
 // 지오펜스 목이 쓴다. 서버의 지오펜스 대상(분석 실패 · 볼 수 없는 영상이 아닌 저장물의 장소)과 같다.
 // 목에서는 볼 수 없는 영상도 FAILED 라 FAILED 만 뺀다. 분석 시간이 지난 저장물은 먼저 끝낸다. 지운 저장물은 이미 빠져 있다.
+// 서버 트리거는 (회원, 장소)마다 하나라 여러 저장물에 있는 장소도 한 번만 낸다.
 export function mockGeofencePlaces(): {
     placeId: string;
     latitude: number;
     longitude: number;
 }[] {
+    const seen = new Set<string>();
     return saves.flatMap((save) => {
         finishIfDue(save);
         if (save.analysisStatus === "FAILED") return [];
-        return save.places.map(({ placeId, latitude, longitude }) => ({
-            placeId,
-            latitude,
-            longitude,
-        }));
+        return save.places
+            .filter(({ placeId }) => {
+                if (seen.has(placeId)) return false;
+                seen.add(placeId);
+                return true;
+            })
+            .map(({ placeId, latitude, longitude }) => ({
+                placeId,
+                latitude,
+                longitude,
+            }));
     });
 }
 
@@ -254,7 +281,8 @@ function mockPlaces(): PersonalSavePlaceResponse[] {
     ];
 }
 
-// 기억 탭 샘플. 저장 시각을 오늘 · 3주 전 · 2달 전으로 나눠 바램 세 단계가 보이게 한다.
+// 기억 탭 · 지도 · 근처 샘플. 저장 시각을 오늘 · 2주 전 · 3주 전 · 2달 전 · 5달 전으로 나눠 바램 세 단계가 보이게 한다.
+// 장소는 지도 목(mock/mapView)과 같은 대전 7곳 · 좌표다. 성심당 본점은 두 저장물에 있다(장소 목록에 두 항목, 가장 최근은 오늘).
 // 영상 id 는 가짜(i.ytimg.com 404)라 썸네일은 자리표시다. 같은 id 를 공유하면 이미 저장한 영상이 된다.
 // 분석 중 샘플은 앱을 켜고 ANALYSIS_MS 뒤에 analysisResult 로 끝난다.
 function seedSaves(): MockSave[] {
@@ -290,7 +318,7 @@ function seedSaves(): MockSave[] {
     });
     const place = (
         name: string,
-        address: string,
+        address: string | null,
         latitude: number,
         longitude: number,
     ): PersonalSavePlaceResponse => ({
@@ -301,17 +329,20 @@ function seedSaves(): MockSave[] {
         longitude,
         description: null,
     });
+    const sungsimdang = place(
+        "성심당 본점",
+        "대전 중구 은행동",
+        36.3277,
+        127.4274,
+    );
     return [
         seed(
             "mockSave001",
             daysAgo(0, 2),
             "SUCCESS",
             null,
-            "대전 가면 꼭 들르는 빵집 3곳",
-            [
-                place("성심당 본점", "대전 중구 은행동", 36.3277, 127.4274),
-                place("소제동 카페거리", "대전 동구 소제동", 36.3326, 127.4381),
-            ],
+            "성심당 튀김소보로 줄 짧은 시간",
+            [sungsimdang],
         ),
         seed("mockSave002", daysAgo(0), "ANALYZING", null, null, []),
         seed(
@@ -322,8 +353,13 @@ function seedSaves(): MockSave[] {
             null,
             [],
         ),
+        seed("mockSave004", daysAgo(14), "SUCCESS", null, "대흥동 골목 산책", [
+            place("오후 네시", "대전 중구 대흥동", 36.3244, 127.4246),
+            // 주소가 없는 장소(08b 빈 필드).
+            place("대흥동 성당", null, 36.3256, 127.4222),
+        ]),
         seed(
-            "mockSave004",
+            "mockSave005",
             daysAgo(21),
             "FAILED",
             "VIDEO_UNAVAILABLE",
@@ -331,20 +367,28 @@ function seedSaves(): MockSave[] {
             [],
         ),
         seed(
-            "mockSave005",
+            "mockSave006",
             daysAgo(21, 2),
             "SUCCESS",
             null,
             "대전 사람만 아는 사투리 5가지",
             [],
         ),
+        seed("mockSave007", monthsAgo(2), "SUCCESS", null, "원도심 밤 산책", [
+            place("으능정이 스카이로드", "대전 중구 은행동", 36.3292, 127.4282),
+            place("옛 충남도청", "대전 중구 선화동", 36.3275, 127.4204),
+        ]),
         seed(
-            "mockSave006",
-            monthsAgo(2),
+            "mockSave008",
+            monthsAgo(5),
             "SUCCESS",
             null,
-            "계족산 황톳길 맨발로 걷기",
-            [place("계족산 황톳길", "대전 대덕구 장동", 36.3925, 127.4447)],
+            "중앙시장 노포 점심",
+            [
+                place("한밭 손칼국수", "대전 중구 대흥동", 36.3229, 127.4263),
+                place("대전 중앙시장", "대전 동구 원동", 36.3289, 127.4331),
+                sungsimdang,
+            ],
         ),
     ];
 }
@@ -375,9 +419,24 @@ function toItem(save: MockSave): PersonalSaveItemResponse {
                       .slice(0, MAX_SUMMARY_LENGTH)
                       .join(""),
         analysisStatus: save.analysisStatus,
+        analysisFailureCode: hasFailureCode(save.analysisStatus)
+            ? save.analysisFailureCode
+            : null,
         placeCount: save.places.length,
+        representativePlaceName: representativePlace(save)?.name ?? null,
+        // 목에는 되묻기 후보가 없다.
+        pendingConfirmCount: 0,
         savedAt: save.savedAt,
     };
+}
+
+// 서버처럼 장소 중 placeId 가 가장 작은 것.
+function representativePlace(
+    save: MockSave,
+): PersonalSavePlaceResponse | undefined {
+    return [...save.places].sort((a, b) =>
+        a.placeId < b.placeId ? -1 : a.placeId > b.placeId ? 1 : 0,
+    )[0];
 }
 
 type CursorKey = { savedAt: string; personalSaveId: string };

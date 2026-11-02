@@ -4,6 +4,7 @@
 // 같은 패키지라 실서버 preview 와 preview-mock 이 겉으로 구분되지 않아 연결 줄을 맨 위에 둔다. FCM 줄은 pushTokenSync 의 마지막 결과를 구독한다.
 // 가상 도착은 누르면 바로 보낸다(RN Android 는 앱이 백그라운드면 JS 타이머가 멈춰 예약하지 않는다). 보낸 뒤 홈으로 내리고 알림을 기다린다.
 // 장소 목록은 묶음이 처음 그려질 때 한 번 읽는다. 목록(최대 100개) 중 장소가 있는 저장물만 상세를 하나씩 읽는다(시연용 N+1).
+// 여러 저장물에 있는 장소는 한 번만 둔다. 목록이 최신 저장순이라 가장 최근 저장물의 제목이 붙는다.
 // 목 도착 기록 줄은 목 서버가 그 도착으로 만든 알림이 있으면 눌러서 연다(알림을 누른 것과 같은 opener).
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 
@@ -149,6 +150,9 @@ async function readPlaces(): Promise<DemoPlace[]> {
         if (toSaveStateFromItem(item).kind !== "ready") continue;
         const detail = await fetchPersonalSave(item.personalSaveId);
         for (const place of detail.places) {
+            if (places.some((added) => added.placeId === place.placeId)) {
+                continue;
+            }
             places.push({
                 placeId: place.placeId,
                 name: place.name,

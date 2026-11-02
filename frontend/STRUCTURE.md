@@ -122,7 +122,7 @@ frontend/
         │   ├── client.ts     기본 주소 · Bearer 헤더 · ApiError · 401 처리 · 요청별 시간 제한(timeoutMs)
         │   ├── consents.ts   동의 API(조회 · 위치 동의 변경) · 목 분기
         │   ├── consentTerms.ts   약관 URL 상수(약관 버전은 서버가 준다)
-        │   ├── personalSaves.ts  저장물 API(저장 · 상세 · 목록 · 삭제)와 서버 응답 타입 · 목 분기
+        │   ├── personalSaves.ts  저장물 API(저장 · 상세 · 목록 · 내 장소 목록 · 삭제)와 서버 응답 타입 · 목 분기
         │   ├── personalSavesMock.ts  저장물 목. 서버 규칙을 따르는 메모리 저장소(서버 계약 모양이라 mock/ 밖)
         │   ├── geofences.ts  지오펜스 API(등록 목록 · 장소 도착 보고)와 서버 타입 · 목 분기
         │   ├── geofencesMock.ts  지오펜스 목. 서버 규칙대로 저장물 목의 장소로 목록을 만들고, 도착 보고를 메모리에 남긴다(새 도착마다 알림 목이 알림을 만든다)
@@ -375,7 +375,7 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
       FCM(`pushTokenSync` 마지막 결과를 구독: "등록됨 · HH:mm"(목 모드면 "등록됨(목 서버)", 시각은 마지막 등록 성공) · "실패 · HH:mm" · "로그인 전이에요" ·
       "건너뜀(알림 권한 없음)" · "이 빌드에서는 받지 않아요" · "토큰 없음(Firebase 설정 없는 빌드)" · "아직 확인하지 않았어요") ·
       지오펜스 등록 상태("등록된 곳 N곳 · HH:mm" 또는 "등록된 곳 없음 · {마지막 등록 결과}") · 보낼 도착 N건 · "지금 다시 등록"(`syncGeofences`, 결과를 설명에) ·
-      저장한 장소별 "{장소}에 도착"(목록 API 중 장소가 있는 저장물만 상세를 하나씩 읽음, 묶음을 처음 그릴 때 한 번) · 목 모드면 목 서버가 받은 도착 기록(최근 순).
+      저장한 장소별 "{장소}에 도착"(목록 API 중 장소가 있는 저장물만 상세를 하나씩 읽음, 묶음을 처음 그릴 때 한 번, 여러 저장물에 있는 장소는 가장 최근 저장물로 한 줄) · 목 모드면 목 서버가 받은 도착 기록(최근 순).
       목 도착 기록은 목 서버가 만든 알림이 있으면 눌러서 연다(알림 누름과 같은 opener, `openFromNotification`).
     - 가상 도착(`simulateArrival`)은 **누르면 바로 보낸다.** RN Android 는 앱이 백그라운드면 JS 타이머가 멈춰(JavaTimerManager `onHostPause`) 예약하지 않는다. 보낸 뒤 홈으로 내리고 알림을 기다린다.
       등록된 장소면 `handleGeofenceEvent` 에 나감 → 들어옴(실제 이벤트와 같은 길, 반복해도 매번 보고), 등록 안 된 장소면 장소 상태는 그대로 두고 같은 대기열로 보낸다. 결과는 보냄 · 남김 · 버림.
@@ -536,9 +536,11 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   문구: 제목은 장소 이름, 본문은 "{저장 시점}에 저장한 곳이 근처에 있어요"(기억 탭과 같은 `savedAgo`, "방금"이면 "방금 저장한 곳이 근처에 있어요"). 상세의 title · body 도 같다.
   목 도착 보고에 목 지연(600ms, JS 타이머)이 있어, "도착"을 누르자마자 홈으로 내리면 앱으로 돌아올 때까지 알림이 뜨지 않는다(백그라운드에서 JS 타이머가 멈춘다).
   상세는 읽을 때 저장물을 다시 확인해 지웠으면 items 가 빈다. 없는 id 는 404, 열람은 멱등. 이번 실행 동안 메모리에 남는다(`getMockNotifications`).
-- 저장물 API 는 목 모드에서 메모리 저장소다. `MOCK_SCENARIO.archiveEmpty` 면 빈 저장소, 아니면 샘플 6개로 시작한다
-  (장소 있는 성공 2 · 분석 중 1 · 실패(EXTRACTION_API_ERROR) 1 · 볼 수 없는 영상 1 · 장소 없음 1, 저장 시각은 오늘 · 3주 전 · 2달 전).
-  샘플 영상 id 는 가짜(`mockSave001`~`006`)라 썸네일은 자리표시다. 분석 중 샘플은 앱을 켜고 약 5초 뒤 `analysisResult` 로 끝난다.
+- 저장물 API 는 목 모드에서 메모리 저장소다. `MOCK_SCENARIO.archiveEmpty` 면 빈 저장소, 아니면 샘플 8개로 시작한다
+  (장소 있는 성공 4 · 분석 중 1 · 실패(EXTRACTION_API_ERROR) 1 · 볼 수 없는 영상 1 · 장소 없음 1, 저장 시각은 오늘 · 2주 전 · 3주 전 · 2달 전 · 5달 전).
+  장소는 지도 목(`mapViewMock`)과 같은 대전 7곳 · 좌표이고(대흥동 성당은 주소 없음), 성심당 본점은 오늘 · 5달 전 두 저장물에 있다.
+  샘플 영상 id 는 가짜(`mockSave001`~`008`)라 썸네일은 자리표시다. 분석 중 샘플은 앱을 켜고 약 5초 뒤 `analysisResult` 로 끝난다.
+  내 장소 목록(`fetchSavedPlaces`)은 서버처럼 장소와 저장물 한 쌍마다 한 항목, 최신 저장순이다. 목록 항목의 되묻기 수는 늘 0 이다(목에 되묻기 후보가 없다).
   `MOCK_SCENARIO.saveResult`(저장 결과, ok · networkError · invalid, 기본 ok) ·
   `analysisResult`(저장하고 약 5초 뒤 상세 · 목록에 보일 분석 결과, success · noPlace · failed · videoUnavailable · analysisError, 기본 success).
   같은 영상을 다시 저장하면 `created: false` 다. 공유로 저장한 것도 같은 저장소라 기억 탭에 바로 보인다.
