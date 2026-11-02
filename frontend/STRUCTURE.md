@@ -92,7 +92,7 @@ frontend/
     │   │   └── components/
     │   ├── archive/          기억 탭. 시간순 앨범. 저장물 목록 API(useArchivePages) · 섹션 · 바램 · 이름(albumSections)
     │   │   └── components/
-    │   ├── proposal/         근처 탭(01 · 06 · 06b). 지금 위치 근처의 내 장소(nearbyView: 반경 · 묶음 · 06b 버튼 동작)
+    │   ├── proposal/         근처 탭(01 · 06 · 06b). 지금 위치 근처의 내 장소(nearbyView: 반경 · 묶음 · 06b 게이트 · 버튼 동작)
     │   │   └── components/
     │   ├── save-result/      저장 결과 모달. 분석 중 / 확인 필요 / 장소 없음 / 실패 상태별 렌더 + 장소 직접 찾기(02c · 02d)
     │   │   └── components/
@@ -136,6 +136,7 @@ frontend/
         │   ├── usePersonalSaveDetail.ts  저장물 상세 hook. 포커스 · 앱 복귀 때 읽기, 분석 중 5초마다 다시 읽기
         │   ├── useNotificationDetail.ts  알림 상세 hook. 처음 그릴 때 한 번 읽고 열 화면(toNotificationTarget)을 정한다
         │   ├── useSavedPlaces.ts  내 장소 hook(지도 · 근처). 내 장소 목록 + 저장물 목록(끝까지)을 묶어 읽기, 포커스 · 앱 복귀 때
+        │   ├── useLocationConsent.ts  위치 정보 이용 동의 hook(근처 06b 게이트). 포커스 · 앱 복귀 · 위치 설정 신호 때 읽기
         │   ├── mappers/      ★ 서버 응답 -> 앱 모델 변환. 백엔드 변경 흡수 지점
         │   │   ├── personalSaveMapper.ts  저장물 상세 · 목록 항목 -> SaveState
         │   │   └── savedPlaceMapper.ts  내 장소 목록 + 저장물 목록 -> SavedPlace(장소마다 가장 최근 저장물)
@@ -304,14 +305,19 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   카드 요약은 영상 요약 → 영상 제목 → 숨김. 태그 줄 · 필터 칩은 그리지 않는다(응답에 없다). 카드를 누르면 저장물 08.
   헤더는 "지금 {동네}"다. 동네 이름은 지금 위치를 역지오코딩해 정한다(`useAreaName` · `reverseGeocodeArea`). Android Geocoder 주소의
   district(subLocality) → street(thoroughfare) → city(locality) → formattedAddress 조각 순으로 보고 "동 · 읍 · 면 · 가"로 끝나는 첫 값을 쓰며, 없거나 실패하면 동네 줄을 숨긴다.
-  위치를 읽는 동안 · 장소를 읽는 동안은 헤더만 보인다. 장소를 처음 읽다가 실패하면 기억 탭과 같은 "확인하지 못했어요. 눌러서 다시 불러와요"(누르면 다시 읽기).
+  위치 · 동의 · 장소를 읽는 동안은 헤더만 보인다(목록을 보였다가 06b 로 바뀌지 않게). 장소를 처음 읽다가 실패하면 기억 탭과 같은 "확인하지 못했어요. 눌러서 다시 불러와요"(누르면 다시 읽기).
   읽는 때는 지도 탭과 같다(포커스 · 앞으로 올 때, 화면을 떠난 뒤에 온 결과는 버림).
 - 06(반경 안에 없음): "가장 가까운 기억은 {N.Nkm} 떨어진 {장소}에 있어요."(거리는 늘 직선거리 km) + "{장소} 기억 보기"(지도 탭 `placeId`).
   바랜 썸네일 3장은 가까운 3곳. 저장한 장소가 하나도 없으면 안내 문장 · 링크를 숨기고 썸네일은 자리표시다.
-- 06b(위치 꺼짐, 2203:939): 위치 권한이 없거나(꺼짐) 위치를 받지 못하면(모름). 헤더는 "위치를 쓰지 않는 중", 바랜 썸네일은 최근 저장 3곳(없으면 자리표시).
-  "위치 켜기"(`nearbyView` 의 `locationAction`): 꺼짐이면 다시 물을 수 있을 때 권한 요청(`requestForegroundLocation`), 아니면 앱 설정(`Linking.openSettings`).
+- 06b(위치 꺼짐, 2203:939): 위치 정보 이용 동의가 agreed 가 아니거나(never · withdrawn · outdated, 위치 권한이 있어도),
+  위치 권한이 없거나(꺼짐) 위치를 받지 못하면(모름)이다(`nearbyGate`). 근처 기능 꺼짐 원칙(동의 절)과 서버 동작(동의 없으면 도착 이벤트를 버림)과 같다.
+  동의를 읽지 못하면 게이트를 걸지 않고 위치 · 장소 규칙대로 보인다(서버가 안 될 때 동의를 잘못 안내하지 않게).
+  헤더는 "위치를 쓰지 않는 중", 바랜 썸네일은 최근 저장 3곳(없으면 자리표시).
+  "위치 켜기"(`nearbyView` 의 `locationAction`): 동의가 없으면 먼저 동의 시트(`LocationConsentSheet`, outdated 면 약관이 바뀌었다는 제목).
+  "동의하고 계속"이 저장되면 시트를 닫고 같은 누름 안에서 위치 단계로 이어 간다(00d 와 같다). "나중에" · 바깥 닫힘은 06b 에 머물고, 저장 실패는 시트에 오류.
+  위치 단계: 꺼짐이면 다시 물을 수 있을 때 권한 요청(`requestForegroundLocation`), 아니면 앱 설정(`Linking.openSettings`).
   모름이면 휴대폰 위치가 꺼져 있을 때 안드로이드 위치 설정(`openLocationSourceSettings`), 켜져 있으면 바로 다시 읽기(위치 설정 신호를 낸다. 지오펜스 재등록도 함께 돈다).
-  권한 창에서 돌아오면 위치 설정 신호로, 설정 화면에서 돌아오면 앱이 앞으로 올 때 위치를 다시 읽어 목록으로 바뀐다. 위치 정보 이용 동의 시트 연결은 아직이다.
+  동의 저장 · 권한 창에서 돌아오면 위치 설정 신호로, 설정 화면에서 돌아오면 앱이 앞으로 올 때 위치 · 동의를 다시 읽어 목록으로 바뀐다.
 - 실행 모션 도착 자리는 첫 "지금" 카드다. 06 · 06b · 장소 읽기 실패면 대상 없음(null)을 보고하고, 읽는 동안은 보고하지 않는다(App 이 1000ms 기다린다).
 - 지도 구조: 근처 감지는 OS 지오펜싱, 앱 안 표시는 Google Maps SDK, 장소 좌표는 서버가 LocationIQ · 공공데이터(상가) · TourAPI 로 정한다. UI 단계는 표시와 핀만 한다.
 - 시트는 `@gorhom/bottom-sheet`, 지도는 `react-native-maps`(Google provider)로 구현한다.
@@ -354,7 +360,7 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
       `{ shouldShowBanner: false, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }` 다(목록 · 소리, 배지 없음).
       Android 8+ 는 banner · list 를 가르지 않고, 헤드업 · 소리는 채널이 정한다. 그런데 channelId 가 없으면 expo 대체 채널("Miscellaneous", 중요도 HIGH → 헤드업)로 간다.
       그래서 서버가 `channelId: "nearby"` 를 보내도록 백엔드에 요청했다(`defaultChannel` 은 빠뜨렸을 때의 안전망).
-- 동의 API 는 서버에 있다: `GET /api/me/consents`, `PUT /api/me/consents/{consentType}`(유형 `LOCATION_BASED_SERVICE` · `PUBLIC_CANDIDATE_CONTRIBUTION`). 클라이언트 · 목은 있고(`shared/api/consents.ts`, 약관 URL `consentTerms.ts`, 상태 계산 `mappers/consentMapper.ts`). 00d "위치 허용하기"에 연결됐다(동의하지 않았으면 `shared/ui/LocationConsentSheet` 로 동의를 받은 뒤 권한 요청)과 설정(11c · 11d, "기기 권한" 절)에 연결됐다. 06b 는 연결 전이다.
+- 동의 API 는 서버에 있다: `GET /api/me/consents`, `PUT /api/me/consents/{consentType}`(유형 `LOCATION_BASED_SERVICE` · `PUBLIC_CANDIDATE_CONTRIBUTION`). 클라이언트 · 목은 있고(`shared/api/consents.ts`, 약관 URL `consentTerms.ts`, 상태 계산 `mappers/consentMapper.ts`). 00d "위치 허용하기"에 연결됐다(동의하지 않았으면 `shared/ui/LocationConsentSheet` 로 동의를 받은 뒤 권한 요청)과 설정(11c · 11d, "기기 권한" 절), 근처 06b "위치 켜기"(게이트 · 동의 시트, "내비게이션" 절)에 연결됐다.
     - 거두면(`agreed: false`) 서버에 기록한 뒤 위치 설정 신호를 내고, `syncGeofences` 가 동의가 `agreed` 가 아니므로 지오펜스를 해제하고 상태를 지운다.
     - 서버는 철회되지 않은 `LOCATION_BASED_SERVICE` 동의가 없으면 위치 이벤트를 실행 없이 버리고 그대로 202 를 돌려준다. 지금은 버린 이유가 응답 · 로그 어디에도 없다.
     - PUT 으로 동의할 때(`agreed: true`) `termsVersion` 은 그 유형의 서버 설정 버전(`consent.*-terms-version`, 기본 v1)과 같아야 하고, 다르면 400 이다.
@@ -363,7 +369,7 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
     - 동의 중인데 `termsVersion` 이 `currentTermsVersion` 과 다르면 `outdated` 다(백엔드 합의: 동의한 버전이 현재 버전과 다르면 재동의를 받는다).
       화면은 outdated 를 동의 없음과 같이 다룬다(근처 기능 꺼짐). 지오펜스 등록도 `agreed` 만 통과시킨다.
       `currentTermsVersion` 이 없으면(필드가 없는 옛 서버) 비교할 수 없어 `agreed` 로 보지만, 이때 동의 PUT 은 버전을 얻지 못해 실패한다.
-    - 재동의는 00d 와 설정에서만 묻는다. 동의 시트는 outdated 에서 열 때 제목만 "위치 정보 약관이 바뀌었어요"다(`termsChanged`, 열 때의 값을 닫힐 때까지 유지).
+    - 재동의는 00d · 설정 · 근처 06b 에서 묻는다. 동의 시트는 outdated 에서 열 때 제목만 "위치 정보 약관이 바뀌었어요"다(`termsChanged`, 열 때의 값을 닫힐 때까지 유지).
     - 동의는 OS 위치 권한과 분리해 동의 시트(`shared/ui/LocationConsentSheet`)에서 명시적으로 받는다(00d · 설정).
 - 지오펜스 API(`shared/api/geofences.ts`)는 develop 코드(`GeofenceResponse` · `LocationEventRequest`)와 ADR003\_지오펜스 기준이다. docs/API.md 의 `regions[{…}]` · `dwellDelayMs` 모양은 옛 것이라 따르지 않는다.
     - `GET /api/geofences?latitude&longitude&platform=ANDROID`(앱은 ANDROID 고정) → `{ regions: [], resync: { geofenceId: "resync", latitude, longitude, radiusMeters } | null, places: [{ geofenceId: "place:{placeId}", placeId, latitude, longitude, radiusMeters }] }`.
@@ -684,20 +690,20 @@ type AnalysisFailureCode =
 공유하면 앱이 앞으로 뜨고 지금 화면 위에 공유 받음 시트(저장 중 · 저장함 · 이미 저장함 · 대기열 · Shorts 아님)가 뜬다.
 분석 결과는 알림이 아니라 기억 탭에서 여는 저장 결과 모달(02~05)로 본다.
 
-| 경우                                         | 표현                                                                     |
-| -------------------------------------------- | ------------------------------------------------------------------------ |
-| 지원하지 않는 링크                           | 공유 받음 시트 NotShorts. 저장하지 않음                                  |
-| 비공개·삭제 영상 (`FAILED` / `VIDEO_ACCESS`) | 05 저장 결과(볼 수 없는 영상 문구) + 기억 탭 실패 셀                     |
-| 분석 실패                                    | 05 저장 결과 모달 + 기억 탭 실패 셀 (제목을 모르면 "불러오지 못한 영상") |
-| 부분 성공 (`PARTIAL`)                        | 표현하지 않음 (배지 제거). 매핑은 미확정 표 참조                         |
-| 삭제·만료된 저장물 · 장소                    | 12 NotFound. "기억 목록으로" → 기억 탭                                   |
-| 장소 후보 없음 (`SUCCESS` + 빈 배열)         | 04 저장 결과 모달 + 전체 기억 배지                                       |
-| 분석 중                                      | 03 저장 결과 모달 + 전체 기억 배지                                       |
-| 장소 후보 여러 개                            | 02 저장 결과 모달 (기존 확인 화면을 흡수)                                |
-| 저장물 0개                                   | 07b 전체 기억 빈 상태. 신규 사용자에게는 사실상 튜토리얼                 |
-| 근처에 저장물 없음                           | 06 근처 빈 상태                                                          |
-| 위치 권한 없음 · 위치를 받지 못함            | 06b 근처 위치 꺼짐                                                       |
-| 제안 성립 안 함                              | 알림이 오지 않는다. 화면 없음                                            |
+| 경우                                               | 표현                                                                     |
+| -------------------------------------------------- | ------------------------------------------------------------------------ |
+| 지원하지 않는 링크                                 | 공유 받음 시트 NotShorts. 저장하지 않음                                  |
+| 비공개·삭제 영상 (`FAILED` / `VIDEO_ACCESS`)       | 05 저장 결과(볼 수 없는 영상 문구) + 기억 탭 실패 셀                     |
+| 분석 실패                                          | 05 저장 결과 모달 + 기억 탭 실패 셀 (제목을 모르면 "불러오지 못한 영상") |
+| 부분 성공 (`PARTIAL`)                              | 표현하지 않음 (배지 제거). 매핑은 미확정 표 참조                         |
+| 삭제·만료된 저장물 · 장소                          | 12 NotFound. "기억 목록으로" → 기억 탭                                   |
+| 장소 후보 없음 (`SUCCESS` + 빈 배열)               | 04 저장 결과 모달 + 전체 기억 배지                                       |
+| 분석 중                                            | 03 저장 결과 모달 + 전체 기억 배지                                       |
+| 장소 후보 여러 개                                  | 02 저장 결과 모달 (기존 확인 화면을 흡수)                                |
+| 저장물 0개                                         | 07b 전체 기억 빈 상태. 신규 사용자에게는 사실상 튜토리얼                 |
+| 근처에 저장물 없음                                 | 06 근처 빈 상태                                                          |
+| 위치 동의 없음 · 위치 권한 없음 · 위치를 받지 못함 | 06b 근처 위치 꺼짐                                                       |
+| 제안 성립 안 함                                    | 알림이 오지 않는다. 화면 없음                                            |
 
 ## 설계 근거
 
