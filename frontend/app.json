@@ -13,9 +13,8 @@
         "android": {
             "package": "com.remembrall.app",
             "adaptiveIcon": {
-                "backgroundColor": "#E6F4FE",
+                "backgroundColor": "#6B4E7A",
                 "foregroundImage": "./assets/images/android-icon-foreground.png",
-                "backgroundImage": "./assets/images/android-icon-background.png",
                 "monochromeImage": "./assets/images/android-icon-monochrome.png"
             },
             "predictiveBackGestureEnabled": false
@@ -50,6 +49,7 @@
             [
                 "expo-notifications",
                 {
+                    "icon": "./assets/images/notification-icon.png",
                     "color": "#6B4E7A",
                     "defaultChannel": "nearby"
                 }
