@@ -374,7 +374,18 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
       마지막 결과(결과 · 시각 · 마지막 등록 시각)를 메모리에 두고 `getLastPushTokenSync` · `subscribePushTokenSync` 로 내보낸다(시연 도구가 읽는다. 토큰 값은 두지 않는다).
       알림 모듈이 없는 빌드(Expo Go 포함)는 권한 없음과 갈라 `skipped: unavailable` 이다.
     - Expo Go · 모듈 없는 빌드 · google-services.json 없이 만든 빌드(Firebase 초기화 안 됨)는 토큰을 받지 못해 건너뛴다(경고 한 번).
-    - 알려진 한계: 요청 도중 게스트 세션을 다시 받으면 서버는 토큰이 지워진 상태로 그 요청을 처리한다(예: 서버 초기화 뒤 첫 도착 알림이 오지 않는다). 다음에 앱이 앞으로 돌아올 때 다시 등록된다.
+    - 세션을 다시 받은 직후 재등록: 서버는 새 세션을 발급할 때(`Device.replaceSession`) 토큰을 지운다. 그래서 게스트 세션을 다시 받으면
+      원래 요청들을 다시 보내기 전에 새 세션으로 토큰을 등록한다(`login.ts` 의 다시 받기 안에서 `setSessionRefreshedHandler` 로 넣은
+      `registerPushTokenAfterRefresh` 를 기다림, App · 헤드리스 지오펜스 태스크가 넣는다). 서버 초기화 뒤 백그라운드 도착 보고가 401 로
+      세션을 다시 받아도, 다시 보낸 도착 보고를 서버가 처리할 때 토큰이 있어 그 알림이 사라지지 않는다.
+      교착 방지: 다시 받기는 진행 중인 실행 하나로 묶이고(`refreshing`), FCM 동기화(`syncPushToken`)도 실행 하나로 묶인다. 그래서 재등록은
+      (1) 세션을 다시 받지 않는 요청(`refresh: false`, 401 이어도 세션을 지우지 않고 실패)으로 보내 다시 받기가 자기 자신을 기다리지 않게 하고,
+      (2) `syncPushToken` 의 묶음을 거치지 않는 전용 함수로 보내 401 로 다시 받기를 기다리던 동기화와 서로 기다리지 않게 하고,
+      (3) 핸들러 전체를 5초에서 끊어(PUT 시간 제한도 5초) 원래 요청들이 오래 붙잡히지 않게 한다. 실패 · 권한 없음 · 토큰 없음 · 시간 초과는 조용히 넘기고
+      원래 요청을 다시 보낸다(다음 앞으로 올 때의 동기화가 다시 한다). 성공하면 기억한 쌍과 시연 도구 "등록됨 · HH:mm"을 새 세션으로 바꾼다.
+      백그라운드에서는 첫 도착 보고 하나 안에 다시 받기(최대 15초) · 재등록(최대 5초) · 다시 보내기(최대 10초)가 들어가 태스크 예산을 넘을 수 있다.
+      도착 보고는 보내기 전에 대기열(상태 파일)에 있고 보낸 결과가 sent 일 때만 지우므로, 태스크가 끝나거나 시간 초과로 끝나면 남아서
+      다음 보내기(다음 이벤트 · 앞으로 올 때)가 같은 triggerEventId 로 다시 보낸다(서버는 중복을 거르고, 앞 실행이 실패로 끝났으면 다시 실행한다).
     - 알림 채널: "근처 알림"(id `nearby`, 중요도 DEFAULT, 소리 · 진동 · 표시 범위는 OS 기본값). `runtime/notifications/channels.ts` 의 `ensureChannels` 가
       `shared/permissions/notifications.ts` 의 `ensureNotificationChannel` 로 만들고, App 마운트 때 켤 때마다 부른다(헤드리스 태스크에서는 부르지 않는다).
       만든 뒤에는 이름 · 설명만 바뀌고 중요도 · 소리는 앱이 바꿀 수 없다. id 는 바꾸지 않는다(app.json 의 `defaultChannel` 과 같아야 한다).
@@ -432,7 +443,7 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
       앱 데이터 삭제 · 재설치(세션 · 설치 id 도 지워져 새 게스트로 다시 시작한다) · Play 서비스 데이터 삭제. 재부팅 · 앱 업데이트는 공백이 없다.
 - **헤드리스 흐름**(`runtime/geofence/geofenceTask.ts`): `index.js` 가 번들 최상위에서 `defineGeofenceTask` 를 `registerRootComponent` 보다 먼저 부른다
   (백그라운드로 깨어나면 컴포넌트가 마운트되지 않고, 이벤트가 왔을 때 정의가 없으면 태스크 매니저가 태스크를 해제한다).
-  태스크 매니저가 없으면 경고 한 번(앱은 그대로 뜬다). 태스크는 `registerSessionRefresher` → `ensureSessionRestored`(아직 읽기 전일 때만 복원) →
+  태스크 매니저가 없으면 경고 한 번(앱은 그대로 뜬다). 태스크는 `registerSessionRefresher` · `setSessionRefreshedHandler`(다시 받은 뒤 FCM 재등록) → `ensureSessionRestored`(아직 읽기 전일 때만 복원) →
   signedOut 이면 해제, 온보딩 중이면 무시 → eventType(1 들어옴 · 2 나감)을 `handleGeofenceEvent` 로 → `resyncNeeded` 면 `syncGeofences("resync")` → `flushLocationEvents`.
   `restoreSession` 은 실제로 한 번만 돈다(App 과 태스크가 같은 결과를 기다린다. 다시 정하면 온보딩 중에 저장된 세션 때문에 온보딩을 건너뛴다).
 - **시연 도구**(설정 맨 아래 "시연 도구" 묶음, `app/demo/DemoToolsSection.tsx`): `__DEV__` 이거나 `EXPO_PUBLIC_DEMO_TOOLS === "1"`(eas.json preview 프로필 env)일 때만 보인다.
@@ -465,6 +476,9 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
       만료가 보이면 보내기 전에 미리 다시 받는다. 다시 받기가 통신 오류면 로그아웃하지 않고 원래 오류를 넘긴다. 거절(4xx)이면 세션을 지우고 00a(설치 id 는 남긴다).
     - 카카오 세션: 세션을 지우고 00b.
     - 클라이언트는 다시 받는 함수를 `setSessionRefresher` 로 주입받는다(App 시작 때 `login.ts` 가 등록). `client.ts` 는 `login.ts` 를 import 하지 않는다.
+    - 다시 받기는 새 세션을 저장한 뒤 `setSessionRefreshedHandler` 로 넣은 함수(FCM 재등록, 최대 5초)를 기다리고 나서 refreshed 를 돌려준다.
+      그래서 401 을 받은 요청들은 재등록이 끝난 뒤에 다시 보내진다("인증 · 세션" 절의 FCM 토큰).
+    - `refresh: false` 요청은 세션을 다시 받지 않는다(만료 전 · 401 모두). 401 이면 세션을 건드리지 않고 그대로 실패한다. 다시 받기 안에서 보내는 요청(재등록)이 쓴다.
 - 인증 · 저장물 · 동의 · 지오펜스 · 기기 · 알림 API 가 클라이언트를 거친다. 근처 · 지도 탭은 내 장소(`useSavedPlaces`)로 받는다.
 
 ## 저장 보내기 대기열

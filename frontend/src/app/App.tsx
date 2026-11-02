@@ -16,7 +16,11 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ensureChannels } from "../runtime/notifications/channels";
 import { startListening } from "../runtime/notifications/notificationListener";
-import { registerSessionRefresher } from "../shared/auth/login";
+import { registerPushTokenAfterRefresh } from "../runtime/notifications/pushTokenSync";
+import {
+    registerSessionRefresher,
+    setSessionRefreshedHandler,
+} from "../shared/auth/login";
 import {
     isDemoToolsEnabled,
     registerDemoToolsSection,
@@ -95,7 +99,9 @@ export default function App() {
 
     useEffect(() => {
         // 게스트 세션이 만료 · 401 이면 API 클라이언트가 조용히 다시 받는다.
+        // 다시 받으면 서버가 FCM 토큰을 지우므로 원래 요청을 다시 보내기 전에 새 세션으로 다시 등록한다.
         registerSessionRefresher();
+        setSessionRefreshedHandler(registerPushTokenAfterRefresh);
         restoreSession();
         // 로그인 여부와 무관하게 켤 때마다. 첫 알림(토큰 등록 뒤)보다 먼저 채널 · 앞에 있을 때의 표시가 있게 한다.
         ensureChannels();

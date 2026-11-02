@@ -1,11 +1,15 @@
 // 지오펜스 백그라운드 태스크. index.js 가 번들 최상위에서 defineGeofenceTask 를 부른다
 // (앱이 백그라운드로 깨어나면 컴포넌트가 마운트되지 않고, 정의가 없으면 태스크 매니저가 태스크를 해제한다).
 // 태스크 매니저가 없는 빌드에서는 경고를 한 번 남기고 넘어간다(앱은 그대로 뜬다).
-// 처리: 세션 다시 받기 등록 → 세션 복원(아직 읽기 전일 때만) → signedIn 이 아니면 해제(signedOut) 또는 무시(온보딩 중)
+// 처리: 세션 다시 받기 · 다시 받은 뒤 FCM 재등록 등록 → 세션 복원(아직 읽기 전일 때만) → signedIn 이 아니면 해제(signedOut) 또는 무시(온보딩 중)
 //   → 들어옴 · 나감을 handleGeofenceEvent 로 → 재조회 지오펜스 나감이면 다시 등록 → 남은 도착 보고 보내기.
 // 태스크 데이터에는 eventType(1 들어옴 · 2 나감, expo-location GeofencingEventType)과 region 만 있다. 오류가 온 이벤트는 무시한다.
-import { registerSessionRefresher } from "../../shared/auth/login";
+import {
+    registerSessionRefresher,
+    setSessionRefreshedHandler,
+} from "../../shared/auth/login";
 import { ensureSessionRestored } from "../../shared/auth/session";
+import { registerPushTokenAfterRefresh } from "../notifications/pushTokenSync";
 import { flushLocationEvents, handleGeofenceEvent } from "./geofenceManager";
 import { syncGeofences } from "./geofenceSync";
 import { GEOFENCE_TASK, loadTaskManager } from "./taskManager";
@@ -46,7 +50,9 @@ export async function handleGeofenceTask({
               : null;
     if (kind == null) return;
 
+    // 백그라운드 도착 보고가 401 로 세션을 다시 받으면, 다시 보내기 전에 새 세션으로 FCM 토큰을 등록해 그 도착의 알림이 오게 한다.
     registerSessionRefresher();
+    setSessionRefreshedHandler(registerPushTokenAfterRefresh);
     const auth = await ensureSessionRestored();
     if (auth.status === "signedOut") {
         await syncGeofences("signedOut");

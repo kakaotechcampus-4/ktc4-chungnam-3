@@ -5,6 +5,8 @@
 // signedIn 이 아니면 기억한 쌍을 지운다. 실패는 조용히 failed 이고 다음 호출(앞으로 돌아올 때 · 다음 실행)이 다시 한다. 재시도 · 백오프는 없다.
 // 실행 중에 또 불리면 하나로 합치고, 끝난 뒤 한 번 더 돈다(그 사이 넘겨받은 마지막 토큰으로).
 // 마지막 결과(결과 · 시각 · 마지막 등록 시각)를 메모리에 두고 구독할 수 있게 한다. 시연 도구가 읽는다. 토큰 값은 두지 않는다.
+// 게스트 세션을 다시 받은 직후에는 registerPushTokenAfterRefresh 가 새 세션으로 바로 다시 등록한다(서버가 새 세션마다 토큰을 지운다).
+// 앱(App)과 헤드리스 지오펜스 태스크가 setSessionRefreshedHandler 로 넣는다.
 import { registerFcmToken } from "../../shared/api/devices";
 import { getAuthState, getSessionToken } from "../../shared/auth/session";
 import {
@@ -81,6 +83,22 @@ export function syncPushToken(token?: string): Promise<PushTokenSyncResult> {
         return syncPushToken(next);
     });
     return queued;
+}
+
+// 세션 다시 받기 안(login.ts, 원래 요청들을 다시 보내기 전)에서 새 세션으로 토큰을 등록한다.
+// syncPushToken 의 묶음을 거치지 않는다: 돌고 있던 동기화의 PUT 이 401 로 이 다시 받기를 기다리는 중일 수 있어,
+// 묶음 뒤에 줄을 서면 서로를 기다린다. 요청도 세션을 다시 받지 않는다(registerFcmToken duringRefresh).
+// signedIn · 알림 권한 granted · 토큰이 있을 때만 보낸다. 실패는 던지고(다시 받기가 삼킨다) 다음 동기화(앞으로 올 때)가 다시 한다.
+// 성공하면 기억한 쌍과 마지막 결과를 새 세션으로 바꾼다(시연 도구 "등록됨 · HH:mm").
+export async function registerPushTokenAfterRefresh(): Promise<void> {
+    if (getAuthState().status !== "signedIn") return;
+    if ((await getNotificationPermission()) !== "granted") return;
+    const fcmToken = await getFcmToken();
+    if (fcmToken == null) return;
+    await registerFcmToken(fcmToken, { duringRefresh: true });
+    if (getAuthState().status !== "signedIn") return;
+    lastSent = { sessionToken: getSessionToken(), fcmToken };
+    record({ kind: "registered" });
 }
 
 async function sync(token: string | undefined): Promise<PushTokenSyncResult> {

@@ -1,5 +1,6 @@
 // 로그인 흐름. 제공자 로그인 → (API 주소가 있으면) 백엔드에 자격 증명을 보내 세션을 받아 저장 → 00c.
 // 게스트 세션은 만료 · 401 때 같은 설치 id 로 조용히 다시 받는다(refreshSession). 클라이언트에 등록해 쓴다.
+// 다시 받은 직후 원래 요청들을 다시 보내기 전에 등록된 함수(setSessionRefreshedHandler, FCM 토큰 재등록)를 기다린다(최대 5초).
 // 목 모드(API 주소 없음)에서는 서버를 부르지 않고 세션도 저장하지 않는다.
 // session.ts 는 API 클라이언트를 import 할 수 없어 이 파일에 둔다.
 import {
@@ -49,7 +50,31 @@ export async function signIn(
 // 동시에 여러 요청이 401 을 받아도 다시 받기는 한 번만 한다.
 let refreshing: Promise<SessionRefreshResult> | null = null;
 
-// 게스트 세션을 같은 설치 id 로 다시 받는다.
+// 새 세션을 받은 직후(원래 요청들을 다시 보내기 전) 기다릴 함수. 서버가 새 세션마다 FCM 토큰을 지워서
+// runtime 이 새 세션으로 다시 등록하는 함수를 넣는다(shared 는 runtime 을 import 하지 않는다).
+// 이 함수는 다시 받기 안에서 돈다. 세션을 다시 받는 요청(refresh: false 가 아닌 요청)이나 그런 요청을 기다리는 일을 하면
+// 진행 중인 다시 받기가 자기 자신을 기다리게 된다. 예외는 삼키고, REFRESHED_HANDLER_TIMEOUT_MS 를 넘으면 기다리지 않는다.
+let onRefreshed: (() => Promise<void>) | undefined;
+const REFRESHED_HANDLER_TIMEOUT_MS = 5_000;
+
+export function setSessionRefreshedHandler(handler: () => Promise<void>): void {
+    onRefreshed = handler;
+}
+
+async function runRefreshedHandler(): Promise<void> {
+    if (onRefreshed == null) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, REFRESHED_HANDLER_TIMEOUT_MS);
+    });
+    try {
+        await Promise.race([onRefreshed().catch(() => {}), timeout]);
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+// 게스트 세션을 같은 설치 id 로 다시 받는다. 새 세션을 저장하면 onRefreshed 를 기다린 뒤 refreshed 를 돌려준다.
 // refreshed: 새 세션을 저장했다. failed: 통신 오류 등(로그아웃하지 않는다).
 // rejected: 게스트 로그인이 거절됐다(세션을 지우고 00a). notApplicable: 게스트 세션이 아니다.
 async function refreshSession(): Promise<SessionRefreshResult> {
@@ -60,6 +85,7 @@ async function refreshSession(): Promise<SessionRefreshResult> {
             const result = await guest.signIn();
             if (result.type !== "success") return "failed";
             await requestSession(guest, result.credential);
+            await runRefreshedHandler();
             return "refreshed";
         } catch (error) {
             const status = error instanceof ApiError ? error.status : null;
