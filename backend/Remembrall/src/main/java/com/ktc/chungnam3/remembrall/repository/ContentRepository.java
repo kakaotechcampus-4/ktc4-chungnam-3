@@ -60,6 +60,20 @@ public interface ContentRepository extends JpaRepository<Content, UUID> {
             """, nativeQuery = true)
     int releaseAnalysisClaim(@Param("contentId") UUID contentId, @Param("now") Instant now);
 
+    /**
+     * 분석 중 예외가 삼켜지거나(로그만 남고 상태 갱신 없이 끝남) 서버가 재시작되면 ANALYZING이
+     * 영구히 남는다 - 원인과 무관하게 {@code analysis_started_at} 기준으로 오래된 것만 솎아서
+     * FAILED + EXTRACTION_API_ERROR로 전환한다. {@link #claimAnalysis}가 이 조합을 재시도 가능으로
+     * 보고 다시 선점하므로, 다음 저장 요청(또는 앱의 "다시 시도")이 자연스럽게 재분석으로 이어진다.
+     */
+    @Modifying
+    @Query(value = """
+            UPDATE content
+               SET analysis_status = 'FAILED', last_analysis_error_code = 'EXTRACTION_API_ERROR', updated_at = :now
+             WHERE analysis_status = 'ANALYZING' AND analysis_started_at < :threshold
+            """, nativeQuery = true)
+    int failStaleAnalyzing(@Param("threshold") Instant threshold, @Param("now") Instant now);
+
     @Modifying
     @Query(value = """
             UPDATE content

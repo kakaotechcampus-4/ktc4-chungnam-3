@@ -476,6 +476,26 @@ class PersonalSaveIntegrationTest {
                 .toInstant()).isEqualTo(NOW);
     }
 
+    @Test
+    void failStaleAnalyzingOnlyFlipsAnalyzingRowsOlderThanTheThreshold() {
+        UUID stale = content("stale", "ANALYZING");
+        jdbc.update("UPDATE content SET analysis_started_at = ? WHERE id = ?", Timestamp.from(NOW.minusSeconds(400)), stale);
+        UUID fresh = content("fresh", "ANALYZING");
+        jdbc.update("UPDATE content SET analysis_started_at = ? WHERE id = ?", Timestamp.from(NOW.minusSeconds(100)), fresh);
+        UUID alreadyFailed = content("already-failed", "FAILED");
+        jdbc.update("UPDATE content SET analysis_started_at = ? WHERE id = ?", Timestamp.from(NOW.minusSeconds(400)), alreadyFailed);
+
+        var updated = new TransactionTemplate(transactionManager)
+                .execute(transaction -> contents.failStaleAnalyzing(NOW.minusSeconds(300), NOW));
+
+        assertThat(updated).isEqualTo(1);
+        assertThat(status(stale)).isEqualTo("FAILED");
+        assertThat(jdbc.queryForObject("SELECT last_analysis_error_code FROM content WHERE id = ?", String.class, stale))
+                .isEqualTo("EXTRACTION_API_ERROR");
+        assertThat(status(fresh)).isEqualTo("ANALYZING");
+        assertThat(status(alreadyFailed)).isEqualTo("FAILED");
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"?size=0", "?size=-1", "?size=101", "?size=abc", "?cursor=bad", "?cursor="})
     void invalidPaginationReturns400(String query) throws Exception {
