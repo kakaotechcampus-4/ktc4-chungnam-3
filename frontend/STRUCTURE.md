@@ -74,6 +74,7 @@ frontend/
     │   ├── notification.ts   알림 페이로드 (발생원 무관)
     │   ├── consent.ts        앱 모델. 동의 상태(never · agreed · outdated · withdrawn)
     │   ├── saveState.ts      앱 모델. 저장물 상태(analyzing · failed · noPlace · ready)
+    │   ├── savedPlace.ts     앱 모델. 내 장소 하나와 그 장소를 가진 가장 최근 저장물(지도 · 근처)
     │   └── executionTrace.ts 에이전트 궤적
     │
     ├── runtime/              React 밖
@@ -101,7 +102,7 @@ frontend/
     │   │   └── components/
     │   ├── share-received/   공유 받음 시트(C/ShareReceivedSheet). 지금 화면 위에 뜬다
     │   ├── execution-trace/  "왜 에이전트인가" 증명 화면 (자리만 있음, 아직 쓰지 않음)
-    │   └── map-view/         지도 탭(10). 사진 핀 · 요약 시트
+    │   └── map-view/         지도 탭(10). 내 장소 사진 핀(mapPins) · 요약 시트
     │       └── components/
     │
     └── shared/
@@ -116,7 +117,8 @@ frontend/
         │   │                     채널 생성 · 근처 알림 채널 id · 앞에 있을 때 표시 · 누름 응답 · 로컬 알림 띄우기(목)
         │   ├── location.ts       위치 권한 조회(always · whileInUse · denied) · 앱 사용 중 · 백그라운드 요청 · 지오펜스 등록 · 해제 · 등록용 현재 위치
         │   ├── locationSettings.ts  위치 설정(동의 저장 · 권한 요청)이 바뀌었다는 신호. app 의 hook 이 받아 지오펜스를 다시 등록
-        │   └── usePermissionStatus.ts  진입 · 앞으로 돌아올 때 다시 읽는 hook
+        │   ├── usePermissionStatus.ts  진입 · 앞으로 돌아올 때 다시 읽는 hook
+        │   └── useDeviceLocation.ts  지금 위치 hook(지도 · 08 · 근처). 포커스 · 앞으로 올 때 한 번씩. 목 모드는 목 플래그 · 목 좌표
         ├── api/
         │   ├── config.ts     API 기본 주소(EXPO_PUBLIC_API_BASE_URL). 비거나 EXPO_PUBLIC_FORCE_MOCK=1 이면 목 모드
         │   ├── client.ts     기본 주소 · Bearer 헤더 · ApiError · 401 처리 · 요청별 시간 제한(timeoutMs)
@@ -131,8 +133,10 @@ frontend/
         │   ├── notificationsMock.ts  알림 목. 목 도착마다 PLACE 알림 1개를 만들어 로컬 알림으로 띄우고, 상세는 읽을 때 저장물을 다시 확인한다
         │   ├── usePersonalSaveDetail.ts  저장물 상세 hook. 포커스 · 앱 복귀 때 읽기, 분석 중 5초마다 다시 읽기
         │   ├── useNotificationDetail.ts  알림 상세 hook. 처음 그릴 때 한 번 읽고 열 화면(toNotificationTarget)을 정한다
+        │   ├── useSavedPlaces.ts  내 장소 hook(지도 · 근처). 내 장소 목록 + 저장물 목록(끝까지)을 묶어 읽기, 포커스 · 앱 복귀 때
         │   ├── mappers/      ★ 서버 응답 -> 앱 모델 변환. 백엔드 변경 흡수 지점
-        │   │   └── personalSaveMapper.ts  저장물 상세 · 목록 항목 -> SaveState
+        │   │   ├── personalSaveMapper.ts  저장물 상세 · 목록 항목 -> SaveState
+        │   │   └── savedPlaceMapper.ts  내 장소 목록 + 저장물 목록 -> SavedPlace(장소마다 가장 최근 저장물)
         │   └── mock/         UI 개발용 목 데이터. 화면 props 모양. 서버 계약 아님
         ├── launch/
         │   └── launchTarget.ts   실행 모션의 앞장이 내려앉을 자리(S2). 도착 화면이 창 좌표로 재서 보고(useLaunchTargetMeasure)하고
@@ -149,6 +153,7 @@ frontend/
         │   └── openExternalUrl.ts  웹 페이지(약관) 열기. expo-web-browser 지연 로드, 실패하면 Linking
         └── ui/               두 개 이상 feature 가 쓰는 공통 컴포넌트
             ├── savedAt.ts    저장 시각 → 바램(fadeFor) · 지난 시간(savedAgo). 순수 함수
+            ├── distanceLabel.ts  거리 → "도보 N분" · "N.Nkm". 순수 함수
             └── theme/        Figma 토큰 + metrics
 ```
 
@@ -252,7 +257,7 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   "확인 필요"는 목록 응답으로 알 수 없어 아직 나오지 않는다. 이름은 ready 면 영상 제목(따옴표 없음, 목록에 장소명이 없어 임시),
   미확정이면 “영상 제목”, 제목이 없으면 failed 는 "불러오지 못한 영상", 그 밖은 "제목 없는 영상".
 - 기억 탭에서 미확정 셀은 `SaveResult > Result { personalSaveId }`, ready 셀은 `ContentDetail { personalSaveId }` 로 연다.
-  지도 · 근처는 지금처럼 `ContentDetail { placeId }`(장소 목)로 연다.
+  지도는 `ContentDetail { personalSaveId, placeId }`(저장물 08)로, 근처는 아직 `ContentDetail { placeId }`(장소 목)로 연다.
 - 저장 결과(03 · 04 · 05)는 저장물 상세 API(`usePersonalSaveDetail` → `toSaveState`)를 읽는다. 포커스될 때 · 포커스된 동안 앱이 앞으로 올 때 읽고,
   분석 중이면 5초마다 다시 읽다가 끝나면 멈춘다. analyzing → 03, noPlace → 04, failed → 05, ready → 모달을 08(`ContentDetail { personalSaveId }`)로 바꾼다(뒤로 가면 기억 탭).
   404 → 12. 처음 읽기 실패 → Figma 05 문구 + "다시 시도"(다시 읽기). 읽는 동안은 닫기 줄만 보인다.
@@ -262,7 +267,8 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   "비공개로 바뀌었거나 삭제된 영상이라 다시 분석할 수 없어요." analysisError "장소를 알아내지 못했어요" / "이 영상은 다시 분석해도 같은 결과가 나와요. 링크는 그대로 보관해둘게요."
   코드가 없으면(null) Figma 05 문구 + 다시 시도. 다시 시도는 상세의 sourceUrl 을 다시 저장하고 상세를 다시 읽는다(서버가 다시 분석하면 03, 아니면 05 에 머문다).
 - 저장물로 연 08 은 `placeId` 파라미터와 같은 장소, 없으면 첫 장소를 그린다(`savedPlaceSheet` 의 `pickPlace`, 장소별 전환 전). 큰 글씨는 지난 시간, 바램은 저장 시각, 썸네일은 videoId.
-  응답에 없는 값은 08b 규칙대로 비운다: 도보 시간 없음, 메모는 장소 설명 → 영상 요약 → 숨김, 태그는 카테고리 1개 → 숨김, 주소 · 도보 시간이 모두 없으면 메타 줄을 숨긴다.
+  도보 시간은 지금 위치를 알 때 그 위치에서 장소까지의 거리로 정한다(`distanceLabel`, 모르면 없음).
+  응답에 없는 값은 08b 규칙대로 비운다: 메모는 장소 설명 → 영상 요약 → 숨김, 태그는 카테고리 1개 → 숨김, 주소 · 도보 시간이 모두 없으면 메타 줄을 숨긴다.
   원본 영상 줄 둘째 줄은 "{영상 제목} · YouTube Shorts"(제목이 없으면 "YouTube Shorts"), 누르면 videoId 의 Shorts 주소를 연다(sourceUrl 은 watch 형식).
   미니 핀은 그리지 않는다. ready 가 아니면 저장 결과로 바꾸고, 404 는 12. 읽는 동안은 바탕과 뒤로가기만, 실패하면 "확인하지 못했어요. 눌러서 다시 불러와요".
   "이 장소가 아니에요"는 지금처럼 02c 바꾸기 모드(그린 장소의 placeId)를 연다. 02c 의 실제 저장 · 바꾸기는 아직 목이다.
@@ -271,12 +277,23 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   02 · 02b(확인 필요)는 아직 이 경로로만 본다(되묻기 연결 전). 서버 id 는 UUID 라 목 키와 겹치지 않는다.
 - 08 시트 멈춤 지점은 기본 · 펼침이다. 지도 탭에서만 요약(10b) 지점이 추가된다.
 - 08 지도에는 이 장소 핀(fade 와 관계없이 40×71 · 흰 테두리 3 · 그림자, 바램은 장소의 fade · 이름표) · 현재 위치 · 현재 위치에서 장소까지의 점선 경로만 그린다.
-  현재 위치 · 경로는 위치 권한이 "denied" 일 때만 숨긴다. 경로는 경로 API 가 정해지기 전까지 직선 자리표시다.
+  현재 위치 · 경로는 지금 위치를 알 때만 그린다(`useDeviceLocation`). 경로는 경로 API 가 정해지기 전까지 직선 자리표시다.
+  도보 시간이 시트 메타 줄 높이를 바꾸므로 지금 위치를 읽은 뒤에 시트 높이를 잰다(읽는 동안은 바탕과 뒤로가기만).
   지도 영역은 뒤로가기 아래부터 시트 기본 지점 위까지이며(mapPadding), 그 안에 현재 위치와 장소를 함께 맞춘다(위는 핀 높이, 아래는 이름표 영역만큼 여유).
   다른 저장 장소는 미니 핀(fade 와 관계없이 22×39 · 흰 테두리 2 · 그림자 없음, 바램은 각 장소의 fade, 누름 없음)으로 그린다. 화면 맞추기에는 넣지 않는다.
 - 10b 요약 시트는 핀을 누르면 뜬다. 요약을 누르거나 위로 끌면 08 로 가고, 지도 빈 곳 · 아래로 끌기 · 뒤로 가기는 닫는다. 다른 탭으로 옮기면 선택을 풀고, 08 에 다녀오면 선택을 유지한다.
 - 06 "{동네} 기억 보기"는 `Main > Map` 에 `area` 를 넘긴다. 지도는 그 동네로 가운데를 잡고 `area` 를 비운다.
-- 지도 핀 크기는 fade 로 정한다(recent 40 · weeks 26 · months 22). 위치 권한이 "denied" 면 현재 위치 · 내 위치 버튼 · 도보 시간을 숨긴다.
+- 지도 핀 크기는 fade 로 정한다(recent 40 · weeks 26 · months 22). 지금 위치를 모르면 현재 위치 · 내 위치 버튼 · 도보 시간을 숨긴다.
+- 지도 탭(10)은 내 장소(`useSavedPlaces`)를 그린다. 내 장소 목록과 저장물 목록(size=100, `nextCursor` 가 없을 때까지)을 함께 읽어
+  `personalSaveId` 로 묶고, 장소마다 가장 최근 저장물 하나만 핀으로 둔다(썸네일 · 바램 · 지난 시간은 그 저장물). 저장물 목록에 없는 쌍은 버린다.
+  탭에 포커스될 때와 포커스된 동안 앱이 앞으로 올 때 다시 읽는다. 처음 읽기가 실패하면 핀 없이 지도만, 다시 읽기 실패는 보이던 핀을 둔다.
+  화면을 떠난 뒤에 온 응답은 버린다(숨겨진 동안 마커가 바뀌지 않게).
+  처음 영역은 06 링크의 동네(`area`) > 지금 위치 가운데 > 핀 전체 > 대한민국 전체 순이다. 지금 위치를 읽는 동안은 지도를 그리지 않고 바탕만 둔다.
+  지금 위치를 모르면 장소를 다 읽을 때까지(실패 포함) 기다려 정하고, 한 번 정한 뒤에는 다시 맞추지 않는다.
+  필터 칩은 숨긴다(카테고리가 응답에 없어 거를 수 없다). 요약 시트는 카테고리 없이 도보 시간만 보인다.
+- 지금 위치(`useDeviceLocation`): 화면에 포커스될 때와 포커스된 동안 앱이 앞으로 올 때 한 번씩 읽는다(움직임을 계속 따라가지 않는다).
+  위치 권한이 always · whileInUse 면 `getGeofencePosition`(마지막 위치 2분 · 200m → 현재 위치 5초 제한), 받지 못하면 모름, 권한이 없으면 꺼짐이다.
+  목 모드는 `MOCK_SCENARIO.locationPermission`(denied 면 꺼짐)과 목 좌표(`mapViewMock.current`)다.
 - 지도 구조: 근처 감지는 OS 지오펜싱, 앱 안 표시는 Google Maps SDK, 장소 좌표는 서버가 LocationIQ · 공공데이터(상가) · TourAPI 로 정한다. UI 단계는 표시와 핀만 한다.
 - 시트는 `@gorhom/bottom-sheet`, 지도는 `react-native-maps`(Google provider)로 구현한다.
 - 지명 라벨이 핀에 가려지는 것은 Google 지도 기본 동작이라 수정하지 않는다. 마커는 항상 지도 라벨 위에 그려지고, 겹치는 라벨을 숨기는 Advanced Marker 충돌 처리는 react-native-maps 가 지원하지 않는다. 가게 · 교통 · 도로 이름은 이미 끈다.
@@ -399,7 +416,7 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
       만료가 보이면 보내기 전에 미리 다시 받는다. 다시 받기가 통신 오류면 로그아웃하지 않고 원래 오류를 넘긴다. 거절(4xx)이면 세션을 지우고 00a(설치 id 는 남긴다).
     - 카카오 세션: 세션을 지우고 00b.
     - 클라이언트는 다시 받는 함수를 `setSessionRefresher` 로 주입받는다(App 시작 때 `login.ts` 가 등록). `client.ts` 는 `login.ts` 를 import 하지 않는다.
-- 인증 · 저장물 · 동의 · 지오펜스 · 기기 · 알림 API 가 클라이언트를 거친다. 근처 탭 · 지도 탭은 아직 화면 목(`shared/api/mock/`)에서 받는다.
+- 인증 · 저장물 · 동의 · 지오펜스 · 기기 · 알림 API 가 클라이언트를 거친다. 근처 탭은 아직 화면 목(`shared/api/mock/`)에서 받는다.
 
 ## 저장 보내기 대기열
 
@@ -512,15 +529,17 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 
 - `shared/api/mock/` 은 화면 props 모양 그대로 둔다. 서버 응답 계약처럼 만들지 않는다.
   서버 계약 모양의 목(API 함수의 목 분기)은 API 모듈 안이나 옆에 둔다(`consents.ts`, `personalSavesMock.ts`).
-- 화면 목을 쓰는 features(근처 탭 · 지도 탭 · 지도 · 근처에서 연 08)는 mock 에서 직접 받는다. `client.ts` 와 `mappers/` 를 거치지 않는다.
+- 화면 목을 쓰는 features(근처 탭 · 근처에서 연 08)는 mock 에서 직접 받는다. `client.ts` 와 `mappers/` 를 거치지 않는다.
   API 를 쓰는 화면: 기억 탭 · 저장 결과 · 저장물로 연 08 은 저장물 API(`personalSaves.ts` · `usePersonalSaveDetail.ts`)와 `mappers/personalSaveMapper.ts`,
+  지도 탭은 내 장소(`useSavedPlaces.ts`)와 `mappers/savedPlaceMapper.ts`,
   00d · 설정(11)은 동의 API(`consents.ts`)와 `mappers/consentMapper.ts`, 알림으로 연 08 은 알림 API(`notifications.ts` · `useNotificationDetail.ts`)를 쓴다. 목 모드에서는 각 API 의 목 분기가 답한다.
 - mock 은 features 의 타입을 import 하지 않는다(shared → features 금지). 구조적 타입으로 맞춘다.
 - 목 이미지 URL(picsum 고정 id)은 이 폴더 안에만 둔다.
 - 목 모드에서 세션과 로그인은 목 플래그다. `MOCK_SCENARIO.signedIn`(시작 시 세션 여부, 기본 false(개발 중에 팀원이 바꿈). true 면 근처 탭부터) · `loginResult`(success · cancelled · failed).
   온보딩 일러스트 사진은 목 이미지다(`mock/onboarding.ts`). 00a 4장은 첫 실행이 오프라인일 수 있고 실행 모션이 맨 앞 사진에 내려앉으므로
   같은 picsum 사진을 번들했다(`assets/images/onboarding/`, Thumb `image` prop). 00b · 00c 는 아직 원격 목 이미지다.
-- 지도(10 · 08)의 현재 위치와 denied 분기는 목 플래그(`MOCK_SCENARIO.locationPermission`)와 목 좌표(`mapViewMock`)다.
+- 목 모드에서 지도(10 · 08)의 현재 위치와 denied 분기는 목 플래그(`MOCK_SCENARIO.locationPermission`)와 목 좌표(`mapViewMock.current`)다(`useDeviceLocation`).
+  실제 모드는 실제 권한 · 위치다. 06 링크의 동네 영역은 근처 탭이 목인 동안 `mapViewMock.areas` 에서 찾는다.
   설정(11)과 지오펜스는 실제 권한 · 위치를 쓴다.
 - 위치기반서비스 동의는 목 모드에서 목 플래그다. `MOCK_SCENARIO.locationConsent`(시작 시 동의 상태, never · agreed · withdrawn, 기본 never) · `consentSaveResult`(동의 저장 결과, ok · fail, 기본 ok) ·
   `locationTermsVersion`(목 서버의 현재 약관 버전, v1 · v2, 기본 v1). 시작 상태의 동의 기록은 v1 이라 v2 + agreed 면 outdated 다.
@@ -548,6 +567,7 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   저장 결과 · 저장물로 연 08 도 이 목을 읽는다. 개발용 딥링크의 목 키(`saveResults`)와 지도 · 근처의 08(`placeDetails`)은 화면 목이다.
 - 장소 확정 저장물(ready)은 상세(08)로, 미확정 저장물은 저장 결과(02~05)로 간다.
 - 거리 표시: 도보 30분 이내는 "도보 N분", 30분을 넘으면 직선거리 "N.Nkm". 목 데이터는 이 규칙대로 문자열을 넣는다.
+  실제 값은 `shared/ui/distanceLabel.ts` 가 정한다. 도보 분 = 반올림(직선거리 × 1.3 ÷ 80), 최소 1분(서버 꺼내기 도구 `WalkingTimeCalculator` 와 같은 우회 계수 · 분속).
 
 ## 의존 방향
 

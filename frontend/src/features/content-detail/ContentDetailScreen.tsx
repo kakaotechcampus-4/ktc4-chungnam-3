@@ -1,9 +1,11 @@
 // 장소 상세. Google 지도 위에 끌 수 있는 시트. 지도에는 이 장소 핀 · 현재 위치 · 점선 경로를 그린다.
-// 현재 위치 · 경로는 위치 권한이 "denied" 일 때만 숨긴다. 경로는 경로 API 전까지 직선 자리표시다.
+// 현재 위치 · 경로 · 도보 시간은 지금 위치를 알 때만(useDeviceLocation) 보인다. 경로는 경로 API 전까지 직선 자리표시다.
+// 도보 시간은 목이 준 값이 없으면 지금 위치에서 장소까지의 거리로 정한다(distanceLabel).
 // 시트 멈춤 지점: 기본(08, 메모 2줄 상태의 내용 높이를 처음 한 번 재서 고정) · 펼침(08c, 상태바 아래까지).
+// 도보 시간이 메타 줄 높이를 바꾸므로 지금 위치를 읽은 뒤에 잰다(읽는 동안은 바탕과 뒤로가기만).
 // 뒤로가기 버튼은 Figma 레이어 순서대로 시트 아래에 있어 펼치면 가려진다.
-// 세 경로가 있다. placeId 로 열면(지도 · 근처) 장소 목을 그리고 다른 저장 장소를 미니 핀으로 그린다.
-// personalSaveId 로 열면(기억 탭 · 저장 결과) 저장물 상세 API 를 읽어 placeId 장소(없으면 첫 장소)를 그린다(savedPlaceSheet). 미니 핀은 없다.
+// 세 경로가 있다. placeId 로 열면(근처 · 개발용 딥링크) 장소 목을 그리고 다른 저장 장소를 미니 핀으로 그린다.
+// personalSaveId 로 열면(지도 · 기억 탭 · 저장 결과) 저장물 상세 API 를 읽어 placeId 장소(없으면 첫 장소)를 그린다(savedPlaceSheet). 미니 핀은 없다.
 // 저장물이 ready 가 아니면(장소가 없어졌거나 다시 분석 중) 저장 결과(02~05)로 바꾼다. 404 는 12.
 // notificationId 로 열면(알림) 알림 상세를 읽고 열람 처리를 한 번 보낸 뒤(기다리지 않고 실패는 무시), 첫 항목의 저장물 08 로 바꾼다.
 // 404 · 항목 없음 · 내 저장물이 아닌 항목(PUBLIC)은 12, 그 밖의 읽기 실패는 다시 불러오기.
@@ -36,17 +38,16 @@ import MapView, {
 } from "react-native-maps";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import {
-    MOCK_SCENARIO,
-    mapViewMock,
-    placeDetailsMock,
-} from "../../shared/api/mock";
+import { mapViewMock, placeDetailsMock } from "../../shared/api/mock";
 import { openNotification } from "../../shared/api/notifications";
 import { useNotificationDetail } from "../../shared/api/useNotificationDetail";
 import { usePersonalSaveDetail } from "../../shared/api/usePersonalSaveDetail";
 import { openExternalUrl } from "../../shared/external-links/openExternalUrl";
 import { youtubeShortsUrl } from "../../shared/external-links/youtubeLinks";
+import { distanceMeters } from "../../shared/geo/distanceMeters";
+import { useDeviceLocation } from "../../shared/permissions/useDeviceLocation";
 import CurrentLocation from "../../shared/ui/CurrentLocation";
+import { distanceLabel } from "../../shared/ui/distanceLabel";
 import Icon from "../../shared/ui/Icon";
 import NotFound from "../../shared/ui/NotFound";
 import PhotoMarker, { photoMarkerSize } from "../../shared/ui/PhotoMarker";
@@ -75,7 +76,7 @@ type MiniPlace = {
 };
 
 const details: Readonly<Record<string, Detail>> = placeDetailsMock;
-const { current, initialRegion: mapRegion } = mapViewMock;
+const { initialRegion: mapRegion } = mapViewMock;
 
 const EXPANDED = 1;
 const HANDLE_HEIGHT =
@@ -143,7 +144,7 @@ function NotificationPlaceDetail({
     return <DetailPending />;
 }
 
-// 지도 · 근처에서 여는 08. 장소 목을 그린다.
+// 근처 · 개발용 딥링크에서 여는 08. 장소 목을 그린다.
 function MockPlaceDetail({ placeId }: { placeId: string }) {
     const navigation = useNavigation();
     const detail = details[placeId];
@@ -166,7 +167,7 @@ function MockPlaceDetail({ placeId }: { placeId: string }) {
     );
 }
 
-// 기억 탭 · 저장 결과 · 알림에서 여는 08. 저장물 상세 API 를 읽는다.
+// 지도 · 기억 탭 · 저장 결과 · 알림에서 여는 08. 저장물 상세 API 를 읽는다.
 function SavedPlaceDetail({
     personalSaveId,
     placeId,
@@ -314,8 +315,19 @@ function ContentDetailView({
         }, []),
     );
 
-    const { coordinate, ...sheet } = detail;
-    const showWalk = MOCK_SCENARIO.locationPermission !== "denied";
+    const location = useDeviceLocation();
+    const current =
+        location.status === "located" ? location.coordinate : undefined;
+    const showWalk = current != null;
+    const { coordinate, ...rest } = detail;
+    const sheet = {
+        ...rest,
+        walk:
+            rest.walk ??
+            (current == null
+                ? undefined
+                : distanceLabel(distanceMeters(current, coordinate))),
+    };
     const footer = footerHeight(insets.bottom);
     const sheetHeight =
         bodyHeight == null
@@ -339,7 +351,7 @@ function ContentDetailView({
     // 이름표는 좌표 아래로 붙으므로 아래 여백에 이름표 영역을 더해 시트에 가려지지 않게 한다.
     // Android 의 edgePadding 은 px 다(mapPadding 은 dp).
     const fitRoute = () => {
-        if (!showWalk) return;
+        if (current == null) return;
         const px = PixelRatio.getPixelSizeForLayoutSize;
         const fit = metrics.contentDetail.mapFitPadding;
         mapRef.current?.fitToCoordinates([current, coordinate], {
@@ -370,8 +382,8 @@ function ContentDetailView({
 
     return (
         <View style={styles.screen}>
-            {/* 기본 지점 높이를 재기 위한 본문. 한 번 재면 치운다. */}
-            {bodyHeight == null && (
+            {/* 기본 지점 높이를 재기 위한 본문. 지금 위치를 읽은 뒤 한 번 재고 치운다. */}
+            {bodyHeight == null && location.status !== "loading" && (
                 <View
                     pointerEvents="none"
                     style={styles.measure}
@@ -403,7 +415,7 @@ function ContentDetailView({
                     toolbarEnabled={false}
                     showsCompass={false}
                 >
-                    {showWalk && (
+                    {current != null && (
                         <Polyline
                             coordinates={[current, coordinate]}
                             strokeColor={colors.text.secondary}
@@ -413,7 +425,9 @@ function ContentDetailView({
                             ]}
                         />
                     )}
-                    {showWalk && <CurrentLocation coordinate={current} />}
+                    {current != null && (
+                        <CurrentLocation coordinate={current} />
+                    )}
                     {/* 08 핀은 흰 테두리 그대로 두고 이름표만 붙인다. */}
                     {/* 다른 저장 장소는 먼저 넣어 이 장소 핀 아래에 그려지게 한다(zIndex 는 쓰지 않는다). 누르는 동작은 없다. */}
                     {otherPlaces.map((place) => (

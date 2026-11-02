@@ -156,10 +156,9 @@ export const metrics = {
         dotBorderWidth: 3,
     },
     // 10 지도 탭 2103:427 · 10b 2103:525.
-    // 필터는 상태바 아래 8, 좌우 16. 내 위치 버튼 44(안쪽 11 + 아이콘 22)는 오른쪽 16, 하단 바 위 20, 시트 위 16.
+    // 내 위치 버튼 44(안쪽 11 + 아이콘 22)는 오른쪽 16, 하단 바 위 20, 시트 위 16. 필터 칩은 숨겼다(카테고리 없음).
     // 요약 시트: 위 10 + 핸들 4 + 간격 16 + 요약(썸네일 56 × 9:16) + 아래 20.
     mapView: {
-        filtersPaddingHorizontal: 16,
         locateRight: 16,
         locateBottom: 20,
         locateSheetGap: 16,
