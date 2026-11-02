@@ -147,7 +147,9 @@ async function readPlaces(): Promise<DemoPlace[]> {
     const { items } = await fetchPersonalSaves({ size: LIST_SIZE });
     const places: DemoPlace[] = [];
     for (const item of items) {
-        if (toSaveStateFromItem(item).kind !== "ready") continue;
+        // 확인 필요도 장소가 일부 확정됐으면 장소가 있다.
+        const { kind } = toSaveStateFromItem(item);
+        if (kind !== "ready" && kind !== "needsConfirmation") continue;
         const detail = await fetchPersonalSave(item.personalSaveId);
         for (const place of detail.places) {
             if (places.some((added) => added.placeId === place.placeId)) {

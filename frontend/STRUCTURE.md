@@ -73,7 +73,7 @@ frontend/
     │   ├── proposal.ts       앱 모델. 꺼내기 결과
     │   ├── notification.ts   알림 페이로드 (발생원 무관)
     │   ├── consent.ts        앱 모델. 동의 상태(never · agreed · outdated · withdrawn)
-    │   ├── saveState.ts      앱 모델. 저장물 상태(analyzing · failed · noPlace · ready)
+    │   ├── saveState.ts      앱 모델. 저장물 상태(analyzing · failed · needsConfirmation · noPlace · ready)
     │   ├── savedPlace.ts     앱 모델. 내 장소 하나와 그 장소를 가진 가장 최근 저장물(지도 · 근처)
     │   └── executionTrace.ts 에이전트 궤적
     │
@@ -252,13 +252,19 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   탭에 포커스될 때와 포커스된 동안 앱이 앞으로 올 때 다시 읽는다(백엔드 합의: 보관함 진입 · 앱 복귀 시 재조회).
   다시 읽을 때는 이미 읽은 개수만큼(20~100) 한 번에 읽어 통째로 바꾸고, 응답이 올 때까지 보이던 목록을 둔다. 마지막 읽기만 반영한다.
   첫 로딩은 헤더만, 처음 읽기 실패는 캡션 자리에 "확인하지 못했어요. 눌러서 다시 불러와요"(누르면 다시 읽기), 다시 읽기 · 다음 페이지 실패는 목록을 그대로 둔다.
-  목록이 비면 07b. "모두 N곳"(N 은 저장물 수)은 마지막 페이지까지 읽었을 때만, 그 전에는 "오래 잊은 것일수록 바래 있어요"만 보인다.
+  목록이 비면 07b. "모두 N개"(N 은 저장물 수. 이름이 장소명이라 "곳"이면 장소 수로 오해된다)는 마지막 페이지까지 읽었을 때만, 그 전에는 "오래 잊은 것일수록 바래 있어요"만 보인다.
 - 기억 탭 바램 · 섹션은 저장 시각에서 지난 시간으로 정한다(`albumSections`). 7일 미만 recent "이번 주", 30일 미만 weeks "지난 몇 주",
   30일 이상 months 이고 섹션은 계절(3~5 봄 · 6~8 여름 · 9~11 가을 · 12~2 겨울, 12월은 다음 해 겨울)에 "올해" · "지난해" · "{YYYY}년"을 붙인다.
   근처에 왔을 때 바램이 되살아나는 것(Figma 2061:632)은 목록 응답에 그 정보가 없어 아직 하지 않는다.
-- 기억 탭 셀: 썸네일은 videoId 의 YouTube 썸네일, 배지는 SaveState(analyzing 분석 중 · failed 실패 · noPlace 장소 없음 · ready 없음).
-  "확인 필요"는 목록 응답으로 알 수 없어 아직 나오지 않는다. 이름은 ready 면 영상 제목(따옴표 없음, 목록에 장소명이 없어 임시),
-  미확정이면 “영상 제목”, 제목이 없으면 failed 는 "불러오지 못한 영상", 그 밖은 "제목 없는 영상".
+- 기억 탭 셀: 썸네일은 videoId 의 YouTube 썸네일, 배지는 SaveState(analyzing 분석 중 · failed 실패 · needsConfirmation 확인 필요 · noPlace 장소 없음 · ready 없음).
+  상태는 목록 항목으로 정한다(`toSaveStateFromItem`): 분석 중 · 실패 → 답하지 않은 되묻기(`pendingConfirmCount > 0`)가 있으면 확인 필요(장소가 일부 확정됐어도) → 장소 수.
+  실패 배지는 실패 종류로 가르지 않는다("실패" 하나). 매퍼는 `analysisFailureCode` 로 실패 이유를 채워 두고, 이유는 05 가 설명한다.
+  이름은 ready 면 대표 장소명(`representativePlaceName`, 따옴표 없음)이고 장소가 2곳 이상이면 "{장소} 외 {N-1}곳"이다.
+  한 줄이 넘치면 장소명만 말줄임하고 "외 N곳"은 늘 보인다(셀이 꼬리말을 따로 그린다). 대표 장소명이 없으면 영상 제목(따옴표 없음).
+  미확정(분석 중 · 실패 · 확인 필요 · 장소 없음)이면 “영상 제목”, 제목이 없으면 failed 는 "불러오지 못한 영상", 그 밖은 "제목 없는 영상".
+  알려진 차이: 장소가 여러 곳이면 서버가 placeId 순으로 고른 대표 장소(셀 이름)와 셀을 눌러 연 08 이 그리는 첫 장소가 다를 수 있다
+  (백엔드에 "처음 추출된 장소"로 바꿔 달라고 요청함. 앱에서 맞추지 않는다).
+  확인 필요 셀은 저장 결과로 연다. 저장 결과는 상세를 다시 읽는데 상세 매퍼가 아직 되묻기를 몰라서(`DetailSaveState`), 되묻기 02 연결 전까지는 08 · 04 로 바뀐다.
 - 기억 탭에서 미확정 셀은 `SaveResult > Result { personalSaveId }`, ready 셀은 `ContentDetail { personalSaveId }` 로 연다.
   지도 · 근처도 `ContentDetail { personalSaveId, placeId }`(저장물 08)로 연다. `ContentDetail { placeId }`(장소 목)는 개발용 딥링크(`detail/{placeId}`)만 쓴다.
 - 저장 결과(03 · 04 · 05)는 저장물 상세 API(`usePersonalSaveDetail` → `toSaveState`)를 읽는다. 포커스될 때 · 포커스된 동안 앱이 앞으로 올 때 읽고,
@@ -666,6 +672,7 @@ type AnalysisFailureCode =
 - **분석 진행 상태는 `analysisStatus` 다.** PENDING · ANALYZING 은 대기 UI(03 분석 중)로 본다.
 - **완료 통지는 따로 없다.** 앱이 상세 · 목록을 다시 읽어 확인한다(언제 다시 읽는지는 "내비게이션" 절의 기억 탭 · 저장 결과).
 - **PARTIAL 은 끝난 것으로 본다.** SUCCESS · PARTIAL 은 장소가 있으면 ready, 없으면 noPlace(`mappers/personalSaveMapper.ts`).
+  목록 항목은 끝난 저장물에 답하지 않은 되묻기(`pendingConfirmCount`)가 남아 있으면 장소 수와 관계없이 needsConfirmation 이다.
 - 실패 코드는 상세에만 있고 PARTIAL · FAILED 일 때만 채워진다. 같은 영상을 다시 저장하면 서버가 다시 분석하는 실패는
   `EXTRACTION_API_ERROR` 뿐이다(`VIDEO_UNAVAILABLE` 은 다시 분석해도 소용없다).
 - 저장 응답은 새로 저장하면 201, 이미 저장한 영상이면 200 이고 본문은 같다.

@@ -2,9 +2,10 @@
 // 바램(shared/ui/savedAt 의 fadeFor) · 섹션은 저장 시각에서 지난 시간으로 정한다. 7일 미만 recent "이번 주", 30일 미만 weeks "지난 몇 주",
 // 30일 이상 months 이고 섹션은 계절로 나눈다(3~5 봄, 6~8 여름, 9~11 가을, 12~2 겨울. 12월은 다음 해 겨울).
 // 계절 섹션 제목의 해는 지금 해와 비교해 "올해" · "지난해" · "{YYYY}년" 이다. 날짜는 기기 시간대로 본다.
-// 셀 이름: ready 는 목록에 장소명이 없어 영상 제목을 따옴표 없이 쓴다(임시). 미확정은 “제목”.
-// 제목이 없으면 failed 는 "불러오지 못한 영상"(흐름 메모 2106:781), 그 밖은 "제목 없는 영상".
-// 미확정은 저장 결과(02~05), ready 는 장소 상세(08)로 연다.
+// 셀 이름: ready 는 대표 장소명(따옴표 없음). 장소가 2곳 이상이면 꼬리말 "외 {N-1}곳"을 따로 두어 셀이 장소명만 줄이고 꼬리말은 늘 보인다.
+// 대표 장소명이 없으면 영상 제목(따옴표 없음). 미확정(분석 중 · 실패 · 확인 필요 · 장소 없음)은 “제목”.
+// 제목이 없으면 failed 는 "불러오지 못한 영상"(흐름 메모 2106:781), 그 밖은 "제목 없는 영상". 실패 종류로 가르지 않는다(05 가 설명한다).
+// 배지는 분석 중 · 실패 · 확인 필요 · 장소 없음, ready 는 없다. 미확정은 저장 결과(02~05), ready 는 장소 상세(08)로 연다.
 import type { SaveState } from "../../domain/saveState";
 import { toSaveStateFromItem } from "../../shared/api/mappers/personalSaveMapper";
 import type { PersonalSaveItemResponse } from "../../shared/api/personalSaves";
@@ -16,6 +17,7 @@ import type { ThumbFade } from "../../shared/ui/Thumb";
 export type AlbumItem = {
     personalSaveId: string;
     label: string;
+    labelSuffix?: string;
     thumbUri: string;
     fade: ThumbFade;
     status?: BadgeStatus;
@@ -33,6 +35,7 @@ const SEASONS = ["겨울", "봄", "여름", "가을"] as const;
 const BADGE: Record<SaveState["kind"], BadgeStatus | undefined> = {
     analyzing: "analyzing",
     failed: "failed",
+    needsConfirmation: "needsConfirmation",
     noPlace: "noPlace",
     ready: undefined,
 };
@@ -52,9 +55,11 @@ export function toAlbumSections(
                   ? { key: "weeks", title: "지난 몇 주" }
                   : seasonSection(savedAt, now);
         const state = toSaveStateFromItem(item);
+        const { label, suffix } = albumLabel(state, item);
         const albumItem: AlbumItem = {
             personalSaveId: item.personalSaveId,
-            label: albumLabel(state, item.title),
+            label,
+            labelSuffix: suffix,
             thumbUri: youtubeThumbnailUrl(item.videoId),
             fade,
             status: BADGE[state.kind],
@@ -82,12 +87,35 @@ export function seasonSection(
     return { key: `${year}-${season}`, title: `${yearLabel} ${season}` };
 }
 
-// 빈 문자열 제목은 없는 것으로 본다.
-export function albumLabel(state: SaveState, title: string | null): string {
-    if (title == null || title === "") {
-        return state.kind === "failed"
-            ? "불러오지 못한 영상"
-            : "제목 없는 영상";
+// 빈 문자열 제목 · 장소명은 없는 것으로 본다.
+export function albumLabel(
+    state: SaveState,
+    item: Pick<
+        PersonalSaveItemResponse,
+        "title" | "representativePlaceName" | "placeCount"
+    >,
+): { label: string; suffix?: string } {
+    const title = present(item.title);
+    if (state.kind === "ready") {
+        const place = present(item.representativePlaceName);
+        if (place != null) {
+            return item.placeCount >= 2
+                ? { label: place, suffix: `외 ${item.placeCount - 1}곳` }
+                : { label: place };
+        }
+        return { label: title ?? "제목 없는 영상" };
     }
-    return state.kind === "ready" ? title : `“${title}”`;
+    if (title == null) {
+        return {
+            label:
+                state.kind === "failed"
+                    ? "불러오지 못한 영상"
+                    : "제목 없는 영상",
+        };
+    }
+    return { label: `“${title}”` };
+}
+
+function present(value: string | null): string | undefined {
+    return value == null || value === "" ? undefined : value;
 }
