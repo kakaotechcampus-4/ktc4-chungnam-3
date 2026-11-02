@@ -420,6 +420,25 @@ class PersonalSaveIntegrationTest {
     }
 
     @Test
+    void listIncludesFailureCodeRepresentativePlaceNameAndPendingConfirmCount() throws Exception {
+        UUID contentId = content("list-extra", "FAILED");
+        jdbc.update("UPDATE content SET last_analysis_error_code = 'EXTRACTION_API_ERROR' WHERE id = ?", contentId);
+        UUID saveId = savedRow(memberId, contentId, NOW, UUID.randomUUID());
+        link(contentId, "rep");
+        confirmCandidate(contentId, "p1", "PENDING", question("질문1", "option-1"));
+        confirmCandidate(contentId, "p2", "PENDING", question("질문2", "option-2"));
+        confirmCandidate(contentId, "p3", "ANSWERED", question("질문3", "option-3"));
+
+        var page = saves.list(memberId, null, null);
+
+        var item = page.items().getFirst();
+        assertThat(item.personalSaveId()).isEqualTo(saveId);
+        assertThat(item.analysisFailureCode()).isEqualTo("EXTRACTION_API_ERROR");
+        assertThat(item.representativePlaceName()).isEqualTo("장소 rep");
+        assertThat(item.pendingConfirmCount()).isEqualTo(2);
+    }
+
+    @Test
     void cursorPaginationHasNoGapsOrDuplicatesWithTimestampAndUuidTies() throws Exception {
         var tiedIds = List.of("80000000-0000-0000-0000-000000000000", "00000000-0000-0000-0000-000000000001",
                 "7fffffff-ffff-ffff-ffff-ffffffffffff", "00000000-0000-0000-0000-000000000002");
