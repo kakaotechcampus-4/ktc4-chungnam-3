@@ -1,17 +1,20 @@
 // 지금 위치를 읽는 hook. 지도 탭(10) · 장소 상세(08) · 근처 탭이 쓴다.
-// 화면에 포커스될 때와, 포커스된 동안 앱이 다시 앞으로 올 때 한 번씩 읽는다(움직임을 계속 따라가지 않는다).
+// 화면에 포커스될 때, 포커스된 동안 앱이 다시 앞으로 올 때, 위치 설정 신호(권한 요청 뒤 등)가 올 때 한 번씩 읽는다
+// (움직임을 계속 따라가지 않는다).
 // 실제 모드: 위치 권한이 always · whileInUse 면 getGeofencePosition(마지막 위치 → 현재 위치 5초 제한)으로 읽고,
 // 받지 못하면 unknown. 권한이 없거나 위치 모듈이 없으면 off.
-// 목 모드(API 주소 없음): MOCK_SCENARIO.locationPermission 이 denied 면 off, 아니면 목 좌표(mapViewMock.current).
+// 목 모드(API 주소 없음): MOCK_SCENARIO.locationPermission 이 denied 면 off, 아니면 목 좌표
+// (mapViewMock.current, MOCK_SCENARIO.nearbyEmpty 면 nearbyMock.empty.current).
 // 다시 읽는 동안은 이전 값을 둔다. 마지막 읽기만 반영하고, 화면을 떠난 뒤에 온 결과는 버린다.
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useRef, useState } from "react";
 import { AppState } from "react-native";
 
 import { isApiConfigured } from "../api/config";
-import { MOCK_SCENARIO, mapViewMock } from "../api/mock";
+import { MOCK_SCENARIO, mapViewMock, nearbyMock } from "../api/mock";
 import type { LatLng } from "../geo/distanceMeters";
 import { getGeofencePosition, getLocationPermission } from "./location";
+import { onLocationSettingsChanged } from "./locationSettings";
 
 export type DeviceLocation =
     | { status: "loading" }
@@ -42,8 +45,10 @@ export function useDeviceLocation(): DeviceLocation {
                     if (state === "active") read();
                 },
             );
+            const stopSettings = onLocationSettingsChanged(read);
             return () => {
                 subscription.remove();
+                stopSettings();
                 readId.current += 1;
             };
         }, [read]),
@@ -64,7 +69,11 @@ async function readLocation(): Promise<DeviceLocation> {
 }
 
 function mockLocation(): DeviceLocation {
-    return MOCK_SCENARIO.locationPermission === "denied"
-        ? { status: "off" }
-        : { status: "located", coordinate: mapViewMock.current };
+    if (MOCK_SCENARIO.locationPermission === "denied") return { status: "off" };
+    return {
+        status: "located",
+        coordinate: MOCK_SCENARIO.nearbyEmpty
+            ? nearbyMock.empty.current
+            : mapViewMock.current,
+    };
 }

@@ -29,6 +29,7 @@ export function toSavedPlaces(
             personalSaveId: save.personalSaveId,
             videoId: save.videoId,
             title: save.title,
+            summary: save.summary,
             savedAt: save.savedAt,
         });
     }

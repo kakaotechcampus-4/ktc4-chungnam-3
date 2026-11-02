@@ -1,6 +1,6 @@
 // 장소 상세 목 데이터. placeId 로 찾는다. 화면 props 모양 그대로이며 서버 계약이 아니다.
 // 문구는 Figma 08 · 08b · 08c 그대로. 태그의 # 은 컴포넌트가 붙인다. 이미지는 01 · 07 의 같은 장소와 같다.
-// coordinate 는 10 지도 핀이 있는 곳이면 mapViewMock.pins 와 같은 좌표다.
+// 개발용 딥링크(detail/{placeId})로만 연다. coordinate 는 저장물 목의 같은 이름 장소와 같은 좌표다.
 // 거리(walk)는 도보 30분 이내면 "도보 N분", 넘으면 직선거리 "N.Nkm". 위치 권한이 "denied" 면 화면이 숨긴다.
 // sourceTitle 은 08 시트에는 안 보이고, 바꾸기 모드 02c 의 캡션에 쓴다(영상 제목).
 import { img } from "./img";

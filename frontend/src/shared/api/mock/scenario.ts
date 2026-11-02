@@ -29,6 +29,7 @@ export const MOCK_SCENARIO: {
     // false 면 저장된 세션이 없는 것으로 보고 온보딩(00a)부터 시작한다.
     signedIn: boolean;
     loginResult: MockLoginResult;
+    // true 면 목 지금 위치를 봉명동(nearbyMock.empty)으로 옮긴다. 저장 장소가 모두 1km 밖이라 근처가 06(빈 상태)이 된다.
     nearbyEmpty: boolean;
     // 저장물 목(personalSavesMock)의 시작 상태. true 면 빈 저장소(07b), false 면 샘플 8개.
     archiveEmpty: boolean;

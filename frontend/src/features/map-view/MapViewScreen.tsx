@@ -1,10 +1,11 @@
 // 10 지도 탭 · 10b 핀 선택. Google 지도 위에 내 장소 사진 핀 · 내 위치 버튼 · 요약 시트를 올린다.
 // 핀은 내 장소(useSavedPlaces, 장소마다 가장 최근 저장물)다. 필터 칩은 카테고리가 응답에 없어 거를 수 없으므로 숨긴다.
-// 처음 영역: 06 링크의 동네(area) > 지금 위치 가운데 > 핀 전체 > 대한민국 전체. 지금 위치를 읽는 동안은 지도를 그리지 않고 바탕만 둔다.
-// 지금 위치를 모르면 장소를 다 읽을 때까지(실패 포함) 기다려 정한다. 한 번 정한 뒤에는 다시 맞추지 않는다.
+// 처음 영역: 06 링크의 장소(placeId) > 지금 위치 가운데 > 핀 전체 > 대한민국 전체. 지금 위치를 읽는 동안은 지도를 그리지 않고 바탕만 둔다.
+// 06 링크면 장소를, 지금 위치를 모르면 장소를 다 읽을 때까지(실패 포함) 기다려 정한다. 한 번 정한 뒤에는 다시 맞추지 않는다.
 // 핀을 누르면 요약 시트가 뜬다. 요약을 누르거나 위로 끌면 저장물 08(personalSaveId · placeId)로 간다.
 // 지도 빈 곳 · 아래로 끌기 · 뒤로 가기는 시트를 닫는다.
-// 06 링크는 area 파라미터로 들어온다. 가운데를 잡은 뒤 파라미터를 비워 같은 링크를 다시 눌러도 움직이게 한다.
+// 06 "{장소} 기억 보기"는 placeId 파라미터로 들어온다. 그 장소를 가운데에 두고 핀을 고른 뒤(10b) 파라미터를 비워
+// 같은 링크를 다시 눌러도 움직이게 한다. 내 장소에 없는 장소면 고르지 않고 비운다.
 import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
 import {
     CommonActions,
@@ -28,7 +29,6 @@ import MapView, {
 } from "react-native-maps";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { mapViewMock } from "../../shared/api/mock";
 import {
     type SavedPlacesView,
     useSavedPlaces,
@@ -53,9 +53,6 @@ import {
 import PinSummary from "./components/PinSummary";
 import { toMapPin } from "./mapPins";
 
-// 06 링크의 동네 영역. 근처 탭이 목인 동안 목 동네 이름으로 찾는다.
-const areas: Readonly<Record<string, Region>> = mapViewMock.areas;
-
 // 지금 위치 · 핀 하나를 가운데에 둘 때의 확대 수준(동네 하나 정도).
 const NEARBY_DELTA = { latitudeDelta: 0.014, longitudeDelta: 0.012 };
 // 지금 위치도 핀도 없을 때. 제주 · 강원까지 들어오는 대한민국 전체.
@@ -78,12 +75,27 @@ type Start = { region: Region; fitPins: boolean };
 
 // 처음 영역. 아직 정할 수 없으면(위치 · 장소를 읽는 중) undefined.
 function startFor(
-    area: string | undefined,
+    placeId: string | undefined,
     location: DeviceLocation,
     view: SavedPlacesView,
 ): Start | undefined {
-    const areaRegion = area == null ? undefined : areas[area];
-    if (areaRegion != null) return { region: areaRegion, fitPins: false };
+    if (placeId != null) {
+        if (view.status === "loading") return undefined;
+        const linked =
+            view.status === "loaded"
+                ? view.places.find((place) => place.placeId === placeId)
+                : undefined;
+        if (linked != null) {
+            return {
+                region: {
+                    latitude: linked.latitude,
+                    longitude: linked.longitude,
+                    ...NEARBY_DELTA,
+                },
+                fitPins: false,
+            };
+        }
+    }
     if (location.status === "loading") return undefined;
     if (location.status === "located") {
         return {
@@ -110,7 +122,7 @@ function startFor(
 export default function MapViewScreen() {
     const navigation = useNavigation();
     const route =
-        useRoute<RouteProp<{ Map: { area?: string } | undefined }, "Map">>();
+        useRoute<RouteProp<{ Map: { placeId?: string } | undefined }, "Map">>();
     const insets = useSafeAreaInsets();
     const mapRef = useRef<MapView>(null);
     const sheetRef = useRef<BottomSheet>(null);
@@ -123,19 +135,33 @@ export default function MapViewScreen() {
     // 처음 영역은 정할 수 있게 된 첫 렌더에 한 번 정한다(MapView 는 그때 그린다).
     const [start, setStart] = useState<Start>();
     if (start == null) {
-        const next = startFor(route.params?.area, location, view);
+        const next = startFor(route.params?.placeId, location, view);
         if (next != null) setStart(next);
     }
 
-    // 이미 열려 있던 지도에 06 링크로 들어오면 그 동네로 옮긴다. 탭이 보인 뒤에 움직이도록 포커스 때 처리한다.
-    const area = route.params?.area;
+    // 06 링크로 들어오면 장소를 읽은 뒤 그 장소로 옮기고 핀을 고른다. 탭이 보인 뒤에 움직이도록 포커스 때 처리한다.
+    const linkedPlaceId = route.params?.placeId;
+    const placesRead = view.status !== "loading";
+    const linked =
+        linkedPlaceId == null || view.status !== "loaded"
+            ? undefined
+            : view.places.find((place) => place.placeId === linkedPlaceId);
     useFocusEffect(
         useCallback(() => {
-            if (area == null) return;
-            const region = areas[area];
-            if (region != null) mapRef.current?.animateToRegion(region);
-            navigation.dispatch(CommonActions.setParams({ area: undefined }));
-        }, [area, navigation]),
+            if (linkedPlaceId == null || !placesRead) return;
+            if (linked != null) {
+                mapRef.current?.animateToRegion({
+                    latitude: linked.latitude,
+                    longitude: linked.longitude,
+                    ...NEARBY_DELTA,
+                });
+                setSelectedId(linked.placeId);
+                setLabelPinId(linked.placeId);
+            }
+            navigation.dispatch(
+                CommonActions.setParams({ placeId: undefined }),
+            );
+        }, [linkedPlaceId, placesRead, linked, navigation]),
     );
 
     // 시트가 열려 있으면 시스템 뒤로 가기는 시트만 닫는다.

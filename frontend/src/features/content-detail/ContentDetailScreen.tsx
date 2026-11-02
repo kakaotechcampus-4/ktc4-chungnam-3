@@ -4,8 +4,8 @@
 // 시트 멈춤 지점: 기본(08, 메모 2줄 상태의 내용 높이를 처음 한 번 재서 고정) · 펼침(08c, 상태바 아래까지).
 // 도보 시간이 메타 줄 높이를 바꾸므로 지금 위치를 읽은 뒤에 잰다(읽는 동안은 바탕과 뒤로가기만).
 // 뒤로가기 버튼은 Figma 레이어 순서대로 시트 아래에 있어 펼치면 가려진다.
-// 세 경로가 있다. placeId 로 열면(근처 · 개발용 딥링크) 장소 목을 그리고 다른 저장 장소를 미니 핀으로 그린다.
-// personalSaveId 로 열면(지도 · 기억 탭 · 저장 결과) 저장물 상세 API 를 읽어 placeId 장소(없으면 첫 장소)를 그린다(savedPlaceSheet). 미니 핀은 없다.
+// 세 경로가 있다. placeId 로 열면(개발용 딥링크) 장소 목을 그리고 다른 저장 장소를 미니 핀으로 그린다.
+// personalSaveId 로 열면(근처 · 지도 · 기억 탭 · 저장 결과) 저장물 상세 API 를 읽어 placeId 장소(없으면 첫 장소)를 그린다(savedPlaceSheet). 미니 핀은 없다.
 // 저장물이 ready 가 아니면(장소가 없어졌거나 다시 분석 중) 저장 결과(02~05)로 바꾼다. 404 는 12.
 // notificationId 로 열면(알림) 알림 상세를 읽고 열람 처리를 한 번 보낸 뒤(기다리지 않고 실패는 무시), 첫 항목의 저장물 08 로 바꾼다.
 // 404 · 항목 없음 · 내 저장물이 아닌 항목(PUBLIC)은 12, 그 밖의 읽기 실패는 다시 불러오기.
@@ -144,7 +144,7 @@ function NotificationPlaceDetail({
     return <DetailPending />;
 }
 
-// 근처 · 개발용 딥링크에서 여는 08. 장소 목을 그린다.
+// 개발용 딥링크(detail/{placeId})로 여는 08. 장소 목을 그린다.
 function MockPlaceDetail({ placeId }: { placeId: string }) {
     const navigation = useNavigation();
     const detail = details[placeId];
@@ -167,7 +167,7 @@ function MockPlaceDetail({ placeId }: { placeId: string }) {
     );
 }
 
-// 지도 · 기억 탭 · 저장 결과 · 알림에서 여는 08. 저장물 상세 API 를 읽는다.
+// 근처 · 지도 · 기억 탭 · 저장 결과 · 알림에서 여는 08. 저장물 상세 API 를 읽는다.
 function SavedPlaceDetail({
     personalSaveId,
     placeId,

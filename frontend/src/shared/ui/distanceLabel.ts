@@ -16,5 +16,10 @@ export function distanceLabel(meters: number): string {
         ),
     );
     if (minutes <= MAX_WALK_MINUTES) return `도보 ${minutes}분`;
+    return kilometersLabel(meters);
+}
+
+// 늘 직선거리 "N.Nkm"(소수 한 자리). 근처 06 의 "가장 가까운 기억은 N.Nkm 떨어진" 이 쓴다.
+export function kilometersLabel(meters: number): string {
     return `${(meters / METERS_PER_KM).toFixed(1)}km`;
 }

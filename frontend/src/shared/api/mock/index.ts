@@ -12,7 +12,7 @@ export {
 } from "./scenario";
 
 export { mapViewMock } from "./mapView";
-export { nearbyEmptyMock, nearbyMock } from "./nearby";
+export { nearbyMock } from "./nearby";
 export { onboardingMock } from "./onboarding";
 export { placeDetailsMock } from "./placeDetails";
 export { placeSearchMock } from "./placeSearch";

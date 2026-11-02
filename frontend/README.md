@@ -3,7 +3,7 @@
 저장만 해두고 잊어버린 콘텐츠를, 에이전트가 꺼내주는 앱
 
 저장해둔 장소 영상을 근처에 갔을 때 다시 꺼내주는 앱의 React Native(Expo) 클라이언트다.
-API 주소(`EXPO_PUBLIC_API_BASE_URL`)가 있으면 서버를, 없으면 목 모드로 동작한다. 근처 탭은 아직 화면 목 데이터로 그린다.
+API 주소(`EXPO_PUBLIC_API_BASE_URL`)가 있으면 서버를, 없으면 목 모드로 동작한다.
 
 ## 실행
 
@@ -190,7 +190,8 @@ Expo Go 와 그 전에 만든 개발 빌드에서는 경고("expo-task-manager �
 4. 시연 전에 재부팅 · 위치를 껐다 켬 · 강제 종료를 했다면, 앱을 한 번 열어 앞으로 가져온 뒤 내린다.
 5. 실제로 걸어서 도착하는 장면을 보여 줄 때는, 폰의 배터리 설정에서 앱의 백그라운드 사용이 제한되지 않았는지 확인한다(삼성은 설정 → 배터리 → 백그라운드 사용 제한).
 
-빈 상태(06 · 07b), 위치 권한, 깨진 썸네일은 `src/shared/api/mock/scenario.ts` 의 `MOCK_SCENARIO` 플래그를 바꾸고 reload 해서 본다.
+빈 상태(06 · 07b), 위치 권한(06b), 깨진 썸네일은 `src/shared/api/mock/scenario.ts` 의 `MOCK_SCENARIO` 플래그를 바꾸고 reload 해서 본다.
+06 은 `nearbyEmpty: true`(목 위치를 봉명동으로 옮김), 06b 는 `locationPermission: "denied"` 다.
 
 ## 로컬 백엔드 연결
 

@@ -1,8 +1,11 @@
-// 위치 권한. 00d(앱 사용 중) · 00e(항상 허용) · 설정(11)이 쓴다. 지오펜스 등록 · 해제와 그때 쓰는 현재 위치도 여기서 한다
+// 위치 권한. 00d(앱 사용 중) · 00e(항상 허용) · 설정(11) · 근처 06b 가 쓴다. 지오펜스 등록 · 해제와 그때 쓰는 현재 위치,
+// 근처 헤더의 동네 이름(역지오코딩)도 여기서 한다
 // (expo-location 은 shared/permissions 밖에서 import 하지 않는다). 권한을 요청한 뒤에는 위치 설정 신호를 낸다.
 // 근처 감지(OS 지오펜스)는 앱이 닫혀 있어도 동작해야 해서 '항상 허용'이 필요하다. 앱 사용 중 권한 없이는 요청할 수 없다.
 // expo-location 은 처음 쓸 때 불러온다. 이 모듈이 없는 개발 빌드에서 파일 맨 위에서 import 하면
 // import 만으로 앱이 멈춘다. 모듈이 없으면 "unavailable" 을 돌려주고 경고한다.
+import { Linking } from "react-native";
+
 import type { LatLng } from "../geo/distanceMeters";
 import { notifyLocationSettingsChanged } from "./locationSettings";
 
@@ -56,6 +59,38 @@ export async function requestForegroundLocation(): Promise<LocationRequestResult
     return granted ? "granted" : "denied";
 }
 
+// 앱 사용 중 위치 권한을 시스템 창으로 다시 물을 수 있는지. "다시 묻지 않음"이면 false(앱 설정에서 바꿔야 한다).
+export async function canAskForegroundLocation(): Promise<boolean> {
+    const module = loadLocation();
+    if (module == null) return false;
+    try {
+        const { canAskAgain } = await module.getForegroundPermissionsAsync();
+        return canAskAgain;
+    } catch {
+        return false;
+    }
+}
+
+// 휴대폰 위치(위치 서비스)가 켜져 있는지.
+export async function isLocationServicesEnabled(): Promise<boolean> {
+    const module = loadLocation();
+    if (module == null) return false;
+    try {
+        return await module.hasServicesEnabledAsync();
+    } catch {
+        return false;
+    }
+}
+
+// 안드로이드 위치 설정 화면. 열지 못하면 앱 정보 화면을 연다. 돌아오면 앱이 앞으로 오면서 다시 읽힌다.
+export async function openLocationSourceSettings(): Promise<void> {
+    try {
+        await Linking.sendIntent("android.settings.LOCATION_SOURCE_SETTINGS");
+    } catch {
+        await Linking.openSettings();
+    }
+}
+
 // 00e. 안드로이드 11+ 는 시스템이 이 앱의 위치 권한 화면을 연다. 사용자가 돌아오면 끝난다.
 export async function requestBackgroundLocation(): Promise<LocationRequestResult> {
     const module = loadLocation();
@@ -107,6 +142,35 @@ export async function getGeofencePosition(): Promise<LatLng | null> {
         return null;
     } finally {
         clearTimeout(timer);
+    }
+}
+
+// 좌표의 동네 이름(근처 헤더). Android Geocoder(기기 언어, 네트워크 필요)의 주소에서 고른다. 실패하거나 없으면 null.
+// expo-location 은 district ← subLocality, street ← thoroughfare, city ← locality, formattedAddress ← 주소 줄로 옮긴다.
+// 한국 주소에서 동 이름이 어느 칸에 오는지 정해져 있지 않아, 이 순서로 보고 "동 · 읍 · 면 · 가"로 끝나는 첫 값을 쓴다.
+const AREA_NAME = /(동|읍|면|가)$/;
+
+export async function reverseGeocodeArea(
+    coordinate: LatLng,
+): Promise<string | null> {
+    const module = loadLocation();
+    if (module == null) return null;
+    try {
+        const [address] = await module.reverseGeocodeAsync(coordinate);
+        if (address == null) return null;
+        const candidates = [
+            address.district,
+            address.street,
+            address.city,
+            ...(address.formattedAddress?.split(/[\s,]+/) ?? []),
+        ];
+        for (const candidate of candidates) {
+            const name = candidate?.trim();
+            if (name != null && AREA_NAME.test(name)) return name;
+        }
+        return null;
+    } catch {
+        return null;
     }
 }
 
