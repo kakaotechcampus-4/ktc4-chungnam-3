@@ -9,6 +9,7 @@ import com.ktc.chungnam3.remembrall.common.exception.ErrorCode;
 import com.ktc.chungnam3.remembrall.common.exception.GlobalExceptionHandler;
 import com.ktc.chungnam3.remembrall.content.dto.AnalysisOutcome;
 import com.ktc.chungnam3.remembrall.content.service.ContentPersistenceService;
+import com.ktc.chungnam3.remembrall.domain.confirm.ConfirmCandidate;
 import com.ktc.chungnam3.remembrall.domain.content.Content;
 import com.ktc.chungnam3.remembrall.domain.content.ContentAnalysisFailureCode;
 import com.ktc.chungnam3.remembrall.domain.content.ContentAnalysisStatus;
@@ -28,6 +29,7 @@ import com.ktc.chungnam3.remembrall.personalsave.dto.PersonalSaveResponse;
 import com.ktc.chungnam3.remembrall.personalsave.repository.PersonalSaveReadRepository;
 import com.ktc.chungnam3.remembrall.personalsave.service.PersonalSaveAnalysisService;
 import com.ktc.chungnam3.remembrall.personalsave.service.PersonalSaveService;
+import com.ktc.chungnam3.remembrall.repository.ConfirmCandidateRepository;
 import com.ktc.chungnam3.remembrall.repository.ContentPlaceRepository;
 import com.ktc.chungnam3.remembrall.repository.ContentRepository;
 import com.ktc.chungnam3.remembrall.repository.DeviceRepository;
@@ -36,6 +38,9 @@ import com.ktc.chungnam3.remembrall.repository.PersonalSaveRepository;
 import com.ktc.chungnam3.remembrall.repository.PlaceRepository;
 import com.ktc.chungnam3.remembrall.repository.TriggerRepository;
 import com.ktc.chungnam3.remembrall.save.SavePipelineService;
+import com.ktc.chungnam3.remembrall.save.config.Jackson2Config;
+import com.ktc.chungnam3.remembrall.save.dto.ConfirmRequestDto;
+import com.ktc.chungnam3.remembrall.save.dto.ResolvedPlaceDto;
 import com.ktc.chungnam3.remembrall.save.dto.SavePipelineRequestDto;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -317,7 +322,6 @@ class PersonalSaveIntegrationTest {
         doAnswer(call -> {
             UUID id = call.getArgument(0);
             var request = call.getArgument(1, SavePipelineRequestDto.class);
-            assertThat(request.alreadyAsked()).isFalse();
             if (calls.incrementAndGet() == 1) {
                 started.countDown();
                 assertThat(release.await(20, TimeUnit.SECONDS)).isTrue();
@@ -416,6 +420,25 @@ class PersonalSaveIntegrationTest {
     }
 
     @Test
+    void listIncludesFailureCodeRepresentativePlaceNameAndPendingConfirmCount() throws Exception {
+        UUID contentId = content("list-extra", "FAILED");
+        jdbc.update("UPDATE content SET last_analysis_error_code = 'EXTRACTION_API_ERROR' WHERE id = ?", contentId);
+        UUID saveId = savedRow(memberId, contentId, NOW, UUID.randomUUID());
+        link(contentId, "rep");
+        confirmCandidate(contentId, "p1", "PENDING", question("질문1", "option-1"));
+        confirmCandidate(contentId, "p2", "PENDING", question("질문2", "option-2"));
+        confirmCandidate(contentId, "p3", "ANSWERED", question("질문3", "option-3"));
+
+        var page = saves.list(memberId, null, null);
+
+        var item = page.items().getFirst();
+        assertThat(item.personalSaveId()).isEqualTo(saveId);
+        assertThat(item.analysisFailureCode()).isEqualTo("EXTRACTION_API_ERROR");
+        assertThat(item.representativePlaceName()).isEqualTo("장소 rep");
+        assertThat(item.pendingConfirmCount()).isEqualTo(2);
+    }
+
+    @Test
     void cursorPaginationHasNoGapsOrDuplicatesWithTimestampAndUuidTies() throws Exception {
         var tiedIds = List.of("80000000-0000-0000-0000-000000000000", "00000000-0000-0000-0000-000000000001",
                 "7fffffff-ffff-ffff-ffff-ffffffffffff", "00000000-0000-0000-0000-000000000002");
@@ -472,6 +495,26 @@ class PersonalSaveIntegrationTest {
                 .toInstant()).isEqualTo(NOW);
     }
 
+    @Test
+    void failStaleAnalyzingOnlyFlipsAnalyzingRowsOlderThanTheThreshold() {
+        UUID stale = content("stale", "ANALYZING");
+        jdbc.update("UPDATE content SET analysis_started_at = ? WHERE id = ?", Timestamp.from(NOW.minusSeconds(400)), stale);
+        UUID fresh = content("fresh", "ANALYZING");
+        jdbc.update("UPDATE content SET analysis_started_at = ? WHERE id = ?", Timestamp.from(NOW.minusSeconds(100)), fresh);
+        UUID alreadyFailed = content("already-failed", "FAILED");
+        jdbc.update("UPDATE content SET analysis_started_at = ? WHERE id = ?", Timestamp.from(NOW.minusSeconds(400)), alreadyFailed);
+
+        var updated = new TransactionTemplate(transactionManager)
+                .execute(transaction -> contents.failStaleAnalyzing(NOW.minusSeconds(300), NOW));
+
+        assertThat(updated).isEqualTo(1);
+        assertThat(status(stale)).isEqualTo("FAILED");
+        assertThat(jdbc.queryForObject("SELECT last_analysis_error_code FROM content WHERE id = ?", String.class, stale))
+                .isEqualTo("EXTRACTION_API_ERROR");
+        assertThat(status(fresh)).isEqualTo("ANALYZING");
+        assertThat(status(alreadyFailed)).isEqualTo("FAILED");
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"?size=0", "?size=-1", "?size=101", "?size=abc", "?cursor=bad", "?cursor="})
     void invalidPaginationReturns400(String query) throws Exception {
@@ -508,12 +551,47 @@ class PersonalSaveIntegrationTest {
     }
 
     @Test
+    void placesReturnsAllOwnedPlacesWithPersonalSaveIdAndExcludesOtherMembers() throws Exception {
+        UUID contentId = content("places", "SUCCESS");
+        UUID saveId = savedRow(memberId, contentId, NOW, UUID.randomUUID());
+        UUID placeId = link(contentId, "pin");
+        UUID otherContentId = content("other-places", "SUCCESS");
+        savedRow(member(), otherContentId, NOW, UUID.randomUUID());
+        link(otherContentId, "other-pin");
+
+        var response = request("GET", "/places", token, null);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        var pins = List.of(mapper.readValue(response.body(), PersonalSaveResponse.PlacePin[].class));
+        assertThat(pins).containsExactly(new PersonalSaveResponse.PlacePin(placeId, "장소 pin", "서울시", 37, 127, saveId));
+    }
+
+    @Test
     void detailWithNoPlacesReturnsAnEmptyArray() throws Exception {
         UUID id = savedRow(memberId, content("empty-places", "PENDING"), NOW, UUID.randomUUID());
 
         var response = request("GET", "/" + id, token, null);
 
         assertThat(mapper.readValue(response.body(), PersonalSaveResponse.Detail.class).places()).isEmpty();
+        assertThat(mapper.readValue(response.body(), PersonalSaveResponse.Detail.class).confirmCandidates()).isEmpty();
+    }
+
+    @Test
+    void detailIncludesPendingConfirmCandidatesButNotAnsweredOnes() throws Exception {
+        UUID contentId = content("confirm", "PARTIAL");
+        UUID saveId = savedRow(memberId, contentId, NOW, UUID.randomUUID());
+        confirmCandidate(contentId, "p1", "PENDING", question("어느 한밭수목원인가요?", "option-1", "option-2"));
+        confirmCandidate(contentId, "p2", "ANSWERED", question("이미 답한 후보", "option-3"));
+
+        var response = request("GET", "/" + saveId, token, null);
+
+        var detail = mapper.readValue(response.body(), PersonalSaveResponse.Detail.class);
+        assertThat(detail.confirmCandidates()).hasSize(1);
+        var candidate = detail.confirmCandidates().getFirst();
+        assertThat(candidate.candidateId()).isEqualTo("p1");
+        assertThat(candidate.question()).isEqualTo("어느 한밭수목원인가요?");
+        assertThat(candidate.options()).extracting(ResolvedPlaceDto::candidateId)
+                .containsExactly("option-1", "option-2");
     }
 
     @Test
@@ -618,6 +696,21 @@ class PersonalSaveIntegrationTest {
         return placeId;
     }
 
+    private void confirmCandidate(UUID contentId, String candidateId, String status, String confirmRequestJson) {
+        jdbc.update("""
+                INSERT INTO confirm_candidate (id, content_id, candidate_id, confirm_request, status)
+                VALUES (?, ?, ?, ?, ?)
+                """, UUID.randomUUID(), contentId, candidateId, confirmRequestJson, status);
+    }
+
+    private String question(String question, String... optionCandidateIds) throws Exception {
+        var options = List.of(optionCandidateIds).stream()
+                .map(id -> new ResolvedPlaceDto(id, "장소 " + id, null, "서울시", 37, 127,
+                        GeocodingProvider.LOCATIONIQ, id, null))
+                .toList();
+        return mapper.writeValueAsString(new ConfirmRequestDto(question, options));
+    }
+
     private long count(String table) {
         return jdbc.queryForObject("SELECT count(*) FROM " + table, Long.class);
     }
@@ -673,15 +766,15 @@ class PersonalSaveIntegrationTest {
     @TestComponent
     @EnableAutoConfiguration
     @EntityScan(basePackageClasses = {Member.class, Device.class, Content.class, PersonalSave.class,
-            Place.class, ContentPlace.class, Trigger.class})
+            Place.class, ContentPlace.class, Trigger.class, ConfirmCandidate.class})
     @EnableJpaRepositories(basePackageClasses = MemberRepository.class, includeFilters = @ComponentScan.Filter(
             type = FilterType.ASSIGNABLE_TYPE, classes = {MemberRepository.class, DeviceRepository.class,
             ContentRepository.class, PersonalSaveRepository.class, PlaceRepository.class,
-            ContentPlaceRepository.class, TriggerRepository.class}))
+            ContentPlaceRepository.class, TriggerRepository.class, ConfirmCandidateRepository.class}))
     @Import({SecurityConfig.class, SessionAuthenticationFilter.class, ApiAuthenticationEntryPoint.class,
             SessionTokenHasher.class, GlobalExceptionHandler.class, PersonalSaveConfiguration.class,
             PersonalSaveController.class, PersonalSaveService.class, PersonalSaveAnalysisService.class,
-            PersonalSaveReadRepository.class, ContentPersistenceService.class})
+            PersonalSaveReadRepository.class, ContentPersistenceService.class, Jackson2Config.class})
     static class TestApplication {
         @Bean
         MutableClock personalSaveTestClock() {

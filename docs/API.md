@@ -8,9 +8,11 @@
 | `PUT /api/me/consents/{consentType}`                   | 동의 여부                                                                    | 해당 동의 부여·철회                                                                                                                                           |
 | `DELETE /api/me`                                       | 탈퇴 요청                                                                    | 회원 및 관련 데이터 삭제 처리                                                                                                                                     |
 | `POST /api/personal-saves`                             | YouTube URL                                                              | `personalSaveId`, `contentId`, `analysisStatus` 반환                                                                                                    |
-| `GET /api/personal-saves`                              | 목록 조회 조건                                                                 | 내 저장물의 제목·요약·분석 상태·연결 장소 등 반환                                                                                                                         |
-| `GET /api/personal-saves/{personalSaveId}`             | 없음                                                                       | 저장물 상세와 연결된 콘텐츠·장소 반환                                                                                                                                 |
+| `GET /api/personal-saves`                              | 목록 조회 조건                                                                 | 내 저장물의 제목·요약·분석 상태·실패 코드·대표 장소명·연결 장소 수·미답변 되묻기 수 등 반환                                                                                                   |
+| `GET /api/personal-saves/{personalSaveId}`             | 없음                                                                       | 저장물 상세와 연결된 콘텐츠·장소·답변 대기 중인 되묻기 후보(`confirmCandidates`) 반환                                                                                             |
 | `DELETE /api/personal-saves/{personalSaveId}`          | 없음                                                                       | 내 저장물과 해당 Trigger 삭제                                                                                                                                  |
+| `GET /api/personal-saves/places`                       | 없음                                                                       | 내가 저장한 모든 콘텐츠의 장소를 좌표·이름·주소·출처 저장물(`personalSaveId`)과 함께 한 번에 반환 (근처 탭·지도용, 페이지네이션 없음)                                                                     |
+| `POST /api/personal-saves/{personalSaveId}/places/{candidateId}/confirm` | `selectedOptionId`                                      | 되묻기 후보에 대한 답변 반영                                                                                                                                      |
 | `GET /api/geofences?latitude=…&longitude=…&platform=…` | 현재 위치와 `IOS` 또는 `ANDROID`                                                | OS에 등록할 **지역·장소 지오펜스 목록** 반환. 각각 등록 ID·유형·좌표·반경을 포함하며, 장소에는 `placeId`, Android DWELL에는 지연 시간을 포함. 앱 시작·복귀, 저장물 변경, **지역 지오펜스 진입·이탈 시 재호출**하여 등록 목록 갱신 |
 | `POST /api/location-events`                            | `placeId`, `triggerEventId`, `eventType`, `eventOccurredAt`, 가능하면 이벤트 위치 | **장소 지오펜스 발동 시에만 호출.** 서버가 세션 사용자와 `placeId`로 유효한 Trigger를 조회하고, 중복·실행 조건을 검사한 뒤 이벤트당 꺼내기 실행 한 건 생성. 제안이 나오면 이후 FCM으로 전달                              |
 | `GET /api/notifications`                               | 목록 조회 조건                                                                 | 내 알림 목록 반환                                                                                                                                            |
@@ -73,18 +75,45 @@
 
 ```
 항목 { personalSaveId, contentId, videoId, title, summary,
-       analysisStatus, placeCount, savedAt }
+       analysisStatus, analysisFailureCode, placeCount, representativePlaceName,
+       pendingConfirmCount, savedAt }
 ```
+
+`analysisFailureCode`는 PARTIAL·FAILED일 때만. `representativePlaceName`은 연결된 장소가 없으면 null.
 
 **`GET /api/personal-saves/{personalSaveId}`**
 
 ```
 { personalSaveId, contentId, videoId, sourceUrl, title, summary,
   category, analysisStatus, analysisFailureCode, savedAt,
-  places: [{ placeId, name, address, latitude, longitude, description }] }
+  places: [{ placeId, name, address, latitude, longitude, description }],
+  confirmCandidates: [{ candidateId, question,
+                         options: [{ candidateId, name, branchName, address, lat, lng,
+                                     geocodingProvider, geocodingPlaceId, verificationPlaceId }] }] }
 ```
 
-장소가 없으면 빈 배열. `analysisFailureCode` 는 PARTIAL·FAILED일 때만.
+장소·되묻기 후보가 없으면 각각 빈 배열. `analysisFailureCode` 는 PARTIAL·FAILED일 때만.
+`confirmCandidates`는 아직 답변하지 않은(PENDING) 후보만 포함한다. 후보의 `candidateId`는 아래 답변
+제출 엔드포인트의 `{candidateId}`로, `options[].candidateId`는 답변 제출 시 `selectedOptionId`로
+그대로 쓴다(장소 응답의 `placeId`와는 다른 값이니 혼동 주의).
+
+**`GET /api/personal-saves/places`**
+
+```
+[{ placeId, name, address, latitude, longitude, personalSaveId }]
+```
+
+내가 저장한 모든 콘텐츠의 장소를 한 번에 반환한다. 페이지네이션 없음.
+
+**`POST /api/personal-saves/{personalSaveId}/places/{candidateId}/confirm`**
+
+```
+요청 { selectedOptionId }
+응답 204
+```
+
+로그인한 회원이 해당 저장물의 주인이 아니면 404. `selectedOptionId`는 그 후보의 `options[].candidateId`
+중 하나.
 
 ### 지오펜스·이벤트
 

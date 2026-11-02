@@ -1,0 +1,31 @@
+meta {
+  name: CON-02 동의 저장 후 재조회 - 200
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/me/consents
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("sessionToken")) { throw new Error("먼저 02-auth-session의 게스트 로그인을 실행하세요."); }
+  if (!bru.getVar("locationTermsVersion")) { throw new Error("03-consent 폴더를 01번부터 실행하세요."); }
+}
+
+tests {
+  test("HTTP 200", function () { expect(res.status).to.equal(200); });
+  test("위치 동의만 저장됨", function () {
+    const location = res.body.find(function (item) { return item.consentType === "LOCATION_BASED_SERVICE"; });
+    expect(location.agreed).to.equal(true);
+    expect(location.termsVersion).to.equal(bru.getVar("locationTermsVersion"));
+    expect(Number.isFinite(Date.parse(location.agreedAt))).to.equal(true);
+    expect(location.withdrawnAt).to.equal(null);
+    const publicConsent = res.body.find(function (item) { return item.consentType === "PUBLIC_CANDIDATE_CONTRIBUTION"; });
+  expect(publicConsent.agreed).to.equal(false);
+  expect(publicConsent.agreedAt).to.equal(null);
+    bru.setVar("firstAgreedAt", location.agreedAt);
+  });
+}

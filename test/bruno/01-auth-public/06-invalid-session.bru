@@ -1,0 +1,23 @@
+meta {
+  name: AUTH-07 임의 세션으로 동의 조회 - 401
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/me/consents
+  body: none
+  auth: bearer
+}
+
+tests {
+  test("HTTP 401 및 오류 형식", function () {
+    expect(res.status).to.equal(401);
+    expect(res.body.code).to.equal("INVALID_SESSION");
+    expect(res.body.message).to.be.a("string").and.not.empty;
+  });
+}
+
+auth:bearer {
+  token: invalid-test-session
+}

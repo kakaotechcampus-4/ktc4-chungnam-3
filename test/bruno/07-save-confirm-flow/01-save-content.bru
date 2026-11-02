@@ -1,0 +1,35 @@
+meta {
+  name: SAVE-01 되묻기 유발 URL 저장 - 200/201
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/personal-saves
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "url": "https://www.youtube.com/shorts/VpRAN6EG9pQ"
+  }
+}
+
+script:pre-request {
+  if (!bru.getVar("sessionToken")) {
+    throw new Error("sessionToken 없음 - 02-auth-session 먼저 실행하세요");
+  }
+}
+
+tests {
+  test("저장 접수", function () {
+    expect([200, 201]).to.include(res.status);
+    expect(res.body.personalSaveId).to.be.a("string").and.not.empty;
+    bru.setVar("personalSaveId", res.body.personalSaveId);
+  });
+}

@@ -1,0 +1,27 @@
+meta {
+  name: AUTH-04 재로그인 이전 토큰 차단 - 401
+  type: http
+  seq: 25
+}
+
+get {
+  url: {{baseUrl}}/api/me/consents
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{previousSessionTokenA}}
+}
+
+script:pre-request {
+  if (!bru.getVar("previousSessionTokenA")) { throw new Error("컬렉션을 처음부터 실행하세요: previousSessionTokenA가 없습니다."); }
+}
+
+tests {
+  test("HTTP 401 및 오류 형식", function () {
+    expect(res.status).to.equal(401);
+    expect(res.body.code).to.equal("INVALID_SESSION");
+    expect(res.body.message).to.be.a("string").and.not.empty;
+  });
+}

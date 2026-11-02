@@ -99,7 +99,8 @@ type Action = { label: string; onPress: () => void };
 
 type ActionsProps = {
     primary: Action;
-    secondary: Action;
+    // 없으면 Primary 하나만 보인다(공유 받음 시트 Queued · NotShorts).
+    secondary?: Action;
     // 있으면 버튼 위에 보인다(Error).
     error?: string;
     disabled: boolean;
@@ -122,12 +123,14 @@ export function ModalSheetActions({
                     disabled={disabled}
                     onPress={primary.onPress}
                 />
-                <Button
-                    kind="text"
-                    label={secondary.label}
-                    disabled={disabled}
-                    onPress={secondary.onPress}
-                />
+                {secondary != null && (
+                    <Button
+                        kind="text"
+                        label={secondary.label}
+                        disabled={disabled}
+                        onPress={secondary.onPress}
+                    />
+                )}
             </View>
         </View>
     );

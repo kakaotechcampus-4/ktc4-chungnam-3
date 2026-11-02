@@ -1,0 +1,20 @@
+meta {
+  name: SAVE-05 테스트 저장 항목 정리 - 204
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{baseUrl}}/api/personal-saves/{{personalSaveId}}
+  body: none
+  auth: inherit
+}
+
+tests {
+  test("정리", function () {
+    expect(res.status).to.equal(204);
+    bru.deleteVar("personalSaveId");
+    bru.deleteVar("confirmCandidateId");
+    bru.deleteVar("selectedOptionId");
+  });
+}

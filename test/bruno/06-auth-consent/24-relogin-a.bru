@@ -1,0 +1,43 @@
+meta {
+  name: AUTH-04 동일 설치 ID 재로그인 - 200
+  type: http
+  seq: 24
+}
+
+post {
+  url: {{baseUrl}}/api/auth/guest
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "installationId": "{{installationId}}"
+  }
+}
+
+script:pre-request {
+  if (!bru.getVar("sessionToken")) { throw new Error("컬렉션을 처음부터 실행하세요: sessionToken가 없습니다."); }
+  if (!bru.getVar("sessionTokenA")) { throw new Error("컬렉션을 처음부터 실행하세요: sessionTokenA가 없습니다."); }
+  if (!bru.getVar("sessionTokenB")) { throw new Error("컬렉션을 처음부터 실행하세요: sessionTokenB가 없습니다."); }
+  if (!bru.getVar("installationId")) { throw new Error("컬렉션을 처음부터 실행하세요: installationId가 없습니다."); }
+  bru.setVar("previousSessionTokenA", bru.getVar("sessionTokenA"));
+}
+
+tests {
+  test("별도 게스트 세션 발급", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.sessionToken).to.be.a("string").and.not.empty;
+    expect(Number.isFinite(Date.parse(res.body.sessionExpiresAt))).to.equal(true);
+    expect(Date.parse(res.body.sessionExpiresAt)).to.be.above(Date.now());
+    bru.setVar("sessionTokenA", res.body.sessionToken);
+  });
+  test("현재 세션을 새 토큰으로 교체", function () {
+    expect(res.body.sessionToken === bru.getVar("previousSessionTokenA")).to.equal(false);
+    bru.setVar("sessionToken", res.body.sessionToken);
+  });
+}

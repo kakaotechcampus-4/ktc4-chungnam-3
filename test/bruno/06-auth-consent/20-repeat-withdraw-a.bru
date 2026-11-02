@@ -1,0 +1,38 @@
+meta {
+  name: CON-09 반복 철회 시 시각 유지 - 200
+  type: http
+  seq: 20
+}
+
+put {
+  url: {{baseUrl}}/api/me/consents/LOCATION_BASED_SERVICE
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{sessionTokenA}}
+}
+
+body:json {
+  {
+    "agreed": false
+  }
+}
+
+script:pre-request {
+  if (!bru.getVar("sessionToken")) { throw new Error("컬렉션을 처음부터 실행하세요: sessionToken가 없습니다."); }
+  if (!bru.getVar("sessionTokenA")) { throw new Error("컬렉션을 처음부터 실행하세요: sessionTokenA가 없습니다."); }
+  if (!bru.getVar("sessionTokenB")) { throw new Error("컬렉션을 처음부터 실행하세요: sessionTokenB가 없습니다."); }
+}
+
+tests {
+  test("철회 반복으로 시각이 바뀌지 않음", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.agreed).to.equal(false);
+    expect(Number.isFinite(bru.getVar("firstWithdrawnAt"))).to.equal(true);
+    expect(Date.parse(res.body.agreedAt)).to.equal(bru.getVar("repeatWithdrawalAgreedAt"));
+    expect(Date.parse(res.body.withdrawnAt)).to.equal(bru.getVar("firstWithdrawnAt"));
+  });
+}

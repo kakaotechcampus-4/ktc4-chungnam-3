@@ -1,0 +1,40 @@
+meta {
+  name: CON-03 철회 후 재동의 - 200
+  type: http
+  seq: 7
+}
+
+put {
+  url: {{baseUrl}}/api/me/consents/LOCATION_BASED_SERVICE
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "agreed": true,
+    "termsVersion": "{{locationTermsVersion}}"
+  }
+}
+
+script:pre-request {
+  if (!bru.getVar("sessionToken")) { throw new Error("먼저 02-auth-session의 게스트 로그인을 실행하세요."); }
+  if (!bru.getVar("locationTermsVersion")) { throw new Error("03-consent 폴더를 01번부터 실행하세요."); }
+}
+
+tests {
+  test("HTTP 200", function () { expect(res.status).to.equal(200); });
+  test("새 동의 시각 및 철회 시각 초기화", function () {
+    expect(bru.getVar("firstAgreedAt")).to.be.a("string").and.not.empty;
+    expect(res.body.agreed).to.equal(true);
+    expect(res.body.termsVersion).to.equal(bru.getVar("locationTermsVersion"));
+    expect(Number.isFinite(Date.parse(res.body.agreedAt))).to.equal(true);
+    expect(Date.parse(res.body.agreedAt)).to.be.above(Date.parse(bru.getVar("firstAgreedAt")));
+    expect(res.body.withdrawnAt).to.equal(null);
+    bru.setVar("reagreedAt", res.body.agreedAt);
+  });
+}

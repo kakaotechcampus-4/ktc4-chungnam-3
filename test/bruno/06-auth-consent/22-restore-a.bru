@@ -1,0 +1,38 @@
+meta {
+  name: CON-03 회원 A 위치 재동의 - 200
+  type: http
+  seq: 22
+}
+
+put {
+  url: {{baseUrl}}/api/me/consents/LOCATION_BASED_SERVICE
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{sessionTokenA}}
+}
+
+body:json {
+  {
+    "agreed": true,
+    "termsVersion": "{{locationTermsVersion}}"
+  }
+}
+
+script:pre-request {
+  if (!bru.getVar("sessionToken")) { throw new Error("컬렉션을 처음부터 실행하세요: sessionToken가 없습니다."); }
+  if (!bru.getVar("sessionTokenA")) { throw new Error("컬렉션을 처음부터 실행하세요: sessionTokenA가 없습니다."); }
+  if (!bru.getVar("sessionTokenB")) { throw new Error("컬렉션을 처음부터 실행하세요: sessionTokenB가 없습니다."); }
+}
+
+tests {
+  test("다음 테스트를 위해 위치 동의 복원", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.agreed).to.equal(true);
+    expect(res.body.termsVersion).to.equal(bru.getVar("locationTermsVersion"));
+    expect(res.body.withdrawnAt).to.equal(null);
+  });
+}

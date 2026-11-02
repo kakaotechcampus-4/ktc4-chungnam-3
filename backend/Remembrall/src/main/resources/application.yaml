@@ -10,6 +10,10 @@ spring:
         vertex-ai: ${gemini.vertex-ai.enabled:false}
         project-id: ${gemini.vertex-ai.project-id:}
         location: ${gemini.vertex-ai.location:us-central1}
+        embedding:
+          # 채팅 모델과 동일 - 임베딩 전용 네임스페이스라 따로 안 채우면 project-id 필수인
+          # Vertex 모드로 떨어져서 로컬 ADC 설정이 필요해짐. API 키만으로 충분.
+          api-key: ${gemini.api.key:}
   config:
     import: optional:file:./secrets.properties
 
@@ -127,5 +131,16 @@ franchise:
 vworld:
   api:
     key: ${vworld.api.key:}
+  connect-timeout-ms: 2000
+  read-timeout-ms: 3000
+
+# 한국관광공사 TourAPI(국문관광정보 서비스_GW) - 지점명 없는 일반 장소(공원·관광지 등) 되묻기 완화
+# (TourApiClient, 2026-10-28). serviceKey는 dataportal.api.key가 계정 단위로 공용이라 그대로 통함
+# (실측 확인) - tourapi.api.key는 비워둬도 됨.
+tourapi:
+  api:
+    # tourapi.api.key 자기참조는 순환 플레이스홀더라 secrets.properties에 그 키가 없으면 그대로 터짐
+    # (실측 확인, 2026-10-29) - dataportal.api.key만 직접 참조하도록 수정.
+    key: ${dataportal.api.key:}
   connect-timeout-ms: 2000
   read-timeout-ms: 3000
