@@ -25,6 +25,18 @@ public interface RecallExecutionRepository extends JpaRepository<RecallExecution
 
     Optional<RecallExecution> findByTriggerIdAndTriggerEventId(UUID triggerId, UUID triggerEventId);
 
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            UPDATE recall_execution
+               SET status = 'PENDING', retry_count = retry_count + 1, result = NULL,
+                   proposal_type = NULL, proposal_payload = NULL, decision_summary = NULL,
+                   failure_code = NULL, started_at = NULL, finished_at = NULL,
+                   agent_version = :agentVersion, updated_at = :now
+             WHERE id = :id AND status IN ('FAILED', 'TIMED_OUT') AND retry_count < :maximum
+            """, nativeQuery = true)
+    int retryFailed(@Param("id") UUID id, @Param("maximum") int maximum,
+                    @Param("agentVersion") String agentVersion, @Param("now") Instant now);
+
     @Modifying
     @Query(value = """
             INSERT INTO recall_execution (

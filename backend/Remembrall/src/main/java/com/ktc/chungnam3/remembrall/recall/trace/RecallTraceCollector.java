@@ -16,6 +16,7 @@ import java.util.UUID;
 
 public final class RecallTraceCollector {
     private final UUID executionId;
+    private final int attempt;
     private final Clock clock;
     private final ObjectMapper mapper;
     private final RecallTraceProperties properties;
@@ -23,7 +24,13 @@ public final class RecallTraceCollector {
     private int sequence;
 
     public RecallTraceCollector(UUID executionId, Clock clock, ObjectMapper mapper, RecallTraceProperties properties) {
+        this(executionId, clock, mapper, properties, 1);
+    }
+
+    public RecallTraceCollector(UUID executionId, Clock clock, ObjectMapper mapper, RecallTraceProperties properties,
+                                 int attempt) {
         this.executionId = executionId;
+        this.attempt = attempt;
         this.clock = clock;
         this.mapper = mapper;
         this.properties = properties;
@@ -32,6 +39,8 @@ public final class RecallTraceCollector {
     public UUID executionId() {
         return executionId;
     }
+
+    public int attempt() { return attempt; }
 
     public synchronized Span begin(Step step, String name) {
         return new Span(++sequence, step, clip(name, 200), clock.instant(), System.nanoTime());

@@ -32,7 +32,10 @@ public class RecallTraceService {
     }
 
     public RecallTraceCollector start(UUID executionId) {
-        return new RecallTraceCollector(executionId, clock, mapper, properties);
+        var attempts = jdbc.query("SELECT retry_count + 1 FROM recall_execution WHERE id = ?",
+                (rs, index) -> rs.getInt(1), executionId);
+        return new RecallTraceCollector(executionId, clock, mapper, properties,
+                attempts.isEmpty() ? 1 : attempts.getFirst());
     }
 
     public void notificationFinished(RecallTraceCollector collector, RecallTraceCollector.Span span,
@@ -54,15 +57,23 @@ public class RecallTraceService {
             if (entries.isEmpty()) {
                 return;
             }
-            transactions.executeWithoutResult(status -> jdbc.batchUpdate("""
+            transactions.executeWithoutResult(status -> {
+                if (jdbc.query("SELECT id FROM recall_execution WHERE id = ? FOR UPDATE",
+                        (rs, index) -> rs.getObject(1, UUID.class), collector.executionId()).isEmpty()) {
+                    return;
+                }
+                int offset = jdbc.queryForObject("SELECT COALESCE(MAX(seq), 0) FROM recall_execution_trace WHERE execution_id = ?",
+                        Integer.class, collector.executionId());
+                jdbc.batchUpdate("""
                     INSERT INTO recall_execution_trace
                         (id, execution_id, seq, step, name, started_at, duration_ms, success,
-                         error_message, input_tokens, output_tokens, detail)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS jsonb))
+                         error_message, input_tokens, output_tokens, detail, attempt)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS jsonb), ?)
+                    ON CONFLICT (id) DO NOTHING
                     """, entries, entries.size(), (statement, entry) -> {
                 statement.setObject(1, entry.id());
                 statement.setObject(2, entry.executionId());
-                statement.setInt(3, entry.seq());
+                statement.setInt(3, offset + entry.seq());
                 statement.setString(4, entry.step().name());
                 statement.setString(5, entry.name());
                 statement.setTimestamp(6, Timestamp.from(entry.startedAt()));
@@ -72,7 +83,9 @@ public class RecallTraceService {
                 statement.setObject(10, entry.inputTokens(), Types.INTEGER);
                 statement.setObject(11, entry.outputTokens(), Types.INTEGER);
                 statement.setString(12, mapper.writeValueAsString(entry.detail()));
-            }));
+                statement.setInt(13, collector.attempt());
+                });
+            });
         } catch (RuntimeException exception) {
             log.warn("Could not persist recall trace for execution {}", collector.executionId(), exception);
         }

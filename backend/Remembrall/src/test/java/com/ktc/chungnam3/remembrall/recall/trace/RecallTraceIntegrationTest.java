@@ -379,6 +379,57 @@ class RecallTraceIntegrationTest {
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    @Test
+    void delayedFirstAttemptTraceCanAppendAfterRetryWithoutSequenceCollision() {
+        var delayed = new java.util.concurrent.atomic.AtomicReference<RecallTraceCollector>();
+        doAnswer(call -> {
+            RecallTraceCollector collector = call.getArgument(0);
+            if (collector.attempt() == 1 && delayed.compareAndSet(null, collector)) return null;
+            return call.callRealMethod();
+        }).when(traces).save(any());
+        when(model.call(any(Prompt.class))).thenThrow(new IllegalStateException("first attempt failure"))
+                .thenReturn(response("""
+                        {"result":"NO_ACTION","proposalType":null,"items":[],"decisionSummary":"retry completed","title":null,"body":null}
+                        """));
+        UUID eventId = UUID.randomUUID();
+        var event = new LocationEventRequest(placeId, eventId, LocationEventType.ENTER, NOW, null);
+        events.accept(memberId, event);
+        UUID id = jdbc.queryForObject("SELECT id FROM recall_execution WHERE trigger_event_id = ?", UUID.class, eventId);
+        assertThat(executions.findById(id).orElseThrow().getStatus()).isEqualTo(RecallExecutionStatus.FAILED);
+        assertThat(rows(id)).isEmpty();
+        events.accept(memberId, event);
+        traces.save(delayed.get());
+        assertThat(rows(id)).extracting(Row::seq).containsExactly(1, 2, 3, 4, 5);
+        assertThat(jdbc.queryForList("SELECT attempt FROM recall_execution_trace WHERE execution_id = ? ORDER BY seq",
+                Integer.class, id)).containsExactly(2, 2, 2, 1, 1);
+        assertThat(executions.findById(id).orElseThrow().getStatus()).isEqualTo(RecallExecutionStatus.COMPLETED);
+    }
+
+    @Test
+    void simultaneousTraceFlushesAllocateDistinctSequencesAndRepeatedFlushIsIdempotent() throws Exception {
+        UUID id = accept();
+        var first = traces.start(id);
+        var second = traces.start(id);
+        first.validation(first.begin(RecallTraceCollector.Step.VALIDATION, "first"), true, null);
+        second.validation(second.begin(RecallTraceCollector.Step.VALIDATION, "second"), true, null);
+        var ready = new java.util.concurrent.CountDownLatch(2);
+        var start = new java.util.concurrent.CountDownLatch(1);
+        try (var workers = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var futures = java.util.stream.Stream.of(first, second).map(collector -> workers.submit(() -> {
+                ready.countDown();
+                if (!start.await(10, java.util.concurrent.TimeUnit.SECONDS)) throw new IllegalStateException("start timeout");
+                traces.save(collector);
+                return true;
+            })).toList();
+            assertThat(ready.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            for (var future : futures) assertThat(future.get(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        }
+        assertThat(rows(id)).extracting(Row::seq).containsExactly(1, 2, 3, 4, 5, 6, 7);
+        traces.save(first);
+        assertThat(rows(id)).hasSize(7);
+    }
+
     private UUID accept() {
         UUID eventId = UUID.randomUUID();
         events.accept(memberId, new LocationEventRequest(placeId, eventId, LocationEventType.ENTER, NOW, null));
