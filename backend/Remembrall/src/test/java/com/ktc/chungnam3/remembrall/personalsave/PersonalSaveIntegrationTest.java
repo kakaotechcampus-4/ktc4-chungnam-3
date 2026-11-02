@@ -512,6 +512,22 @@ class PersonalSaveIntegrationTest {
     }
 
     @Test
+    void placesReturnsAllOwnedPlacesWithPersonalSaveIdAndExcludesOtherMembers() throws Exception {
+        UUID contentId = content("places", "SUCCESS");
+        UUID saveId = savedRow(memberId, contentId, NOW, UUID.randomUUID());
+        UUID placeId = link(contentId, "pin");
+        UUID otherContentId = content("other-places", "SUCCESS");
+        savedRow(member(), otherContentId, NOW, UUID.randomUUID());
+        link(otherContentId, "other-pin");
+
+        var response = request("GET", "/places", token, null);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        var pins = List.of(mapper.readValue(response.body(), PersonalSaveResponse.PlacePin[].class));
+        assertThat(pins).containsExactly(new PersonalSaveResponse.PlacePin(placeId, "장소 pin", "서울시", 37, 127, saveId));
+    }
+
+    @Test
     void detailWithNoPlacesReturnsAnEmptyArray() throws Exception {
         UUID id = savedRow(memberId, content("empty-places", "PENDING"), NOW, UUID.randomUUID());
 

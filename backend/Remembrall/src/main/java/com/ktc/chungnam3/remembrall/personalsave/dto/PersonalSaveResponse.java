@@ -31,6 +31,10 @@ public record PersonalSaveResponse(UUID personalSaveId, UUID contentId,
                         String description) {
     }
 
+    public record PlacePin(UUID placeId, String name, String address, double latitude, double longitude,
+                           UUID personalSaveId) {
+    }
+
     /**
      * {@code candidateId}는 {@code ConfirmAnswerController} 답변 제출 경로의 path variable로 그대로
      * 쓰는 값, {@code options[].candidateId()}는 그중 고르는 selectedOptionId에 해당한다.

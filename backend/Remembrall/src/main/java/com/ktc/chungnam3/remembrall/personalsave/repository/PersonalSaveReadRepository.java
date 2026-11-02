@@ -63,6 +63,21 @@ public class PersonalSaveReadRepository {
                         row.getTimestamp("saved_at").toInstant(), List.of(), List.of())).stream().findFirst();
     }
 
+    public List<PersonalSaveResponse.PlacePin> findAllPlaces(UUID memberId) {
+        return jdbc.query("""
+                SELECT p.id, p.name, p.address, p.latitude, p.longitude, ps.id AS personal_save_id
+                  FROM personal_save ps
+                  JOIN content_place cp ON cp.content_id = ps.content_id
+                  JOIN place p ON p.id = cp.place_id
+                 WHERE ps.member_id = :memberId
+                 ORDER BY ps.saved_at DESC
+                """, new MapSqlParameterSource("memberId", memberId),
+                (row, index) -> new PersonalSaveResponse.PlacePin(
+                        row.getObject("id", UUID.class), row.getString("name"), row.getString("address"),
+                        row.getDouble("latitude"), row.getDouble("longitude"),
+                        row.getObject("personal_save_id", UUID.class)));
+    }
+
     public List<PersonalSaveResponse.Place> findPlaces(UUID contentId) {
         return jdbc.query("""
                 SELECT p.id, p.name, p.address, p.latitude, p.longitude, cp.description
