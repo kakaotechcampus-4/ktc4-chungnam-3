@@ -420,6 +420,25 @@ class PersonalSaveIntegrationTest {
     }
 
     @Test
+    void listIncludesFailureCodeRepresentativePlaceNameAndPendingConfirmCount() throws Exception {
+        UUID contentId = content("list-extra", "FAILED");
+        jdbc.update("UPDATE content SET last_analysis_error_code = 'EXTRACTION_API_ERROR' WHERE id = ?", contentId);
+        UUID saveId = savedRow(memberId, contentId, NOW, UUID.randomUUID());
+        link(contentId, "rep");
+        confirmCandidate(contentId, "p1", "PENDING", question("질문1", "option-1"));
+        confirmCandidate(contentId, "p2", "PENDING", question("질문2", "option-2"));
+        confirmCandidate(contentId, "p3", "ANSWERED", question("질문3", "option-3"));
+
+        var page = saves.list(memberId, null, null);
+
+        var item = page.items().getFirst();
+        assertThat(item.personalSaveId()).isEqualTo(saveId);
+        assertThat(item.analysisFailureCode()).isEqualTo("EXTRACTION_API_ERROR");
+        assertThat(item.representativePlaceName()).isEqualTo("장소 rep");
+        assertThat(item.pendingConfirmCount()).isEqualTo(2);
+    }
+
+    @Test
     void cursorPaginationHasNoGapsOrDuplicatesWithTimestampAndUuidTies() throws Exception {
         var tiedIds = List.of("80000000-0000-0000-0000-000000000000", "00000000-0000-0000-0000-000000000001",
                 "7fffffff-ffff-ffff-ffff-ffffffffffff", "00000000-0000-0000-0000-000000000002");
@@ -476,6 +495,26 @@ class PersonalSaveIntegrationTest {
                 .toInstant()).isEqualTo(NOW);
     }
 
+    @Test
+    void failStaleAnalyzingOnlyFlipsAnalyzingRowsOlderThanTheThreshold() {
+        UUID stale = content("stale", "ANALYZING");
+        jdbc.update("UPDATE content SET analysis_started_at = ? WHERE id = ?", Timestamp.from(NOW.minusSeconds(400)), stale);
+        UUID fresh = content("fresh", "ANALYZING");
+        jdbc.update("UPDATE content SET analysis_started_at = ? WHERE id = ?", Timestamp.from(NOW.minusSeconds(100)), fresh);
+        UUID alreadyFailed = content("already-failed", "FAILED");
+        jdbc.update("UPDATE content SET analysis_started_at = ? WHERE id = ?", Timestamp.from(NOW.minusSeconds(400)), alreadyFailed);
+
+        var updated = new TransactionTemplate(transactionManager)
+                .execute(transaction -> contents.failStaleAnalyzing(NOW.minusSeconds(300), NOW));
+
+        assertThat(updated).isEqualTo(1);
+        assertThat(status(stale)).isEqualTo("FAILED");
+        assertThat(jdbc.queryForObject("SELECT last_analysis_error_code FROM content WHERE id = ?", String.class, stale))
+                .isEqualTo("EXTRACTION_API_ERROR");
+        assertThat(status(fresh)).isEqualTo("ANALYZING");
+        assertThat(status(alreadyFailed)).isEqualTo("FAILED");
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"?size=0", "?size=-1", "?size=101", "?size=abc", "?cursor=bad", "?cursor="})
     void invalidPaginationReturns400(String query) throws Exception {
@@ -509,6 +548,22 @@ class PersonalSaveIntegrationTest {
                 "서울시", 37, 127, "영상 장소 소개"));
         assertError(request("GET", "/" + saveId, session(member()), null), 404, ErrorCode.NOT_FOUND);
         assertError(request("GET", "/" + UUID.randomUUID(), token, null), 404, ErrorCode.NOT_FOUND);
+    }
+
+    @Test
+    void placesReturnsAllOwnedPlacesWithPersonalSaveIdAndExcludesOtherMembers() throws Exception {
+        UUID contentId = content("places", "SUCCESS");
+        UUID saveId = savedRow(memberId, contentId, NOW, UUID.randomUUID());
+        UUID placeId = link(contentId, "pin");
+        UUID otherContentId = content("other-places", "SUCCESS");
+        savedRow(member(), otherContentId, NOW, UUID.randomUUID());
+        link(otherContentId, "other-pin");
+
+        var response = request("GET", "/places", token, null);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        var pins = List.of(mapper.readValue(response.body(), PersonalSaveResponse.PlacePin[].class));
+        assertThat(pins).containsExactly(new PersonalSaveResponse.PlacePin(placeId, "장소 pin", "서울시", 37, 127, saveId));
     }
 
     @Test

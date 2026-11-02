@@ -18,7 +18,8 @@ public record PersonalSaveResponse(UUID personalSaveId, UUID contentId,
     }
 
     public record Item(UUID personalSaveId, UUID contentId, String videoId, String title, String summary,
-                       ContentAnalysisStatus analysisStatus, long placeCount, Instant savedAt) {
+                       ContentAnalysisStatus analysisStatus, String analysisFailureCode, long placeCount,
+                       String representativePlaceName, long pendingConfirmCount, Instant savedAt) {
     }
 
     public record Detail(UUID personalSaveId, UUID contentId, String videoId, String sourceUrl, String title,
@@ -29,6 +30,10 @@ public record PersonalSaveResponse(UUID personalSaveId, UUID contentId,
 
     public record Place(UUID placeId, String name, String address, double latitude, double longitude,
                         String description) {
+    }
+
+    public record PlacePin(UUID placeId, String name, String address, double latitude, double longitude,
+                           UUID personalSaveId) {
     }
 
     /**

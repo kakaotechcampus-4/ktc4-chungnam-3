@@ -80,6 +80,11 @@ public class PersonalSaveService {
     }
 
     @Transactional(readOnly = true)
+    public List<PersonalSaveResponse.PlacePin> places(UUID memberId) {
+        return reads.findAllPlaces(memberId);
+    }
+
+    @Transactional(readOnly = true)
     public PersonalSaveResponse.Detail detail(UUID memberId, UUID personalSaveId) {
         var detail = reads.findOwnedDetail(memberId, personalSaveId)
                 .orElseThrow(() -> new ApiException(ErrorCode.NOT_FOUND));
