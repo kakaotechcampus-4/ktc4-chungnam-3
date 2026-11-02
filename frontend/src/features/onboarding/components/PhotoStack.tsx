@@ -19,7 +19,8 @@ type Layout = {
 
 type Props = {
     layout: Layout;
-    photos: readonly { uri: string; fade: ThumbFade }[];
+    // 원격 주소(uri) 또는 번들 이미지(image, 00a). 고정된 일러스트라 순서가 바뀌지 않는다.
+    photos: readonly { uri?: string; image?: number; fade: ThumbFade }[];
     // 맨 앞 사진에 그림자와 Shorts 표식을 둔다(00a).
     raiseFront?: boolean;
     // 맨 앞 사진이 실행 모션의 앞장이 내려앉을 자리다(00a).
@@ -60,8 +61,9 @@ export default function PhotoStack({
                 const front = raiseFront && index === photos.length - 1;
                 return (
                     <Thumb
-                        key={photo.uri + index}
+                        key={index}
                         uri={photo.uri}
+                        image={photo.image}
                         fade={photo.fade}
                         showSource={front}
                         style={[

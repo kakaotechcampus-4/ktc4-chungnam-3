@@ -46,6 +46,7 @@ frontend/
 │       ├── android-icon-foreground.png  적응형 아이콘 전경(108dp 캔버스, 글리프는 안전 영역 66dp). 바탕은 app.json 색
 │       ├── android-icon-monochrome.png  테마 아이콘(Android 13+). 흰 글리프, 점은 구멍
 │       ├── notification-icon.png  알림 small icon(96px 흰색 + 투명, 점은 구멍)
+│       ├── onboarding/       00a 일러스트 사진 4장(picsum 360×640 jpg 를 그대로 번들. 오프라인 첫 실행 · 실행 모션 도착 자리)
 │       ├── providers/        로그인 제공자 공식 심볼. 공식 에셋에서 심볼 경로만 남긴 파일(직접 그리지 않는다)
 │       └── *.png             그 밖은 Expo 템플릿 그대로(파비콘, 쓰지 않는 파일 포함)
 ├── scripts/
@@ -515,7 +516,8 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 - mock 은 features 의 타입을 import 하지 않는다(shared → features 금지). 구조적 타입으로 맞춘다.
 - 목 이미지 URL(picsum 고정 id)은 이 폴더 안에만 둔다.
 - 목 모드에서 세션과 로그인은 목 플래그다. `MOCK_SCENARIO.signedIn`(시작 시 세션 여부, 기본 false(개발 중에 팀원이 바꿈). true 면 근처 탭부터) · `loginResult`(success · cancelled · failed).
-  온보딩 일러스트 사진은 목 이미지다(`mock/onboarding.ts`). 첫 실행은 오프라인일 수 있어 나중에 번들 이미지로 바꾼다.
+  온보딩 일러스트 사진은 목 이미지다(`mock/onboarding.ts`). 00a 4장은 첫 실행이 오프라인일 수 있고 실행 모션이 맨 앞 사진에 내려앉으므로
+  같은 picsum 사진을 번들했다(`assets/images/onboarding/`, Thumb `image` prop). 00b · 00c 는 아직 원격 목 이미지다.
 - 지도(10 · 08)의 현재 위치와 denied 분기는 목 플래그(`MOCK_SCENARIO.locationPermission`)와 목 좌표(`mapViewMock`)다.
   설정(11)과 지오펜스는 실제 권한 · 위치를 쓴다.
 - 위치기반서비스 동의는 목 모드에서 목 플래그다. `MOCK_SCENARIO.locationConsent`(시작 시 동의 상태, never · agreed · withdrawn, 기본 never) · `consentSaveResult`(동의 저장 결과, ok · fail, 기본 ok) ·

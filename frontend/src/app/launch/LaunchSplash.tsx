@@ -2,6 +2,9 @@
 // 네이티브 스플래시(자두색 + 글리프 완성 상태)와 같은 화면으로 시작해, 네이티브 스플래시를 숨기고 그 위에서 3000ms 1회 재생한다.
 // 도착 화면은 이 아래에 이미 그려져 있다. 분기(세션 유무)는 모르고 앞장이 내려앉을 자리(target)만 받는다.
 // 끝날 때까지 화면 전체를 덮어 아래 화면은 눌리지 않는다(00a 시작하기 포함).
+
+// special thanks to @seolmango !!
+
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useRef, useState } from "react";
 import { type LayoutChangeEvent, StyleSheet, View } from "react-native";
