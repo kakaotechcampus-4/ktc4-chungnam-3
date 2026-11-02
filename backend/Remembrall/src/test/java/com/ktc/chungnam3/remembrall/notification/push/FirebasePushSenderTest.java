@@ -12,6 +12,7 @@ import com.google.firebase.FirebaseOptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
@@ -24,10 +25,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class FirebasePushSenderTest {
-    @Test
-    void adminSdkUsesHttpV1AndSerializesAllRequiredFields() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"nearby", "demo-channel"})
+    void adminSdkUsesHttpV1AndSerializesAllRequiredFields(String channelId) throws Exception {
         AtomicReference<String> body = new AtomicReference<>();
-        try (var sender = sender(200, "{\"name\":\"projects/test/messages/123\"}", body)) {
+        try (var sender = sender(200, "{\"name\":\"projects/test/messages/123\"}", body, channelId)) {
             Instant now = Instant.parse("2026-10-02T00:00:00Z");
             UUID id = UUID.randomUUID();
             assertThat(sender.send(PushMessage.notification("fcm-token", "title", "body", id, now)))
@@ -40,6 +42,7 @@ class FirebasePushSenderTest {
             assertThat(message.get("data").get("notificationId").asString()).isEqualTo(id.toString());
             assertThat(message.get("android").get("ttl").asString()).isEqualTo("1800s");
             assertThat(message.get("android").get("notification").get("tag").asString()).isEqualTo(id.toString());
+            assertThat(message.get("android").get("notification").get("channel_id").asString()).isEqualTo(channelId);
             assertThat(message.get("apns").get("headers").get("apns-expiration").asString())
                     .isEqualTo(Long.toString(now.plusSeconds(1800).getEpochSecond()));
             assertThat(message.get("apns").get("headers").get("apns-collapse-id").asString()).isEqualTo(id.toString());
@@ -65,13 +68,17 @@ class FirebasePushSenderTest {
     void absentCredentialsUseExplicitFailureSender() {
         var configuration = new com.ktc.chungnam3.remembrall.notification.config.NotificationConfiguration();
         assertThatThrownBy(() -> configuration.pushSender(
-                        new com.ktc.chungnam3.remembrall.notification.config.NotificationProperties(120, 200, ""))
+                        new com.ktc.chungnam3.remembrall.notification.config.NotificationProperties(120, 200, "", "nearby"))
                 .send(PushMessage.notification("token", "title", "body", UUID.randomUUID(), Instant.now())))
                 .isInstanceOfSatisfying(PushSendException.class,
                         exception -> assertThat(exception.failureCode()).isEqualTo("FCM_NOT_CONFIGURED"));
     }
 
     private FirebasePushSender sender(int status, String response, AtomicReference<String> body) {
+        return sender(status, response, body, "nearby");
+    }
+
+    private FirebasePushSender sender(int status, String response, AtomicReference<String> body, String channelId) {
         var transport = new MockHttpTransport() {
             @Override
             public LowLevelHttpRequest buildRequest(String method, String url) {
@@ -91,6 +98,6 @@ class FirebasePushSenderTest {
                 Date.from(Instant.now().plusSeconds(3600))));
         FirebaseOptions options = FirebaseOptions.builder().setCredentials(credentials)
                 .setProjectId("test-project").setHttpTransport(transport).build();
-        return new FirebasePushSender(FirebaseApp.initializeApp(options, "test-" + UUID.randomUUID()));
+        return new FirebasePushSender(FirebaseApp.initializeApp(options, "test-" + UUID.randomUUID()), channelId);
     }
 }

@@ -38,6 +38,9 @@ public class RecallExecution {
     @Column(name = "status", nullable = false, length = 20)
     private RecallExecutionStatus status;
 
+    @Column(name = "retry_count", nullable = false)
+    private int retryCount;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "result", length = 20)
     private RecallExecutionResult result;
