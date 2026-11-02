@@ -130,7 +130,8 @@ frontend/
         │   │   └── personalSaveMapper.ts  저장물 상세 · 목록 항목 -> SaveState
         │   └── mock/         UI 개발용 목 데이터. 화면 props 모양. 서버 계약 아님
         ├── launch/
-        │   └── launchTarget.ts   실행 모션의 앞장이 내려앉을 자리(S2). 도착 화면이 보고하고 App 이 읽는다. 이번 실행의 첫 보고만
+        │   └── launchTarget.ts   실행 모션의 앞장이 내려앉을 자리(S2). 도착 화면이 창 좌표로 재서 보고(useLaunchTargetMeasure)하고
+        │                         App 이 읽는다. 이번 실행의 첫 보고만. 보고하는 곳: 근처 첫 카드(NearbyCard) · 00a 맨 앞 사진(PhotoStack)
         ├── demo/
         │   └── demoTools.ts      시연 도구 켜짐 여부(__DEV__ · EXPO_PUBLIC_DEMO_TOOLS) · 설정 묶음 자리(app 이 등록, 설정이 그림)
         ├── storage/
@@ -200,6 +201,8 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 - 실행 모션(`docs/design/c-launch-motion.md`): 폰트 · 세션이 준비되면 도착 화면(근처 탭 또는 00a)을 그리고, 그 위에 `app/launch/LaunchSplash` 를 덮는다.
   LaunchSplash 는 네이티브 스플래시와 같은 화면(자두색 + 글리프)으로 시작해, 도착 화면이 앞장이 내려앉을 자리를 보고하면(`shared/launch/launchTarget`)
   다음 프레임에 네이티브 스플래시를 숨기고 3000ms 모션을 1회 재생한 뒤 언마운트한다. 보고가 1000ms 안에 없으면 대상 없음으로 시작한다.
+  보고하는 곳은 근처 첫 카드(`launchTarget` prop, 카드가 없으면 대상 없음)와 00a 맨 앞 사진(PhotoStack `launchTarget`, 기울기 포함)이다.
+  기울어진 사진은 재면 회전된 꼭짓점이 나오므로 기울지 않은 일러스트 틀을 재고 그릴 때와 같은 식으로 자리를 구한다.
   재생하는 동안은 화면 전체를 덮어 아래 화면이 눌리지 않는다. 앞으로 돌아올 때는 재생하지 않는다.
   애니메이션 줄이기가 켜져 있거나, 세션이 있고 종료 상태에서 누른 알림으로 켜졌으면(08 로 바로 간다) 200ms 크로스페이드만 한다.
 - MVP(게스트 세션) 흐름: 00a → 00c → 00d → 00e → 00f → 근처 탭. 00b 는 건너뛴다(등록하지 않는다).

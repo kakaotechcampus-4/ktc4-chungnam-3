@@ -47,6 +47,7 @@ export default function IntroScreen() {
                     layout={metrics.onboarding.intro}
                     photos={onboardingMock.introPhotos}
                     raiseFront
+                    launchTarget
                 />
             }
             messageTop={metrics.onboarding.introMessageTop}

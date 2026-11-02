@@ -1,7 +1,7 @@
 // 근처 탭. 지금 위치 근처의 저장물을 꺼내 보여준다. 저장물이 없으면 06 빈 상태.
 // 헤더는 스크롤 영역 밖에 고정한다. 하단 inset 은 하단 바가 맡는다.
 import { useNavigation } from "@react-navigation/native";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
 import {
@@ -9,6 +9,7 @@ import {
     nearbyEmptyMock,
     nearbyMock,
 } from "../../shared/api/mock";
+import { reportLaunchTarget } from "../../shared/launch/launchTarget";
 import Chip from "../../shared/ui/Chip";
 import ScreenHeader from "../../shared/ui/ScreenHeader";
 import { colors, metrics, spacing, typography } from "../../shared/ui/theme";
@@ -29,6 +30,13 @@ export default function ProposalScreen() {
     // 06 "{동네} 기억 보기". 지도 탭을 그 동네 가운데로 연다.
     const openArea = (area: string) =>
         navigation.navigate("Main", { screen: "Map", params: { area } });
+
+    // 실행 모션: 첫 근처 카드가 앞장이 내려앉을 자리다. 카드가 없으면(06 빈 상태 · 근처 0개) 도착 대상 없음.
+    const hasNearbyCard =
+        !MOCK_SCENARIO.nearbyEmpty && nearbyMock.nearby.length > 0;
+    useEffect(() => {
+        if (!hasNearbyCard) reportLaunchTarget(null);
+    }, [hasNearbyCard]);
 
     if (MOCK_SCENARIO.nearbyEmpty) {
         return (
@@ -76,11 +84,12 @@ export default function ProposalScreen() {
 
                 <View style={styles.list}>
                     <View>
-                        {nearby.map(({ id, detailId, ...card }) => (
+                        {nearby.map(({ id, detailId, ...card }, index) => (
                             <NearbyCard
                                 key={id}
                                 {...card}
                                 onPress={() => openDetail(detailId)}
+                                launchTarget={index === 0}
                             />
                         ))}
                     </View>

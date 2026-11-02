@@ -64,19 +64,26 @@ type Props = {
     onFinish: () => void;
 };
 
+// 오버레이의 크기와 창 안 위치. 도착 화면은 창 좌표로 보고하므로 이 위치를 빼서 오버레이 좌표로 바꾼다.
+type Screen = { width: number; height: number; x: number; y: number };
+
 export default function LaunchSplash(props: Props) {
-    const [screen, setScreen] = useState<{
-        width: number;
-        height: number;
-    } | null>(null);
+    const root = useRef<View>(null);
+    const [screen, setScreen] = useState<Screen | null>(null);
 
     const handleLayout = ({ nativeEvent }: LayoutChangeEvent) => {
         const { width, height } = nativeEvent.layout;
-        setScreen((prev) => prev ?? { width, height });
+        root.current?.measureInWindow((x, y) =>
+            setScreen((prev) => prev ?? { width, height, x, y }),
+        );
     };
 
     return (
-        <View style={StyleSheet.absoluteFill} onLayout={handleLayout}>
+        <View
+            ref={root}
+            style={StyleSheet.absoluteFill}
+            onLayout={handleLayout}
+        >
             {screen != null && <LaunchMotion {...props} screen={screen} />}
         </View>
     );
@@ -84,11 +91,19 @@ export default function LaunchSplash(props: Props) {
 
 // 화면 크기를 안 뒤에 마운트해 첫 프레임부터 S0 에 그린다.
 function LaunchMotion({
-    target,
+    target: windowTarget,
     skipMotion,
     onFinish,
     screen,
-}: Props & { screen: { width: number; height: number } }) {
+}: Props & { screen: Screen }) {
+    const target =
+        windowTarget == null
+            ? windowTarget
+            : {
+                  ...windowTarget,
+                  left: windowTarget.left - screen.x,
+                  top: windowTarget.top - screen.y,
+              };
     const reducedMotion = useReducedMotion();
     const crossfadeOnly = skipMotion || reducedMotion;
 

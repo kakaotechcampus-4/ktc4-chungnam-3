@@ -1,7 +1,8 @@
 // 실행 모션(app/launch/LaunchSplash)의 앞장이 내려앉을 자리. docs/design/c-launch-motion.md §3.3 의 S2.
-// 도착 화면(근처 첫 카드 · 00a 맨 앞 사진)이 화면 좌표로 재서 보고하고, App 이 읽어 LaunchSplash 에 넘긴다.
+// 도착 화면(근처 첫 카드 · 00a 맨 앞 사진)이 창 좌표로 재서 보고하고, App 이 읽어 LaunchSplash 에 넘긴다.
 // undefined: 아직 보고 전, null: 도착 대상 없음(빈 근처 등). 이번 실행의 첫 보고만 받고, 모션이 끝나면 더 받지 않는다.
-import { useSyncExternalStore } from "react";
+import { useRef, useSyncExternalStore } from "react";
+import type { View } from "react-native";
 
 export type LaunchRect = {
     left: number;
@@ -24,10 +25,36 @@ function subscribe(listener: () => void) {
     };
 }
 
+function accepting() {
+    return !ended && target === undefined;
+}
+
 export function reportLaunchTarget(rect: LaunchRect | null): void {
-    if (ended || target !== undefined) return;
+    if (!accepting()) return;
     target = rect;
     listeners.forEach((listener) => listener());
+}
+
+export type WindowFrame = {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+};
+
+// 도착 화면용. 돌려준 ref · onLayout 을 붙인 뷰를 처음 그렸을 때 창 좌표로 재고, toRect 로 바꿔 보고한다.
+// 기울어진 뷰는 재면 회전된 꼭짓점이 나오므로, 기울지 않은 부모를 재고 toRect 에서 자식 자리를 계산한다(PhotoStack).
+export function useLaunchTargetMeasure(
+    toRect: (frame: WindowFrame) => LaunchRect,
+) {
+    const ref = useRef<View>(null);
+    const onLayout = () => {
+        if (!accepting()) return;
+        ref.current?.measureInWindow((x, y, width, height) =>
+            reportLaunchTarget(toRect({ x, y, width, height })),
+        );
+    };
+    return { ref, onLayout };
 }
 
 export function useLaunchTarget(): LaunchRect | null | undefined {
