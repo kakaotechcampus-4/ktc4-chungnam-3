@@ -72,8 +72,10 @@ public class PersonalSaveReadRepository {
 
     public List<PersonalSaveResponse.PlacePin> findAllPlaces(UUID memberId) {
         return jdbc.query("""
-                SELECT p.id, p.name, p.address, p.latitude, p.longitude, ps.id AS personal_save_id
+                SELECT p.id, p.name, p.address, p.latitude, p.longitude, ps.id AS personal_save_id,
+                       c.video_id, ps.saved_at
                   FROM personal_save ps
+                  JOIN content c ON c.id = ps.content_id
                   JOIN content_place cp ON cp.content_id = ps.content_id
                   JOIN place p ON p.id = cp.place_id
                  WHERE ps.member_id = :memberId
@@ -82,7 +84,8 @@ public class PersonalSaveReadRepository {
                 (row, index) -> new PersonalSaveResponse.PlacePin(
                         row.getObject("id", UUID.class), row.getString("name"), row.getString("address"),
                         row.getDouble("latitude"), row.getDouble("longitude"),
-                        row.getObject("personal_save_id", UUID.class)));
+                        row.getObject("personal_save_id", UUID.class), row.getString("video_id"),
+                        row.getTimestamp("saved_at").toInstant()));
     }
 
     public List<PersonalSaveResponse.Place> findPlaces(UUID contentId) {

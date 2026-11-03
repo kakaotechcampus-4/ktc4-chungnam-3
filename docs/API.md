@@ -11,7 +11,7 @@
 | `GET /api/personal-saves`                              | 목록 조회 조건                                                                 | 내 저장물의 제목·요약·분석 상태·실패 코드·대표 장소명·연결 장소 수·미답변 되묻기 수 등 반환                                                                                                   |
 | `GET /api/personal-saves/{personalSaveId}`             | 없음                                                                       | 저장물 상세와 연결된 콘텐츠·장소·답변 대기 중인 되묻기 후보(`confirmCandidates`) 반환                                                                                             |
 | `DELETE /api/personal-saves/{personalSaveId}`          | 없음                                                                       | 내 저장물과 해당 Trigger 삭제                                                                                                                                  |
-| `GET /api/personal-saves/places`                       | 없음                                                                       | 내가 저장한 모든 콘텐츠의 장소를 좌표·이름·주소·출처 저장물(`personalSaveId`)과 함께 한 번에 반환 (근처 탭·지도용, 페이지네이션 없음)                                                                     |
+| `GET /api/personal-saves/places`                       | 없음                                                                       | 내가 저장한 모든 콘텐츠의 장소를 좌표·이름·주소·출처 저장물(`personalSaveId`)·`videoId`·`savedAt`과 함께 한 번에 반환 (근처 탭·지도용, 페이지네이션 없음)                                                                     |
 | `POST /api/personal-saves/{personalSaveId}/places/{candidateId}/confirm` | `selectedOptionId`                                      | 되묻기 후보에 대한 답변 반영                                                                                                                                      |
 | `GET /api/geofences?latitude=…&longitude=…&platform=…` | 현재 위치와 `IOS` 또는 `ANDROID`                                                | OS에 등록할 **지역·장소 지오펜스 목록** 반환. 각각 등록 ID·유형·좌표·반경을 포함하며, 장소에는 `placeId`, Android DWELL에는 지연 시간을 포함. 앱 시작·복귀, 저장물 변경, **지역 지오펜스 진입·이탈 시 재호출**하여 등록 목록 갱신 |
 | `POST /api/location-events`                            | `placeId`, `triggerEventId`, `eventType`, `eventOccurredAt`, 가능하면 이벤트 위치 | **장소 지오펜스 발동 시에만 호출.** 서버가 세션 사용자와 `placeId`로 유효한 Trigger를 조회하고, 중복·실행 조건을 검사한 뒤 이벤트당 꺼내기 실행 한 건 생성. 제안이 나오면 이후 FCM으로 전달                              |
@@ -100,7 +100,7 @@
 **`GET /api/personal-saves/places`**
 
 ```
-[{ placeId, name, address, latitude, longitude, personalSaveId }]
+[{ placeId, name, address, latitude, longitude, personalSaveId, videoId, savedAt }]
 ```
 
 내가 저장한 모든 콘텐츠의 장소를 한 번에 반환한다. 페이지네이션 없음.

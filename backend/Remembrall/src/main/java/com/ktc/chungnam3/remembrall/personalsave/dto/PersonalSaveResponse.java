@@ -33,7 +33,7 @@ public record PersonalSaveResponse(UUID personalSaveId, UUID contentId,
     }
 
     public record PlacePin(UUID placeId, String name, String address, double latitude, double longitude,
-                           UUID personalSaveId) {
+                           UUID personalSaveId, String videoId, Instant savedAt) {
     }
 
     /**
