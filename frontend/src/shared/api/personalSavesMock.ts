@@ -359,8 +359,10 @@ function seedSaves(): MockSave[] {
         places: PersonalSavePlaceResponse[],
         confirmCandidates: ConfirmCandidateResponse[] = [],
     ): MockSave => ({
-        personalSaveId: mockUuid(),
-        contentId: mockUuid(),
+        // 샘플 id 는 고정이다(개발용 딥링크 save-result/<id> 가 실행마다 같게). 끝 세 자리는 영상 번호(mockSave009 → 009),
+        // 넷째 묶음은 저장물 9000 · 콘텐츠 a000 이라 장소(8000)와 겹치지 않는다.
+        personalSaveId: `00000000-0000-4000-9000-000000000${videoId.slice(-3)}`,
+        contentId: `00000000-0000-4000-a000-000000000${videoId.slice(-3)}`,
         videoId,
         savedAt,
         analysisStatus,
