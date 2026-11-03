@@ -12,9 +12,15 @@ import com.google.firebase.messaging.Notification;
 
 public class FirebasePushSender implements PushSender, AutoCloseable {
     private final FirebaseApp app;
+    private final String channelId;
 
     public FirebasePushSender(FirebaseApp app) {
+        this(app, "nearby");
+    }
+
+    public FirebasePushSender(FirebaseApp app, String channelId) {
         this.app = app;
+        this.channelId = channelId;
     }
 
     @Override
@@ -29,12 +35,13 @@ public class FirebasePushSender implements PushSender, AutoCloseable {
     }
 
     @SuppressWarnings("deprecation")
-    static Message toFirebaseMessage(PushMessage message) {
+    private Message toFirebaseMessage(PushMessage message) {
         return Message.builder().setToken(message.token())
                 .setNotification(Notification.builder().setTitle(message.title()).setBody(message.body()).build())
                 .putAllData(message.data())
                 .setAndroidConfig(AndroidConfig.builder().setTtl(message.androidTtl().toMillis())
-                        .setNotification(AndroidNotification.builder().setTag(message.androidTag()).build()).build())
+                        .setNotification(AndroidNotification.builder().setTag(message.androidTag())
+                                .setChannelId(channelId).build()).build())
                 .setApnsConfig(ApnsConfig.builder().putAllHeaders(message.apnsHeaders())
                         .setAps(Aps.builder().build()).build())
                 .build();

@@ -60,6 +60,7 @@ personal-save:
   analysis-queue-capacity: 100
 
 recall:
+  max-event-retries: ${RECALL_MAX_EVENT_RETRIES:1}
   trace:
     max-detail-bytes: 65536
     max-error-length: 1000
@@ -102,6 +103,7 @@ recall:
     max-cache-entries: 512
 
 notification:
+  android-channel-id: ${NOTIFICATION_ANDROID_CHANNEL_ID:nearby}
   max-title-length: 120
   max-body-length: 200
   fcm-credentials-path: ${FCM_CREDENTIALS_PATH:}

@@ -29,7 +29,8 @@ public class NotificationConfiguration {
         try (InputStream stream = Files.newInputStream(Path.of(properties.fcmCredentialsPath()))) {
             FirebaseOptions options = FirebaseOptions.builder()
                     .setCredentials(ServiceAccountCredentials.fromStream(stream)).build();
-            return new FirebasePushSender(FirebaseApp.initializeApp(options, "notification-" + UUID.randomUUID()));
+            return new FirebasePushSender(FirebaseApp.initializeApp(options, "notification-" + UUID.randomUUID()),
+                    properties.androidChannelId());
         }
     }
 }

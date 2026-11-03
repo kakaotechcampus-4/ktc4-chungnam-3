@@ -1,8 +1,12 @@
 // HTTP 클라이언트. 기본 주소 · Bearer 헤더 · ApiError · 401 처리.
 // 응답은 래핑하지 않는다. 실패 바디 {code, message} 와 네트워크 오류 · 시간 초과는 ApiError 로 바꾼다.
+// 성공 응답의 본문이 비어 있으면(204 · 본문 없는 202) body 는 undefined 다.
+// 시간 제한은 기본 15초이고 요청마다 timeoutMs 로 바꿀 수 있다. 제한은 fetch 한 번에 걸린다(세션 다시 받기 · 401 뒤 재전송은 따로 잰다).
 // 게스트 세션은 만료됐으면 요청 전에, 401 이면 그때 같은 설치 id 로 조용히 다시 받고 원래 요청을 딱 한 번 다시 보낸다.
 // 다시 보낸 요청이 또 401 이면 반복하지 않는다. 게스트가 아닌 세션(카카오)의 401 은 세션을 지우고 00b 로 간다.
 // 다시 받는 함수는 login.ts 가 등록한다(setSessionRefresher). 이 파일은 login.ts 를 import 하지 않는다(순환 방지).
+// refresh: false 인 요청은 세션을 다시 받지 않는다(만료 전 · 401 모두). 401 이면 세션을 건드리지 않고 그대로 실패한다.
+// 세션 다시 받기 안에서 보내는 요청(새 세션으로 FCM 토큰 재등록)이 쓴다. 다시 받기를 부르면 진행 중인 자기 자신을 기다리게 된다.
 import {
     clearSession,
     getSessionToken,
@@ -45,12 +49,24 @@ type RequestOptions = {
     body?: unknown;
     // false 면 세션을 싣지 않는다(로그인 요청).
     auth?: boolean;
+    // 응답을 기다리는 시간(ms). 없으면 REQUEST_TIMEOUT_MS.
+    timeoutMs?: number;
+    // false 면 세션을 다시 받지 않는다(세션 다시 받기 안에서 보내는 요청, 교착 방지).
+    refresh?: boolean;
 };
 
-export function request<T>(
+export async function request<T>(
     path: string,
     options: RequestOptions = {},
 ): Promise<T> {
+    return (await send<T>(path, options, false)).body;
+}
+
+// 성공 상태 코드가 필요할 때(저장 API 의 201 새로 저장 · 200 이미 저장). 실패는 request 와 같다.
+export function requestWithStatus<T>(
+    path: string,
+    options: RequestOptions = {},
+): Promise<{ status: number; body: T }> {
     return send<T>(path, options, false);
 }
 
@@ -58,8 +74,14 @@ async function send<T>(
     path: string,
     options: RequestOptions,
     retried: boolean,
-): Promise<T> {
-    const { method = "GET", body, auth = true } = options;
+): Promise<{ status: number; body: T }> {
+    const {
+        method = "GET",
+        body,
+        auth = true,
+        timeoutMs = REQUEST_TIMEOUT_MS,
+        refresh = true,
+    } = options;
     if (API_BASE_URL == null) {
         throw new ApiError(
             null,
@@ -69,7 +91,9 @@ async function send<T>(
     }
 
     // 만료된 게스트 세션은 보내기 전에 다시 받는다. 실패해도 그대로 보내고 401 처리에 맡긴다.
-    if (auth && !retried && isSessionExpired()) await refreshSession?.();
+    if (auth && refresh && !retried && isSessionExpired()) {
+        await refreshSession?.();
+    }
 
     const headers: Record<string, string> = { Accept: "application/json" };
     if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -77,7 +101,7 @@ async function send<T>(
     if (token != null) headers.Authorization = `Bearer ${token}`;
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     let response: Response;
     try {
         response = await fetch(`${API_BASE_URL}${path}`, {
@@ -99,7 +123,7 @@ async function send<T>(
         clearTimeout(timer);
     }
 
-    if (response.status === 401 && token != null && !retried) {
+    if (response.status === 401 && token != null && refresh && !retried) {
         const result = (await refreshSession?.()) ?? "notApplicable";
         if (result === "refreshed") return send<T>(path, options, true);
         if (result === "notApplicable") await clearSession("login");
@@ -109,8 +133,11 @@ async function send<T>(
         const { code, message } = await readError(response);
         throw new ApiError(response.status, code, message);
     }
-    if (response.status === 204) return undefined as T;
-    return (await response.json()) as T;
+    const text = await response.text();
+    return {
+        status: response.status,
+        body: (text === "" ? undefined : JSON.parse(text)) as T,
+    };
 }
 
 async function readError(

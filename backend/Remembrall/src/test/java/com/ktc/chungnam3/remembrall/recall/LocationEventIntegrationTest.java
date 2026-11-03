@@ -636,6 +636,95 @@ class LocationEventIntegrationTest {
         return createFixture(null);
     }
 
+    @Test
+    void agentFailureRetriesSameRowDespiteCooldownAndRetainsBothAttemptsInTrace() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        doAnswer(invocation -> {
+            if (calls.incrementAndGet() == 1) throw new IllegalStateException("first attempt failure");
+            return invocation.callRealMethod();
+        }).when(agent).execute(any(), any());
+        UUID eventId = UUID.randomUUID();
+        String request = body(fixture.placeId(), eventId, NOW, "ENTER", null);
+        assertAccepted(post(fixture, request));
+        var first = executionRepository.findByTriggerIdAndTriggerEventId(fixture.triggerId(), eventId).orElseThrow();
+        assertThat(first.getStatus()).isEqualTo(RecallExecutionStatus.FAILED);
+        assertThat(first.getRetryCount()).isZero();
+        assertAccepted(post(fixture, body(fixture.placeId(), UUID.randomUUID(), NOW, "ENTER", null)));
+        assertThat(calls).hasValue(1);
+        assertAccepted(post(fixture, request));
+        var second = executionRepository.findById(first.getId()).orElseThrow();
+        assertThat(second.getStatus()).isEqualTo(RecallExecutionStatus.COMPLETED);
+        assertThat(second.getRetryCount()).isEqualTo(1);
+        assertThat(second.getFailureCode()).isNull();
+        assertThat(second.getCreatedAt()).isEqualTo(first.getCreatedAt());
+        assertThat(executionRepository.count()).isEqualTo(1);
+        assertThat(calls).hasValue(2);
+        assertThat(jdbcTemplate.queryForList("SELECT attempt FROM recall_execution_trace WHERE execution_id = ? ORDER BY seq",
+                Integer.class, first.getId())).containsExactly(1, 1, 2, 2, 2);
+        assertThat(jdbcTemplate.queryForList("SELECT seq FROM recall_execution_trace WHERE execution_id = ? ORDER BY seq",
+                Integer.class, first.getId())).containsExactly(1, 2, 3, 4, 5);
+    }
+
+    @Test
+    void repeatedAgentFailureStopsAtConfiguredRetryLimit() throws Exception {
+        doAnswer(invocation -> { throw new IllegalStateException("persistent failure"); }).when(agent).execute(any(), any());
+        UUID eventId = UUID.randomUUID();
+        String request = body(fixture.placeId(), eventId, NOW, "ENTER", null);
+        for (int attempt = 0; attempt < 4; attempt++) assertAccepted(post(fixture, request));
+        var row = executionRepository.findByTriggerIdAndTriggerEventId(fixture.triggerId(), eventId).orElseThrow();
+        assertThat(row.getStatus()).isEqualTo(RecallExecutionStatus.FAILED);
+        assertThat(row.getRetryCount()).isEqualTo(properties.maxEventRetries()).isEqualTo(1);
+        verify(agent, times(2)).execute(any(), any());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = RecallExecutionStatus.class, names = {"FAILED", "TIMED_OUT"})
+    void terminalFailureCanRetryAndConcurrentRequestsClaimItOnlyOnce(RecallExecutionStatus terminal) throws Exception {
+        UUID eventId = UUID.randomUUID();
+        UUID id = UUID.randomUUID();
+        transactions.executeWithoutResult(status -> executionRepository.insertPendingIfAbsent(
+                id, fixture.triggerId(), eventId, "old-agent", NOW, NOW));
+        jdbcTemplate.update("UPDATE recall_execution SET status = ?, failure_code = 'OLD_ERROR', finished_at = ? WHERE id = ?",
+                terminal.name(), java.sql.Timestamp.from(NOW), id);
+        postConcurrently(List.of(fixture, fixture), List.of(eventId, eventId)).forEach(this::assertAccepted);
+        var row = executionRepository.findById(id).orElseThrow();
+        assertThat(row.getStatus()).isEqualTo(RecallExecutionStatus.COMPLETED);
+        assertThat(row.getRetryCount()).isEqualTo(1);
+        assertThat(row.getAgentVersion()).isEqualTo("stub-v1");
+        assertThat(row.getFailureCode()).isNull();
+        verify(agent, times(1)).execute(any(), any());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = RecallExecutionStatus.class, names = {"PENDING", "RUNNING", "COMPLETED"})
+    void nonFailedDuplicateCannotRetry(RecallExecutionStatus state) throws Exception {
+        UUID id = UUID.randomUUID();
+        UUID eventId = UUID.randomUUID();
+        transactions.executeWithoutResult(status -> executionRepository.insertPendingIfAbsent(
+                id, fixture.triggerId(), eventId, "stub-v1", NOW, NOW));
+        jdbcTemplate.update("UPDATE recall_execution SET status = ? WHERE id = ?", state.name(), id);
+        assertAccepted(post(fixture, body(fixture.placeId(), eventId, NOW, "ENTER", null)));
+        var row = executionRepository.findById(id).orElseThrow();
+        assertThat(row.getRetryCount()).isZero();
+        assertThat(row.getStatus()).isEqualTo(state);
+        verify(agent, times(0)).execute(any(), any());
+    }
+
+    @Test
+    void retryStillRequiresLocationConsentAndOriginalEventFreshness() throws Exception {
+        UUID id = UUID.randomUUID();
+        UUID eventId = UUID.randomUUID();
+        transactions.executeWithoutResult(status -> executionRepository.insertPendingIfAbsent(
+                id, fixture.triggerId(), eventId, "stub-v1", NOW.minusSeconds(1801), NOW));
+        jdbcTemplate.update("UPDATE recall_execution SET status = 'FAILED' WHERE id = ?", id);
+        assertAccepted(post(fixture, body(fixture.placeId(), eventId, NOW, "ENTER", null)));
+        jdbcTemplate.update("UPDATE recall_execution SET event_occurred_at = ? WHERE id = ?", java.sql.Timestamp.from(NOW), id);
+        consents.change(fixture.memberId(), ConsentType.LOCATION_BASED_SERVICE, new ConsentRequest(false, null));
+        assertAccepted(post(fixture, body(fixture.placeId(), eventId, NOW, "ENTER", null)));
+        assertThat(executionRepository.findById(id).orElseThrow().getRetryCount()).isZero();
+        verify(agent, times(0)).execute(any(), any());
+    }
+
     private Fixture anotherTriggerFor(Fixture member) {
         UUID placeId = placeRepository.save(Place.create("Other place", "Address", 36.35, 127.38,
                 GeocodingProvider.LOCATIONIQ, UUID.randomUUID().toString(), VerificationProvider.KAKAO,

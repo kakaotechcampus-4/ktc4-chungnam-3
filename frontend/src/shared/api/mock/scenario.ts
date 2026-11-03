@@ -9,18 +9,43 @@ export type MockLoginResult = "success" | "cancelled" | "failed";
 // 목 위치기반서비스 동의. 시작 상태와 저장(PUT) 결과. fail 이면 시트의 오류 상태를 본다.
 export type MockLocationConsent = "never" | "agreed" | "withdrawn";
 export type MockConsentSaveResult = "ok" | "fail";
+// 목 서버의 현재 위치기반서비스 약관 버전. 시작 상태의 동의 기록은 v1 이라 v2 로 두면 agreed 가 outdated(재동의)가 된다.
+export type MockLocationTermsVersion = "v1" | "v2";
+// 목 도착 보고(POST /api/location-events) 결과. timeout 은 서버가 받아 기록했지만 앱이 응답을 못 받은 경우다.
+export type MockLocationEventResult = "ok" | "networkError" | "timeout";
+// 목 저장물(personalSavesMock). 저장(POST) 결과와, 저장하고 약 5초 뒤 상세 · 목록에 보일 분석 결과.
+// networkError: 응답 없음(ApiError status null). invalid: 400 INVALID_REQUEST.
+// failed 는 다시 저장하면 다시 분석되는 실패(EXTRACTION_API_ERROR), videoUnavailable(VIDEO_UNAVAILABLE) ·
+// analysisError(EXTRACTION_RESULT_ERROR) 는 다시 분석되지 않는다.
+export type MockSaveResult = "ok" | "networkError" | "invalid";
+// 되묻기 답변(POST …/confirm) 결과. notFound: 404(서버에서는 후보가 이미 처리됐거나 고른 장소를 카카오에서 확인하지 못함).
+// networkError: 응답 없음(ApiError status null).
+export type MockConfirmResult = "ok" | "notFound" | "networkError";
+export type MockAnalysisResult =
+    | "success"
+    | "noPlace"
+    | "failed"
+    | "videoUnavailable"
+    | "analysisError";
 
 export const MOCK_SCENARIO: {
     // false 면 저장된 세션이 없는 것으로 보고 온보딩(00a)부터 시작한다.
     signedIn: boolean;
     loginResult: MockLoginResult;
+    // true 면 목 지금 위치를 봉명동(nearbyMock.empty)으로 옮긴다. 저장 장소가 모두 1km 밖이라 근처가 06(빈 상태)이 된다.
     nearbyEmpty: boolean;
+    // 저장물 목(personalSavesMock)의 시작 상태. true 면 빈 저장소(07b), false 면 샘플 10개.
     archiveEmpty: boolean;
     locationPermission: MockLocationPermission;
     // true 면 목 썸네일 URL 을 깨뜨려 로드 실패(bg/placeholder) 를 본다.
     brokenThumbnails: boolean;
     locationConsent: MockLocationConsent;
     consentSaveResult: MockConsentSaveResult;
+    locationTermsVersion: MockLocationTermsVersion;
+    locationEventResult: MockLocationEventResult;
+    saveResult: MockSaveResult;
+    analysisResult: MockAnalysisResult;
+    confirmResult: MockConfirmResult;
 } = {
     signedIn: false, // 현재는 개발 과정이므로 false로 두었음. 설계 문서에는 true가 기본 값이라고 명시해두었음.
     loginResult: "success",
@@ -30,4 +55,9 @@ export const MOCK_SCENARIO: {
     brokenThumbnails: false,
     locationConsent: "never",
     consentSaveResult: "ok",
+    locationTermsVersion: "v1",
+    locationEventResult: "ok",
+    saveResult: "ok",
+    analysisResult: "success",
+    confirmResult: "ok",
 };

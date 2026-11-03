@@ -106,17 +106,22 @@ public class LocationEventService {
         }
 
         Instant now = clock.instant();
-        if (executionRepository.existsByTriggerIdAndTriggerEventId(trigger.getId(), event.triggerEventId())) {
+        var existing = executionRepository.findByTriggerIdAndTriggerEventId(trigger.getId(), event.triggerEventId())
+                .orElse(null);
+        Instant occurredAt = existing == null ? event.eventOccurredAt() : existing.getEventOccurredAt();
+        if (occurredAt.isBefore(now.minus(properties.maxEventAge()))) {
             return null;
         }
-        if (event.eventOccurredAt().isBefore(now.minus(properties.maxEventAge()))) {
-            return null;
-        }
-        if (executionRepository.existsRecentByMemberId(memberId, now.minus(properties.memberCooldown()))) {
+        if (existing == null && executionRepository.existsRecentByMemberId(memberId, now.minus(properties.memberCooldown()))) {
             return null;
         }
         if (!consents.existsByMemberIdAndConsentTypeAndWithdrawnAtIsNull(memberId, ConsentType.LOCATION_BASED_SERVICE)) {
             return null;
+        }
+
+        if (existing != null) {
+            return executionRepository.retryFailed(existing.getId(), properties.maxEventRetries(), agent.version(), now) == 1
+                    ? existing.getId() : null;
         }
 
         UUID executionId = UUID.randomUUID();

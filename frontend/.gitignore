@@ -33,6 +33,9 @@ yarn-error.*
 # local env files
 .env*.local
 
+# Firebase 설정(공개 레포라 커밋하지 않는다. EAS 는 file 환경 변수 GOOGLE_SERVICES_JSON)
+google-services.json
+
 # typescript
 *.tsbuildinfo
 

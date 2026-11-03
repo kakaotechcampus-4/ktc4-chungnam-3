@@ -14,7 +14,8 @@ import {
 
 type Props = {
     name: string;
-    address: string;
+    // 없으면 2줄을 숨긴다(02 선택지의 주소가 비었을 때).
+    address?: string;
     selected: boolean;
     onPress: () => void;
 };
@@ -39,9 +40,11 @@ export default function PlaceOption({
                 <Text numberOfLines={1} style={styles.name}>
                     {name}
                 </Text>
-                <Text numberOfLines={1} style={styles.address}>
-                    {address}
-                </Text>
+                {address != null && (
+                    <Text numberOfLines={1} style={styles.address}>
+                        {address}
+                    </Text>
+                )}
             </View>
             {selected && (
                 <Icon name="check" size={metrics.placeOption.checkSize} />
