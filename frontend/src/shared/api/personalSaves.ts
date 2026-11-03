@@ -108,6 +108,7 @@ export type PersonalSaveDetailResponse = {
 };
 
 // 내 장소 목록 항목. 장소와 저장물 한 쌍마다 한 항목이라 같은 placeId 가 여러 번 올 수 있다.
+// videoId · savedAt 은 그 저장물의 영상 id · 저장 시각이다.
 export type SavedPlacePinResponse = {
     placeId: string;
     name: string;
@@ -115,6 +116,8 @@ export type SavedPlacePinResponse = {
     latitude: number;
     longitude: number;
     personalSaveId: string;
+    videoId: string;
+    savedAt: string;
 };
 
 // created: 새로 저장했다(201). false 면 이미 저장한 영상이다(200).

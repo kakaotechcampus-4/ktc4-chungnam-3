@@ -136,11 +136,11 @@ frontend/
         │   ├── notificationsMock.ts  알림 목. 목 도착마다 PLACE 알림 1개를 만들어 로컬 알림으로 띄우고, 상세는 읽을 때 저장물을 다시 확인한다
         │   ├── usePersonalSaveDetail.ts  저장물 상세 hook. 포커스 · 앱 복귀 때 읽기, 분석 중 5초마다 다시 읽기
         │   ├── useNotificationDetail.ts  알림 상세 hook. 처음 그릴 때 한 번 읽고 열 화면(toNotificationTarget)을 정한다
-        │   ├── useSavedPlaces.ts  내 장소 hook(지도 · 근처). 내 장소 목록 + 저장물 목록(끝까지)을 묶어 읽기, 포커스 · 앱 복귀 때
+        │   ├── useSavedPlaces.ts  내 장소 hook(지도 · 근처). 내 장소 목록 + 저장물 목록(끝까지, 제목 · 요약용)을 함께 읽기, 포커스 · 앱 복귀 때
         │   ├── useLocationConsent.ts  위치 정보 이용 동의 hook(근처 06b 게이트). 포커스 · 앱 복귀 · 위치 설정 신호 때 읽기
         │   ├── mappers/      ★ 서버 응답 -> 앱 모델 변환. 백엔드 변경 흡수 지점
         │   │   ├── personalSaveMapper.ts  저장물 상세 · 목록 항목 -> SaveState
-        │   │   └── savedPlaceMapper.ts  내 장소 목록 + 저장물 목록 -> SavedPlace(장소마다 가장 최근 저장물)
+        │   │   └── savedPlaceMapper.ts  내 장소 목록 -> SavedPlace(장소마다 가장 최근 저장물). 저장물 목록은 제목 · 요약만 붙인다
         │   └── mock/         UI 개발용 목 데이터. 화면 props 모양. 서버 계약 아님
         ├── launch/
         │   └── launchTarget.ts   실행 모션의 앞장이 내려앉을 자리(S2). 도착 화면이 창 좌표로 재서 보고(useLaunchTargetMeasure)하고
@@ -312,8 +312,10 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 - 06 "{장소} 기억 보기"는 `Main > Map` 에 `placeId` 를 넘긴다. 지도는 장소를 읽은 뒤 그 장소를 가운데에 두고 핀을 고르고(10b) `placeId` 를 비운다.
   내 장소에 없는 장소면(그 사이 지움) 고르지 않고 비운다.
 - 지도 핀 크기는 fade 로 정한다(recent 40 · weeks 26 · months 22). 지금 위치를 모르면 현재 위치 · 내 위치 버튼 · 도보 시간을 숨긴다.
-- 지도 탭(10)은 내 장소(`useSavedPlaces`)를 그린다. 내 장소 목록과 저장물 목록(size=100, `nextCursor` 가 없을 때까지)을 함께 읽어
-  `personalSaveId` 로 묶고, 장소마다 가장 최근 저장물 하나만 핀으로 둔다(썸네일 · 바램 · 지난 시간은 그 저장물). 저장물 목록에 없는 쌍은 버린다.
+- 지도 탭(10)은 내 장소(`useSavedPlaces`)를 그린다. 내 장소 목록(장소 × 저장물 쌍, 각 쌍에 `videoId` · `savedAt`)에서 장소마다 `savedAt` 이 가장 최근인
+  저장물 하나만 핀으로 둔다(썸네일 · 바램 · 지난 시간은 그 저장물). 저장물 목록(size=100, `nextCursor` 가 없을 때까지)은 함께 읽어
+  `personalSaveId` 로 제목 · 요약(근처 카드 요약)만 붙인다. 저장물 목록에 없는 쌍도 버리지 않고 제목 · 요약 없이 둔다.
+  둘 중 하나라도 실패하면 그 읽기는 실패다(장소 목록에 제목 · 요약이 생기면 저장물 목록 읽기를 걷어 낸다. 백엔드 요청).
   탭에 포커스될 때와 포커스된 동안 앱이 앞으로 올 때 다시 읽는다. 처음 읽기가 실패하면 핀 없이 지도만, 다시 읽기 실패는 보이던 핀을 둔다.
   화면을 떠난 뒤에 온 응답은 버린다(숨겨진 동안 마커가 바뀌지 않게).
   처음 영역은 06 링크의 장소(`placeId`) > 지금 위치 가운데 > 핀 전체 > 대한민국 전체 순이다. 지금 위치를 읽는 동안은 지도를 그리지 않고 바탕만 둔다.
@@ -390,11 +392,13 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
       `shared/permissions/notifications.ts` 의 `ensureNotificationChannel` 로 만들고, App 마운트 때 켤 때마다 부른다(헤드리스 태스크에서는 부르지 않는다).
       만든 뒤에는 이름 · 설명만 바뀌고 중요도 · 소리는 앱이 바꿀 수 없다. id 는 바꾸지 않는다(app.json 의 `defaultChannel` 과 같아야 한다).
       id 상수 `NEARBY_CHANNEL_ID` 는 `shared/permissions/notifications.ts` 에 둔다. 목 로컬 알림(shared/api)도 쓰는데 shared 는 runtime 을 import 하지 않기 때문이다.
-      서버가 channelId 없이 보내는 FCM 은 앱이 뒤에 있을 때 `defaultChannel`(manifest `default_notification_channel_id`)로 이 채널에 온다.
+      서버는 FCM 의 Android 알림에 `channelId: "nearby"` 를 넣어 보낸다(#61, 서버 설정 `notification.android-channel-id`,
+      환경 변수 `NOTIFICATION_ANDROID_CHANNEL_ID`, 기본값 nearby). 앱이 뒤에 있으면 OS 가 이 채널로 바로 띄운다.
+      `defaultChannel`(manifest `default_notification_channel_id`)은 channelId 가 빠진 FCM 을 이 채널로 받는 안전망으로 남긴다.
       앱이 앞에 있을 때는 expo 가 받아 JS 핸들러에 묻는다. 핸들러(`setForegroundPresentation`, App 마운트 때 채널과 같은 자리)는
       `{ shouldShowBanner: false, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }` 다(목록 · 소리, 배지 없음).
-      Android 8+ 는 banner · list 를 가르지 않고, 헤드업 · 소리는 채널이 정한다. 그런데 channelId 가 없으면 expo 대체 채널("Miscellaneous", 중요도 HIGH → 헤드업)로 간다.
-      그래서 서버가 `channelId: "nearby"` 를 보내도록 백엔드에 요청했다(`defaultChannel` 은 빠뜨렸을 때의 안전망).
+      Android 8+ 는 banner · list 를 가르지 않고, 헤드업 · 소리는 채널이 정한다. channelId 가 없거나 앱에 없는 채널이면 expo 대체 채널("Miscellaneous", 중요도 HIGH → 헤드업)로 간다.
+      서버가 `channelId: "nearby"` 를 보내므로(#61) 앞에 있을 때도 이 채널로 온다. 서버 환경 변수를 다른 값으로 바꾸면 앞에 있을 때 대체 채널로 가니 바꾸지 않는다.
 - 동의 API 는 서버에 있다: `GET /api/me/consents`, `PUT /api/me/consents/{consentType}`(유형 `LOCATION_BASED_SERVICE` · `PUBLIC_CANDIDATE_CONTRIBUTION`). 클라이언트 · 목은 있고(`shared/api/consents.ts`, 약관 URL `consentTerms.ts`, 상태 계산 `mappers/consentMapper.ts`). 00d "위치 허용하기"에 연결됐다(동의하지 않았으면 `shared/ui/LocationConsentSheet` 로 동의를 받은 뒤 권한 요청)과 설정(11c · 11d, "기기 권한" 절), 근처 06b "위치 켜기"(게이트 · 동의 시트, "내비게이션" 절)에 연결됐다.
     - 거두면(`agreed: false`) 서버에 기록한 뒤 위치 설정 신호를 내고, `syncGeofences` 가 동의가 `agreed` 가 아니므로 지오펜스를 해제하고 상태를 지운다.
     - 서버는 철회되지 않은 `LOCATION_BASED_SERVICE` 동의가 없으면 위치 이벤트를 실행 없이 버리고 그대로 202 를 돌려준다. 지금은 버린 이유가 응답 · 로그 어디에도 없다.
@@ -628,7 +632,7 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   실행 중에 생기는 id(새 저장 · 분석으로 붙는 장소 · 되묻기로 붙는 장소 · 저장물 · 알림)는 무작위다.
   확인 필요 둘은 답하기 전에는 장소가 없다: 선택지 2곳(02, 둘 다 "역전칼국수"이고 LocationIQ 형식 주소만 다름)과 선택지 1곳(02b, 도로명 주소).
   샘플 영상 id 는 가짜(`mockSave001`~`010`)라 썸네일은 자리표시다. 분석 중 샘플은 앱을 켜고 약 5초 뒤 `analysisResult` 로 끝난다.
-  내 장소 목록(`fetchSavedPlaces`)은 서버처럼 장소와 저장물 한 쌍마다 한 항목, 최신 저장순이다. 목록 항목의 되묻기 수는 남은 목 후보 수다.
+  내 장소 목록(`fetchSavedPlaces`)은 서버처럼 장소와 저장물 한 쌍마다 한 항목(그 저장물의 videoId · savedAt 포함), 최신 저장순이다. 목록 항목의 되묻기 수는 남은 목 후보 수다.
   되묻기 답변(`mockConfirmPlace`)은 서버처럼 고른 선택지 좌표 · 이름 · 주소로 장소를 붙이고 후보를 지운다(카카오 확인은 흉내 내지 않음).
   `MOCK_SCENARIO.confirmResult`(ok · notFound · networkError, 기본 ok): notFound 는 404 를 내고 후보를 남긴다(서버의 카카오 확인 실패와 같은 모양).
   `MOCK_SCENARIO.saveResult`(저장 결과, ok · networkError · invalid, 기본 ok) ·
@@ -727,7 +731,7 @@ type AnalysisFailureCode =
 | 카테고리                                | 팀 합의: 고정 enum 소수 + 분위기 태그 다수. enum 값은 미확정                          | 01 필터 칩 라벨(전체/식당/카페/가볼 곳)은 enum 확정 전까지 목 데이터 한정                                                                                                                                             |
 | 비공개·삭제 영상의 링크 보관 여부       | 서버 저장 정책 문제. 백엔드 합의 필요. 05 디자인은 "링크는 그대로 보관" 으로 안내한다 | (b) "다시 시도" 가 모든 실패에 똑같이 노출된다. 재시도가 의미 없는 비공개·삭제(`VIDEO_ACCESS`)에도 보인다. 재시도 가능 여부를 서버가 내려줘야 버튼 노출을 가를 수 있다. (07 실패 셀이 생겨 05 재진입 경로는 해결됐다) |
 | 꺼내기 제안 유형                        | 문서상 가설이 5개 (장소 1곳 / 코스 / 장소 없는 콘텐츠 재노출 / 공용 풀 보충 / 침묵)   | **SINGLE·COURSE 2분기로 부족하다.** 열린 형태로 둔다                                                                                                                                                                  |
-| 알림 발생원 (FCM / 로컬)                | 백엔드가 firebase-admin 으로 FCM 을 보낸다(channelId 없음). 앱은 토큰을 등록한다      | `runtime/notifications/notificationListener.ts` 안에서만 갈린다                                                                                                                                                       |
+| 알림 발생원 (FCM / 로컬)                | 백엔드가 firebase-admin 으로 FCM 을 보낸다(channelId nearby). 앱은 토큰을 등록한다    | `runtime/notifications/notificationListener.ts` 안에서만 갈린다                                                                                                                                                       |
 | API 서버 주소                           | 배포 주소 미정(백엔드 확인 중). 개발은 로컬 백엔드 `http://<PC LAN IP>:8080`          | `EXPO_PUBLIC_API_BASE_URL` 만 바꾼다                                                                                                                                                                                  |
 | 지오펜스 보고 엔드포인트                | 서버 코드 있음(늘 202). 클라이언트 `shared/api/geofences.ts`                          | 서버가 조용히 무시할 수 있어 프론트가 결과를 알 방법이 필요                                                                                                                                                           |
 

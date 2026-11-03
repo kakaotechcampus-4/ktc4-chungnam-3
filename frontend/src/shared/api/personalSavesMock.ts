@@ -157,6 +157,8 @@ export async function mockFetchSavedPlaces(): Promise<SavedPlacePinResponse[]> {
                 latitude,
                 longitude,
                 personalSaveId: save.personalSaveId,
+                videoId: save.videoId,
+                savedAt: save.savedAt,
             }),
         );
     });
