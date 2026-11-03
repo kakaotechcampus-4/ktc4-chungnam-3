@@ -22,6 +22,28 @@
 | `GET /api/notifications/{notificationId}` | 없음 | 200, 내 알림 상세 |
 | `POST /api/notifications/{notificationId}/open` | 없음 | 204, 최초 `openedAt` 기록 |
 
+<<<<<<< HEAD
+| API                                                    | 요청                                                                       | 응답·처리                                                                                                                                                 |
+| ------------------------------------------------------ | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 기존 카카오 로그인·로그아웃                                        | 기존 명세 유지                                                                 | `Member`, `Device`와 DB 세션 처리                                                                                                                          |
+| `PUT /api/devices/fcm-token`                           | FCM 토큰                                                                   | 현재 기기의 토큰 등록·갱신                                                                                                                                       |
+| `DELETE /api/devices/fcm-token`                        | 없음                                                                       | 현재 기기의 FCM 토큰 해제                                                                                                                                      |
+| `GET /api/me/consents`                                 | 없음                                                                       | 위치기반서비스·공용 후보 활용 동의 상태 반환                                                                                                                             |
+| `PUT /api/me/consents/{consentType}`                   | 동의 여부                                                                    | 해당 동의 부여·철회                                                                                                                                           |
+| `DELETE /api/me`                                       | 탈퇴 요청                                                                    | 회원 및 관련 데이터 삭제 처리                                                                                                                                     |
+| `POST /api/personal-saves`                             | YouTube URL                                                              | `personalSaveId`, `contentId`, `analysisStatus` 반환                                                                                                    |
+| `GET /api/personal-saves`                              | 목록 조회 조건                                                                 | 내 저장물의 제목·요약·분석 상태·실패 코드·대표 장소명·연결 장소 수·미답변 되묻기 수 등 반환                                                                                                   |
+| `GET /api/personal-saves/{personalSaveId}`             | 없음                                                                       | 저장물 상세와 연결된 콘텐츠·장소·답변 대기 중인 되묻기 후보(`confirmCandidates`) 반환                                                                                             |
+| `DELETE /api/personal-saves/{personalSaveId}`          | 없음                                                                       | 내 저장물과 해당 Trigger 삭제                                                                                                                                  |
+| `GET /api/personal-saves/places`                       | 없음                                                                       | 내가 저장한 모든 콘텐츠의 장소를 좌표·이름·주소·출처 저장물(`personalSaveId`)·`videoId`·`savedAt`과 함께 한 번에 반환 (근처 탭·지도용, 페이지네이션 없음)                                                                     |
+| `POST /api/personal-saves/{personalSaveId}/places/{candidateId}/confirm` | `selectedOptionId`                                      | 되묻기 후보에 대한 답변 반영                                                                                                                                      |
+| `GET /api/geofences?latitude=…&longitude=…&platform=…` | 현재 위치와 `IOS` 또는 `ANDROID`                                                | OS에 등록할 **지역·장소 지오펜스 목록** 반환. 각각 등록 ID·유형·좌표·반경을 포함하며, 장소에는 `placeId`, Android DWELL에는 지연 시간을 포함. 앱 시작·복귀, 저장물 변경, **지역 지오펜스 진입·이탈 시 재호출**하여 등록 목록 갱신 |
+| `POST /api/location-events`                            | `placeId`, `triggerEventId`, `eventType`, `eventOccurredAt`, 가능하면 이벤트 위치 | **장소 지오펜스 발동 시에만 호출.** 서버가 세션 사용자와 `placeId`로 유효한 Trigger를 조회하고, 중복·실행 조건을 검사한 뒤 이벤트당 꺼내기 실행 한 건 생성. 제안이 나오면 이후 FCM으로 전달                              |
+| `GET /api/notifications`                               | 목록 조회 조건                                                                 | 내 알림 목록 반환                                                                                                                                            |
+| `GET /api/notifications/{id}`                          | 없음                                                                       | 제안 상세 반환                                                                                                                                              |
+| `POST /api/notifications/{id}/open`                    | 없음                                                                       | `openedAt` 기록. 중복 호출은 같은 결과로 처리                                                                                                                       |
+=======
+>>>>>>> a6924f38dc1b60aa4e7a377f9bd7ba57fb13522a
 ### 공통
 
 - 응답은 래핑하지 않는다. 처리된 API 오류는 `{ code, message }` 형식이다. 별도 핸들러가 없는 500은 Spring Boot 기본 오류 응답 경로를 사용한다.
@@ -122,7 +144,7 @@
 **`GET /api/personal-saves/places`**
 
 ```
-[{ placeId, name, address, latitude, longitude, personalSaveId }]
+[{ placeId, name, address, latitude, longitude, personalSaveId, videoId, savedAt }]
 ```
 
 내가 저장한 모든 콘텐츠의 장소를 한 번에 반환한다. 페이지네이션 없음.

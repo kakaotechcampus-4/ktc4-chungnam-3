@@ -563,7 +563,8 @@ class PersonalSaveIntegrationTest {
 
         assertThat(response.statusCode()).isEqualTo(200);
         var pins = List.of(mapper.readValue(response.body(), PersonalSaveResponse.PlacePin[].class));
-        assertThat(pins).containsExactly(new PersonalSaveResponse.PlacePin(placeId, "장소 pin", "서울시", 37, 127, saveId));
+        assertThat(pins).containsExactly(new PersonalSaveResponse.PlacePin(placeId, "장소 pin", "서울시", 37, 127, saveId,
+                "places", NOW));
     }
 
     @Test
