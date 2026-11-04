@@ -1,0 +1,33 @@
+meta {
+  name: DEVICE-08 새 토큰 등록 접수 - 204
+  type: http
+  seq: 8
+}
+
+put {
+  url: {{baseUrl}}/api/devices/fcm-token
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {"fcmToken":"{{deviceFcmToken}}"}
+}
+
+script:pre-request {
+  if (!bru.getVar("sessionToken")) { throw new Error("먼저 02-auth-session의 게스트 로그인을 실행하세요. 컬렉션 전체 실행을 권장합니다."); }
+  bru.setVar("deviceFcmToken", "qa-fcm-" + require("uuid").v4());
+  bru.setVar("deviceNextFcmToken", "qa-fcm-" + require("uuid").v4());
+}
+
+tests {
+  test("HTTP 204 및 빈 응답", function () {
+    expect(res.status).to.equal(204);
+    expect(res.body).to.be.oneOf(["", null, undefined]);
+  });
+}
+

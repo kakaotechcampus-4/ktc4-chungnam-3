@@ -1,0 +1,22 @@
+auth {
+  mode: bearer
+}
+
+auth:bearer {
+  token: {{liveSessionTokenA}}
+}
+
+docs {
+  이 컬렉션은 test/bruno 기본 회귀와 별개다. 별도로 열어 local 환경에서 컬렉션 전체를 실행한다.
+  유효한 영상 저장으로 실제 외부 API 비용이 발생할 수 있다. shortsUrl에는 공개 Shorts URL을 넣는다.
+  실행마다 회원 A와 B를 생성한다. 개인 저장물 신규 201은 콘텐츠 신규 분석을 보장하지 않는다. 기존 분석 결과가 재사용될 수 있다.
+  SUCCESS를 기본 기대 결과로 검증한다. FAILED 또는 PARTIAL을 정상 성공처럼 처리하지 않는다. 의도한 실패 실험에서만 expectedAnalysisStatus를 명시적으로 바꾼다.
+  장소 없는 정상 영상도 있으므로 minPlaceCount 기본값은 0이다. 확정 장소를 기대하는 영상이면 1 이상으로 바꾼다.
+  분석 완료 조회는 최대 analysisTimeoutMs까지 pollIntervalMs 간격으로 반복한다. 이 반복은 컬렉션 Runner에서만 작동한다.
+  FAILED나 시간 초과이면 중복 저장 요청을 차단해 의도하지 않은 분석 재시도를 피한다. 이후 접근 차단·삭제·로그아웃은 계속 시도한다.
+  마지막에 개인 저장물은 삭제하고 두 회원을 로그아웃한다. 회원과 공용 콘텐츠·분석 결과는 DB에 남을 수 있다.
+  임베딩은 API 응답에 없어 자동 통과 판정하지 않는다. liveContentId로 DB를 별도 확인해야 한다.
+  DB 확인 예: SELECT id, analysis_status, embedding IS NOT NULL AS has_embedding, vector_dims(embedding) AS dimensions, embedding_model FROM content WHERE id = '여기에_liveContentId';
+  벡터가 NULL이 아니고 dimensions가 768인지 확인한다. 기존 콘텐츠라면 이 결과만으로 이번 실행의 임베딩 호출을 입증할 수 없다.
+  토큰과 설치 ID는 실행 중 변수로만 보관한다. 실제 푸시는 검증하지 않는다.
+}

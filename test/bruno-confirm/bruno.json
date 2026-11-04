@@ -1,0 +1,10 @@
+{
+  "version": "1",
+  "name": "REMEMBRALL 장소 후보 답변",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git",
+    "reports"
+  ]
+}

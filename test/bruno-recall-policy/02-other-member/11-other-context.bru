@@ -1,0 +1,42 @@
+meta {
+  name: POL-OWNER-11 B는 동의했지만 저장·트리거 없음 - 200
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{observerUrl}}/policy-context/{{policyEventId}}?installationId={{policyInstallation}}&placeId={{policyPlaceId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{observerSecret}}
+}
+
+script:pre-request {
+  if (!bru.getVar("policyInstallation")) { throw new Error("이 폴더를 처음부터 실행하세요: policyInstallation가 없습니다."); }
+  if (!bru.getVar("policyPlaceId")) { throw new Error("이 폴더를 처음부터 실행하세요: policyPlaceId가 없습니다."); }
+  if (!bru.getVar("policyEventId")) { throw new Error("이 폴더를 처음부터 실행하세요: policyEventId가 없습니다."); }
+}
+
+tests {
+  bru.setVar("policyReady", false);
+  test("B는 동의했지만 저장·트리거 없음 및 독립된 사전 조건", function () {
+    expect(res.status).to.equal(200);
+    const state = res.body;
+    expect(state.memberExists).to.equal(true);
+    expect(Number.isFinite(Date.parse(state.serverNow))).to.equal(true);
+    expect(state.locationConsented).to.equal(true);
+    expect(state.savedForPlace).to.equal(0);
+    expect(state.triggerCount).to.equal(0);
+    expect(state.executionCount, "다른 차단 조건인 기존 실행·쿨다운이 섞였는지 확인하세요.").to.equal(0);
+    expect(state.notificationCount).to.equal(0);
+    expect(state.eventExecutions).to.be.an("array").with.lengthOf(0);
+    expect(state.latestExecutionAgeMs).to.equal(null);
+
+    bru.setVar("policyDbNow", state.serverNow);
+    bru.setVar("policyReady", true);
+  });
+}
+

@@ -1,0 +1,28 @@
+meta {
+  name: DEVICE-01 세션 없이 등록 - 401
+  type: http
+  seq: 1
+}
+
+put {
+  url: {{baseUrl}}/api/devices/fcm-token
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {"fcmToken":"qa-device-no-session"}
+}
+
+tests {
+  test("HTTP 401 및 INVALID_SESSION", function () {
+    expect(res.status).to.equal(401);
+    expect(res.body.code).to.equal("INVALID_SESSION");
+    expect(res.body.message).to.be.a("string").and.not.empty;
+  });
+}
+

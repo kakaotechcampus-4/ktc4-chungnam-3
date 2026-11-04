@@ -1,0 +1,26 @@
+meta {
+  name: RECALL-10 열람 시각 저장 - 200
+  type: http
+  seq: 18
+}
+
+get {
+  url: {{baseUrl}}/api/notifications/{{recallNotificationId}}
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("recallNotificationId")) { throw new Error("컬렉션을 처음부터 실행하세요: recallNotificationId가 없습니다."); }
+  if (!bru.getVar("recallSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: recallSessionA가 없습니다."); }
+}
+
+tests {
+  test("열람 시각이 실제 조회 응답에 저장", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.notificationId).to.equal(bru.getVar("recallNotificationId"));
+    expect(Number.isFinite(Date.parse(res.body.openedAt))).to.equal(true);
+    bru.setVar("recallOpenedAt", res.body.openedAt);
+  });
+}
+

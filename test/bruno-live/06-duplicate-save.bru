@@ -1,0 +1,37 @@
+meta {
+  name: LIVE-SAVE-04 동일 영상 재저장 - 200
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/personal-saves
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "url": "{{liveShortsUrl}}"
+  }
+}
+
+script:pre-request {
+  if (!bru.getVar("liveSessionTokenA")) { throw new Error("컬렉션을 처음부터 실행하세요: liveSessionTokenA가 없습니다."); }
+  if (!bru.getVar("livePersonalSaveId")) { throw new Error("컬렉션을 처음부터 실행하세요: livePersonalSaveId가 없습니다."); }
+  if (!["SUCCESS","PARTIAL"].includes(bru.getVar("liveLastStatus"))) { throw new Error("분석 실패·시간 초과 상태에서는 재시도를 유발하는 중복 저장을 실행하지 않습니다."); }
+}
+
+tests {
+  test("같은 개인 저장물과 저장 시각 유지", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.personalSaveId).to.equal(bru.getVar("livePersonalSaveId"));
+  expect(res.body.contentId).to.equal(bru.getVar("liveContentId"));
+    expect(Date.parse(res.body.savedAt)).to.equal(Date.parse(bru.getVar("liveSavedAt")));
+    expect(res.body.analysisStatus).to.equal(bru.getVar("liveLastStatus"));
+  });
+}

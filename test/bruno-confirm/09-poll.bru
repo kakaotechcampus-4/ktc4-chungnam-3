@@ -1,0 +1,24 @@
+meta {
+  name: CONFIRM-SETUP 분석 완료 대기 - 200
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves/{{confirmSaveA}}
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+if (!bru.getVar("confirmSessionA") || !bru.getVar("confirmSaveA")) { throw new Error("컬렉션을 처음부터 실행하세요."); }
+}
+
+script:post-response {
+bru.setVar("confirmPolling",false); if(res.status===200 && ["PENDING","ANALYZING"].includes(res.body.analysisStatus) && Date.now()<bru.getVar("confirmDeadline")) { bru.setVar("confirmPolling",true); await bru.sleep(Number(bru.getEnvVar("pollIntervalMs"))); bru.runner.setNextRequest("CONFIRM-SETUP 분석 완료 대기 - 200"); }
+else if(res.status!==200 || !["SUCCESS","PARTIAL"].includes(res.body.analysisStatus)) bru.runner.setNextRequest("CONFIRM-CLEANUP A 저장 삭제 - 204");
+}
+
+tests {
+test("분석 응답과 제한 시간", function () { expect(res.status).to.equal(200); expect(res.body.contentId).to.equal(bru.getVar("confirmContent")); if(!bru.getVar("confirmPolling")) expect(["SUCCESS","PARTIAL"],"분석 실패 또는 대기 시간 초과").to.include(res.body.analysisStatus); });
+}

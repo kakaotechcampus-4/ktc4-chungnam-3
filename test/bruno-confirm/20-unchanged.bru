@@ -1,0 +1,25 @@
+meta {
+  name: CONFIRM-ERROR 거절 후 기존 상태 유지 - 200
+  type: http
+  seq: 20
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves/{{confirmSaveA}}
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+if (!bru.getVar("confirmSessionA") || !bru.getVar("confirmSaveA")) { throw new Error("컬렉션을 처음부터 실행하세요."); }
+}
+
+script:post-response {
+if(bru.getVar("confirmMode")==="validate" || bru.getVar("confirmChecksFailed")) bru.runner.setNextRequest("CONFIRM-CLEANUP A 저장 삭제 - 204");
+}
+
+tests {
+let unchanged=false;
+test("후보와 장소 및 상세가 변경되지 않음",function(){ expect(res.status).to.equal(200); const normalized = function (body) { const copy = JSON.parse(JSON.stringify(body)); copy.places.sort((a,b)=>a.placeId.localeCompare(b.placeId)); copy.confirmCandidates.sort((a,b)=>a.candidateId.localeCompare(b.candidateId)); return copy; }; expect(normalized(res.body)).to.deep.equal(bru.getVar("confirmBefore")); unchanged=true; });
+if(!unchanged) bru.runner.setNextRequest("CONFIRM-CLEANUP A 저장 삭제 - 204");
+}

@@ -1,0 +1,25 @@
+meta {
+  name: SAVE-BASIC-01 신규 회원 빈 목록 - 200
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("sessionToken")) { throw new Error("먼저 게스트 로그인부터 실행하세요. 컬렉션 전체 실행을 권장합니다."); }
+  bru.setVar("missingPersonalSaveId", require("uuid").v4());
+}
+
+tests {
+  test("HTTP 200 및 빈 저장물 목록", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body).to.be.an("object");
+    expect(res.body.items).to.be.an("array").with.lengthOf(0);
+    expect(res.body.nextCursor).to.equal(null);
+  });
+}

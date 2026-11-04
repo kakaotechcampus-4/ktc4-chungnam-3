@@ -1,0 +1,33 @@
+meta {
+  name: CONFIRM-ANSWER 실제 답변 제출 - 204
+  type: http
+  seq: 21
+}
+
+post {
+  url: {{baseUrl}}/api/personal-saves/{{confirmSaveA}}/places/{{confirmCandidate}}/confirm
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {{confirmAnswerBody}}
+}
+
+script:pre-request {
+if (!bru.getVar("confirmSessionA") || !bru.getVar("confirmSaveA")) { throw new Error("컬렉션을 처음부터 실행하세요."); }
+if(!["select","reject"].includes(bru.getVar("confirmMode"))) throw new Error("실제 답변은 select/reject 모드에서만 실행하세요.");
+if(bru.getVar("confirmChecksFailed")) throw new Error("앞선 오류 검증이 실패하여 실제 답변을 중단합니다.");
+}
+
+script:post-response {
+if(res.status!==204) bru.runner.setNextRequest("CONFIRM-CLEANUP A 저장 삭제 - 204");
+}
+
+tests {
+test("선택 또는 후보 중에 없음 답변 접수", function () { expect(res.status).to.equal(204); bru.setVar("confirmAnswered",true); });
+}

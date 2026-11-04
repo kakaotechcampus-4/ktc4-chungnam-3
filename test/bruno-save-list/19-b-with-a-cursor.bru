@@ -1,0 +1,35 @@
+meta {
+  name: LIST-19 A 커서를 써도 B 데이터만 조회 - 200
+  type: http
+  seq: 19
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves?size=2&cursor={{listCursorA}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{listSessionB}}
+}
+
+script:pre-request {
+  if (!bru.getVar("listSessionB")) { throw new Error("컬렉션을 처음부터 실행하세요: listSessionB가 없습니다."); }
+  if (!bru.getVar("listSaveB")) { throw new Error("컬렉션을 처음부터 실행하세요: listSaveB가 없습니다."); }
+  if (!bru.getVar("listCursorA")) { throw new Error("컬렉션을 처음부터 실행하세요: listCursorA가 없습니다."); }
+}
+
+tests {
+  test("커서가 회원 접근 권한으로 쓰이지 않음", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.items).to.be.an("array");
+    res.body.items.forEach(function (item) {
+      expect(item.personalSaveId).to.equal(bru.getVar("listSaveB").personalSaveId);
+      expect(bru.getVar("listSavesA").map(function (row) { return row.personalSaveId; })).not.to.include(item.personalSaveId);
+    });
+    expect(res.body.items.length).to.be.at.most(1);
+    expect(res.body.nextCursor).to.equal(null);
+  });
+}
+

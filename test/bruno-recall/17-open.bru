@@ -1,0 +1,21 @@
+meta {
+  name: RECALL-09 본인 알림 열람 - 204
+  type: http
+  seq: 17
+}
+
+post {
+  url: {{baseUrl}}/api/notifications/{{recallNotificationId}}/open
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("recallNotificationId")) { throw new Error("컬렉션을 처음부터 실행하세요: recallNotificationId가 없습니다."); }
+  if (!bru.getVar("recallSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: recallSessionA가 없습니다."); }
+}
+
+tests {
+  test("HTTP 204", function () { expect(res.status).to.equal(204); });
+}
+

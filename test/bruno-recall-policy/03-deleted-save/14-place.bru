@@ -1,0 +1,36 @@
+meta {
+  name: POL-DELETE-14 실제 저장된 장소 선택 - 200
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves/{{policySaveId}}
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("policySession")) { throw new Error("이 폴더를 처음부터 실행하세요: policySession가 없습니다."); }
+  if (!bru.getVar("policySaveId")) { throw new Error("이 폴더를 처음부터 실행하세요: policySaveId가 없습니다."); }
+}
+
+tests {
+  test("실제 장소 및 복구 후 같은 장소", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.analysisStatus).to.equal("SUCCESS");
+    expect(res.body.contentId).to.equal(bru.getVar("policyContentId"));
+    expect(res.body.places).to.be.an("array").and.not.empty;
+    const original = bru.getVar("policyOriginalPlaceId");
+    const place = original ? res.body.places.find(function (item) { return item.placeId === original; }) : res.body.places[0];
+    expect(place, "대조 요청도 처음과 같은 장소를 사용해야 합니다.").to.be.an("object");
+    expect(place.placeId).to.match(/^[0-9a-f-]{36}$/i);
+    expect(place.latitude).to.be.a("number").and.within(-90,90);
+    expect(place.longitude).to.be.a("number").and.within(-180,180);
+    bru.setVar("policyPlaceId", place.placeId);
+    bru.setVar("policyOriginalPlaceId", place.placeId);
+    bru.setVar("policyLatitude", place.latitude);
+    bru.setVar("policyLongitude", place.longitude);
+  });
+}
+

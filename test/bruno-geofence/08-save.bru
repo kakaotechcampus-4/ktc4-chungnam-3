@@ -1,0 +1,37 @@
+meta {
+  name: GEO-SETUP-05 테스트 영상 저장 - 201
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/personal-saves
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "url": "{{geoUrl}}"
+  }
+}
+
+script:pre-request {
+  if (!bru.getVar("geoSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: geoSessionA가 없습니다."); }
+  if (!bru.getVar("geoUrl")) { throw new Error("컬렉션을 처음부터 실행하세요: geoUrl가 없습니다."); }
+}
+
+tests {
+  test("신규 개인 저장물 생성", function () {
+    expect(res.status).to.equal(201);
+    expect(res.body.personalSaveId).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+    expect(res.body.contentId).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+    bru.setVar("geoSaveId", res.body.personalSaveId);
+    bru.setVar("geoContentId", res.body.contentId);
+    bru.setVar("geoDeadline", Date.now() + Number(bru.getEnvVar("analysisTimeoutMs")));
+  });
+}

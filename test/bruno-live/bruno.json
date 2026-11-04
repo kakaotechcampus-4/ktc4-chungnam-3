@@ -1,0 +1,10 @@
+{
+  "version": "1",
+  "name": "REMEMBRALL 실제 저장·분석",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git",
+    "reports"
+  ]
+}

@@ -1,0 +1,19 @@
+meta {
+  name: SAVE-BASIC-05 세션 없는 목록 조회 - 401
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves
+  body: none
+  auth: none
+}
+
+tests {
+  test("HTTP 401 및 INVALID_SESSION", function () {
+    expect(res.status).to.equal(401);
+    expect(res.body.code).to.equal("INVALID_SESSION");
+    expect(res.body.message).to.be.a("string").and.not.empty;
+  });
+}

@@ -1,0 +1,31 @@
+meta {
+  name: RECALL-13 동일 이벤트 재전송 - 202
+  type: http
+  seq: 21
+}
+
+post {
+  url: {{baseUrl}}/api/location-events
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {"placeId":"{{recallPlaceId}}","triggerEventId":"{{recallEventId}}","eventType":"DWELL","eventOccurredAt":"{{recallEventAt}}","location":{"latitude":{{recallLatitude}},"longitude":{{recallLongitude}},"accuracyMeters":10,"locatedAt":"{{recallEventAt}}"}}
+}
+
+script:pre-request {
+  if (!bru.getVar("recallSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: recallSessionA가 없습니다."); }
+  if (!bru.getVar("recallEventId")) { throw new Error("컬렉션을 처음부터 실행하세요: recallEventId가 없습니다."); }
+  if (!bru.getVar("recallEventAt")) { throw new Error("컬렉션을 처음부터 실행하세요: recallEventAt가 없습니다."); }
+  if (!bru.getVar("recallExecutionId")) { throw new Error("컬렉션을 처음부터 실행하세요: recallExecutionId가 없습니다."); }
+}
+
+tests {
+  test("같은 장소·이벤트 ID·시각으로 재전송 접수", function () { expect(res.status).to.equal(202); });
+}
+

@@ -1,0 +1,20 @@
+meta {
+  name: LIVE-SAVE-08 소유자 삭제 - 204
+  type: http
+  seq: 10
+}
+
+delete {
+  url: {{baseUrl}}/api/personal-saves/{{livePersonalSaveId}}
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("liveSessionTokenA")) { throw new Error("컬렉션을 처음부터 실행하세요: liveSessionTokenA가 없습니다."); }
+  if (!bru.getVar("livePersonalSaveId")) { throw new Error("컬렉션을 처음부터 실행하세요: livePersonalSaveId가 없습니다."); }
+}
+
+tests {
+  test("소유자 삭제", function () { expect(res.status).to.equal(204); });
+}

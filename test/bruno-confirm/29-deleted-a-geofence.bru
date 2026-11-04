@@ -1,0 +1,19 @@
+meta {
+  name: CONFIRM-CLEANUP A 장소 제거 - 200
+  type: http
+  seq: 29
+}
+
+get {
+  url: {{baseUrl}}/api/geofences?latitude={{confirmLatitude}}&longitude={{confirmLongitude}}&platform=ANDROID
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{confirmSessionA}}
+}
+
+tests {
+test("장소 ID와 좌표 및 회원별 등록 목록", function () { expect(res.status).to.equal(200); expect(res.body.regions).to.deep.equal([]); expect(res.body.places).to.be.an("array"); expect(res.body.places).to.deep.equal([]); expect(res.body.resync).to.equal(null); });
+}
