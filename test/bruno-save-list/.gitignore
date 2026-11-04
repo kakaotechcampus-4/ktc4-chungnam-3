@@ -1,0 +1,8 @@
+.env
+.env.*
+!.env.example
+reports/
+results*.json
+results*.xml
+results*.html
+

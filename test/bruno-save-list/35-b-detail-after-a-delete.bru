@@ -1,0 +1,31 @@
+meta {
+  name: LIST-35 B 저장물 상세도 유지 - 200
+  type: http
+  seq: 35
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves/{{listSaveBId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{listSessionB}}
+}
+
+script:pre-request {
+  if (!bru.getVar("listSessionB")) { throw new Error("컬렉션을 처음부터 실행하세요: listSessionB가 없습니다."); }
+  if (!bru.getVar("listSaveB")) { throw new Error("컬렉션을 처음부터 실행하세요: listSaveB가 없습니다."); }
+  bru.setVar("listSaveBId", bru.getVar("listSaveB").personalSaveId);
+}
+
+tests {
+  test("공유 콘텐츠와 B 소유 저장물 유지", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.personalSaveId).to.equal(bru.getVar("listSaveB").personalSaveId);
+    expect(res.body.contentId).to.equal(bru.getVar("listSaveB").contentId);
+    expect(res.body.videoId).to.equal(bru.getVar("listVideo1"));
+  });
+}
+

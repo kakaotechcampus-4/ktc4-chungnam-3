@@ -1,0 +1,32 @@
+meta {
+  name: CONFIRM-ERROR 빈 선택지 - 400
+  type: http
+  seq: 17
+}
+
+post {
+  url: {{baseUrl}}/api/personal-saves/{{confirmSaveA}}/places/{{confirmCandidate}}/confirm
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {"selectedOptionId":""}
+}
+
+script:pre-request {
+if (!bru.getVar("confirmSessionA") || !bru.getVar("confirmSaveA")) { throw new Error("컬렉션을 처음부터 실행하세요."); }
+if(!bru.getVar("confirmCandidate")) throw new Error("미응답 후보를 먼저 준비하세요.");
+}
+
+script:post-response {
+  if(res.status!==400 || !res.body || res.body.code!=="INVALID_REQUEST") bru.setVar("confirmChecksFailed",true);
+}
+
+tests {
+test("HTTP 상태와 오류 코드", function () { expect(res.status).to.equal(400); expect(res.body.code).to.equal("INVALID_REQUEST"); expect(res.body.message).to.be.a("string").and.not.empty; });
+}

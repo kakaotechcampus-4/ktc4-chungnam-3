@@ -1,0 +1,42 @@
+meta {
+  name: EVT-AUTH-02 잘못된 세션의 위치 이벤트 - 401
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/location-events
+  body: json
+  auth: bearer
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "placeId": "{{evtPlaceId}}",
+    "triggerEventId": "{{evtEventId}}",
+    "eventType": "ENTER",
+    "eventOccurredAt": "{{evtNow}}"
+  }
+}
+
+script:pre-request {
+  bru.setVar("evtPlaceId", require("uuid").v4());
+  bru.setVar("evtEventId", require("uuid").v4());
+  bru.setVar("evtNow", new Date().toISOString());
+}
+
+auth:bearer {
+  token: invalid-event-test-session
+}
+
+tests {
+  test("HTTP 401 및 INVALID_SESSION", function () {
+    expect(res.status).to.equal(401);
+    expect(res.body.code).to.equal("INVALID_SESSION");
+    expect(res.body.message).to.be.a("string").and.not.empty;
+  });
+}

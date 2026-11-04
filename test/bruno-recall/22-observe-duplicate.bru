@@ -1,0 +1,43 @@
+meta {
+  name: RECALL-14 재전송 후 DB 건수 유지 - 200
+  type: http
+  seq: 22
+}
+
+get {
+  url: {{observerUrl}}/executions/{{recallEventId}}?installationId={{recallInstallationA}}&placeId={{recallPlaceId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{observerSecret}}
+}
+
+script:pre-request {
+  if (!bru.getVar("recallEventId")) { throw new Error("컬렉션을 처음부터 실행하세요: recallEventId가 없습니다."); }
+  if (!bru.getVar("recallExecutionId")) { throw new Error("컬렉션을 처음부터 실행하세요: recallExecutionId가 없습니다."); }
+  if (!bru.getVar("recallObserved")) { throw new Error("컬렉션을 처음부터 실행하세요: recallObserved가 없습니다."); }
+}
+
+tests {
+  test("실행 및 알림 추가 생성 없음 - 쿨다운과 중복 조건이 함께 적용됨", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.executions).to.have.lengthOf(1);
+    const row = res.body.executions[0];
+    const previous = bru.getVar("recallObserved");
+    expect(row.executionId).to.equal(bru.getVar("recallExecutionId"));
+    expect(row.status).to.equal("COMPLETED");
+    expect(row.result).to.equal(bru.getEnvVar("expectedResult"));
+    expect(row.notifications.map(function (item) { return item.notificationId; })).to.have.members(
+      previous.notifications.map(function (item) { return item.notificationId; }));
+    if (row.result === "PROPOSE") {
+      const canonicalUtc = function (value) {
+        return String(value).replace(/\+00:00$/, "Z")
+          .replace(/(\.\d*?[1-9])0+Z$/, "$1Z").replace(/\.0+Z$/, "Z");
+      };
+      expect(canonicalUtc(row.notifications[0].openedAt)).to.equal(canonicalUtc(bru.getVar("recallOpenedAt")));
+    }
+  });
+}
+

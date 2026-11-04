@@ -1,0 +1,20 @@
+meta {
+  name: LIST-13 임의 세션 목록 - 401
+  type: http
+  seq: 13
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer invalid-test-session
+}
+
+tests {
+  test("임의 세션 목록 차단", function () { expect(res.status).to.equal(401); expect(res.body.code).to.equal("INVALID_SESSION"); });
+}
+

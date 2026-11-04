@@ -1,0 +1,19 @@
+meta {
+  name: CONFIRM-CLEANUP B 상세 제거 - 404
+  type: http
+  seq: 33
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves/{{confirmSaveB}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{confirmSessionB}}
+}
+
+tests {
+test("HTTP 상태와 오류 코드", function () { expect(res.status).to.equal(404); expect(res.body.code).to.equal("NOT_FOUND"); expect(res.body.message).to.be.a("string").and.not.empty; });
+}

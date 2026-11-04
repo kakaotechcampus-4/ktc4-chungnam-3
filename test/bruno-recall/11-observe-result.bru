@@ -1,0 +1,74 @@
+meta {
+  name: RECALL-03 실행 결과와 알림 생성 확인 - 200
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{observerUrl}}/executions/{{recallEventId}}?installationId={{recallInstallationA}}&placeId={{recallPlaceId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{observerSecret}}
+}
+
+script:pre-request {
+  if (!bru.getVar("recallEventId")) { throw new Error("컬렉션을 처음부터 실행하세요: recallEventId가 없습니다."); }
+  if (!bru.getVar("recallPlaceId")) { throw new Error("컬렉션을 처음부터 실행하세요: recallPlaceId가 없습니다."); }
+  if (!bru.getVar("recallObservationDeadline")) { throw new Error("컬렉션을 처음부터 실행하세요: recallObservationDeadline가 없습니다."); }
+}
+
+script:post-response {
+  bru.setVar("recallObservationWaiting", false);
+  const rows = res.status === 200 && Array.isArray(res.body.executions) ? res.body.executions : [];
+  const row = rows.length === 1 ? rows[0] : null;
+  const terminal = row && ["COMPLETED","FAILED","TIMED_OUT"].includes(row.status);
+  if (res.status === 200 && !terminal && rows.length < 2 && Date.now() < bru.getVar("recallObservationDeadline")) {
+    bru.setVar("recallObservationWaiting", true);
+    await bru.sleep(Number(bru.getEnvVar("pollIntervalMs")));
+    bru.runner.setNextRequest("RECALL-03 실행 결과와 알림 생성 확인 - 200");
+  } else {
+    const expected = bru.getEnvVar("expectedResult");
+    const valid = row && row.status === "COMPLETED" && row.result === expected &&
+      (expected === "NO_ACTION" ? row.notifications.length === 0 :
+        row.agentVersion !== "stub-v1" && row.notifications.length === 1 &&
+        row.notifications[0].status === "FAILED" && row.notifications[0].failureCode === "NO_FCM_TOKEN");
+    if (!valid) {
+      bru.runner.setNextRequest("RECALL-CLEANUP-01 저장 삭제 - 204");
+    } else if (expected === "NO_ACTION") {
+      bru.runner.setNextRequest("RECALL-13 동일 이벤트 재전송 - 202");
+    }
+  }
+}
+
+tests {
+  test("DB 조회 성공", function () { expect(res.status).to.equal(200); });
+  if (!bru.getVar("recallObservationWaiting")) {
+    test("실행 한 건과 명시한 기대 결과", function () {
+      expect(res.body.executions, "실행 기록이 없으면 트리거·동의·시간 조건을 확인하세요.").to.have.lengthOf(1);
+      const row = res.body.executions[0];
+      console.log("실행 " + row.executionId + ": " + row.status + "/" + row.result + ", agent=" + row.agentVersion + ", failure=" + row.failureCode);
+      expect(row.status, "실패 코드: " + row.failureCode).to.equal("COMPLETED");
+      expect(row.failureCode).to.equal(null);
+      expect(row.result, "PROPOSE 기대 시 stub/NO_ACTION을 성공으로 처리하지 않습니다.").to.equal(bru.getEnvVar("expectedResult"));
+      bru.setVar("recallExecutionId", row.executionId);
+      bru.setVar("recallObserved", row);
+      if (row.result === "PROPOSE") {
+        expect(row.agentVersion).not.to.equal("stub-v1");
+        expect(row.notifications).to.have.lengthOf(1);
+        const notification = row.notifications[0];
+        expect(notification.status).to.equal("FAILED");
+        expect(notification.failureCode).to.equal("NO_FCM_TOKEN");
+        expect(notification.sentAt).to.equal(null);
+        expect(notification.openedAt).to.equal(null);
+        expect(row.proposalPayload.items).to.be.an("array").and.not.empty;
+        bru.setVar("recallNotificationId", notification.notificationId);
+      } else {
+        expect(row.notifications).to.have.lengthOf(0);
+      }
+    });
+  }
+}
+

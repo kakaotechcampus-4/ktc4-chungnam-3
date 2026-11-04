@@ -1,0 +1,19 @@
+meta {
+  name: CONFIRM-ANSWER 재제출 후 상태 유지 - 200
+  type: http
+  seq: 27
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves/{{confirmSaveA}}
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+if (!bru.getVar("confirmSessionA") || !bru.getVar("confirmSaveA")) { throw new Error("컬렉션을 처음부터 실행하세요."); }
+}
+
+tests {
+test("재제출로 장소 중복이나 후보 변경 없음",function(){expect(res.status).to.equal(200); const normalized = function (body) { const copy = JSON.parse(JSON.stringify(body)); copy.places.sort((a,b)=>a.placeId.localeCompare(b.placeId)); copy.confirmCandidates.sort((a,b)=>a.candidateId.localeCompare(b.candidateId)); return copy; }; expect(normalized(res.body)).to.deep.equal(bru.getVar("confirmAfter"));});
+}

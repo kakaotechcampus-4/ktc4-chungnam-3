@@ -1,0 +1,19 @@
+meta {
+  name: CONFIRM-CLEANUP B 저장 삭제 - 204
+  type: http
+  seq: 31
+}
+
+delete {
+  url: {{baseUrl}}/api/personal-saves/{{confirmSaveB}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{confirmSessionB}}
+}
+
+tests {
+test("B 개인 저장 삭제", function () { expect(res.status).to.equal(204);  });
+}

@@ -1,0 +1,42 @@
+meta {
+  name: LIVE-SAVE-01 신규 개인 저장 - 201
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/personal-saves
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "url": "{{liveShortsUrl}}"
+  }
+}
+
+script:pre-request {
+  if (!bru.getVar("liveSessionTokenA")) { throw new Error("컬렉션을 처음부터 실행하세요: liveSessionTokenA가 없습니다."); }
+  if (!bru.getVar("liveShortsUrl")) { throw new Error("컬렉션을 처음부터 실행하세요: liveShortsUrl가 없습니다."); }
+}
+
+tests {
+  test("신규 저장물 생성", function () {
+    expect(res.status).to.equal(201);
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    expect(res.body.personalSaveId).to.match(uuid);
+    expect(res.body.contentId).to.match(uuid);
+    expect(["PENDING","ANALYZING","SUCCESS","PARTIAL","FAILED"]).to.include(res.body.analysisStatus);
+    expect(Number.isFinite(Date.parse(res.body.savedAt))).to.equal(true);
+    bru.setVar("livePersonalSaveId", res.body.personalSaveId);
+    bru.setVar("liveContentId", res.body.contentId);
+    console.log("임베딩 DB 확인용 contentId: " + res.body.contentId);
+    bru.setVar("liveSavedAt", res.body.savedAt);
+    bru.setVar("livePollDeadline", Date.now() + Number(bru.getEnvVar("analysisTimeoutMs")));
+  });
+}

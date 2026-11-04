@@ -1,0 +1,50 @@
+meta {
+  name: POL-COOLDOWN-09 정상 실행 한 건으로 쿨다운 시작 - 200
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{observerUrl}}/policy-context/{{policyEventId}}?installationId={{policyInstallation}}&placeId={{policyPlaceId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{observerSecret}}
+}
+
+script:pre-request {
+  if (!bru.getVar("policyInstallation")) { throw new Error("이 폴더를 처음부터 실행하세요: policyInstallation가 없습니다."); }
+  if (!bru.getVar("policyPlaceId")) { throw new Error("이 폴더를 처음부터 실행하세요: policyPlaceId가 없습니다."); }
+  if (!bru.getVar("policyEventId")) { throw new Error("이 폴더를 처음부터 실행하세요: policyEventId가 없습니다."); }
+}
+
+tests {
+  bru.setVar("policyReady", false);
+  test("정상 실행 한 건으로 쿨다운 시작 및 독립된 사전 조건", function () {
+    expect(res.status).to.equal(200);
+    const state = res.body;
+    expect(state.memberExists).to.equal(true);
+    expect(Number.isFinite(Date.parse(state.serverNow))).to.equal(true);
+    expect(state.locationConsented).to.equal(true);
+    expect(state.savedForPlace).to.equal(1);
+    expect(state.triggerCount).to.equal(1);
+    expect(state.executionCount, "다른 차단 조건인 기존 실행·쿨다운이 섞였는지 확인하세요.").to.equal(1);
+    expect(state.notificationCount).to.equal((state.eventExecutions[0].result === "PROPOSE" ? 1 : 0));
+    expect(state.eventExecutions).to.be.an("array").with.lengthOf(1);
+    expect(state.latestExecutionAgeMs).to.be.a("number").and.within(0, Number(bru.getEnvVar("policyCooldownMs")));
+    const row = state.eventExecutions[0];
+    expect(row.status, "실패 코드: " + row.failureCode).to.equal("COMPLETED");
+    expect(row.failureCode).to.equal(null);
+    expect(["NO_ACTION","PROPOSE"]).to.include(row.result);
+    const age = Date.parse(state.serverNow) - Date.parse(bru.getVar("policyEventAt"));
+    expect(age).to.be.within(0, Number(bru.getEnvVar("policyMaxEventAgeMs")));
+    bru.setVar("policyBaselineEventId", bru.getVar("policyEventId"));
+    bru.setVar("policyBaselineExecutionId", row.executionId);
+    bru.setVar("policyBaselineNotifications", state.notificationCount);
+    bru.setVar("policyDbNow", state.serverNow);
+    bru.setVar("policyReady", true);
+  });
+}
+

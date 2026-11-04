@@ -1,0 +1,47 @@
+meta {
+  name: GEO-04 iOS 재조회 ID 유지 - 200
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{baseUrl}}/api/geofences?latitude={{geoLatitude}}&longitude={{geoLongitude}}&platform=IOS
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("geoSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: geoSessionA가 없습니다."); }
+  if (!bru.getVar("geoExpectedPlaces")) { throw new Error("컬렉션을 처음부터 실행하세요: geoExpectedPlaces가 없습니다."); }
+  if (!Number.isFinite(bru.getVar("geoLatitude")) || !Number.isFinite(bru.getVar("geoLongitude"))) { throw new Error("저장물 상세에서 확정 좌표를 먼저 준비하세요."); }
+}
+
+tests {
+  test("IOS 등록 목록 계약과 저장 장소 반영", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.regions).to.be.an("array").with.lengthOf(0);
+    expect(res.body.places).to.be.an("array").and.not.empty;
+    expect(res.body.places.length).to.be.at.most(19);
+    const expected = bru.getVar("geoExpectedPlaces");
+    const expectedIds = expected.map(function (place) { return place.placeId; });
+    const actualIds = res.body.places.map(function (place) { return place.placeId; });
+    expect(new Set(actualIds).size).to.equal(actualIds.length);
+    if (expected.length <= 19) { expect(actualIds).to.have.members(expectedIds); }
+    res.body.places.forEach(function (place) {
+      const source = expected.find(function (item) { return item.placeId === place.placeId; });
+      expect(source, "다른 회원 또는 저장하지 않은 장소가 섞임").to.be.an("object");
+      expect(place.geofenceId).to.equal("place:" + place.placeId);
+      expect(place.latitude).to.equal(source.latitude);
+      expect(place.longitude).to.equal(source.longitude);
+      expect(place.radiusMeters).to.be.a("number").and.above(0);
+    });
+    expect(res.body.resync).to.be.an("object");
+    expect(res.body.resync.geofenceId).to.equal("resync");
+    expect(res.body.resync.latitude).to.equal(bru.getVar("geoLatitude"));
+    expect(res.body.resync.longitude).to.equal(bru.getVar("geoLongitude"));
+    expect(res.body.resync.radiusMeters).to.be.a("number").and.above(0);
+    const ids = res.body.places.map(function (place) { return place.geofenceId; }).sort();
+    expect(bru.getVar("geoIosIds")).to.be.a("string").and.not.empty;
+    expect(JSON.stringify(ids)).to.equal(bru.getVar("geoIosIds"));
+  });
+}

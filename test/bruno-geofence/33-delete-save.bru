@@ -1,0 +1,20 @@
+meta {
+  name: GEO-SETUP-11 개인 저장물 삭제 - 204
+  type: http
+  seq: 33
+}
+
+delete {
+  url: {{baseUrl}}/api/personal-saves/{{geoSaveId}}
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("geoSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: geoSessionA가 없습니다."); }
+  if (!bru.getVar("geoSaveId")) { throw new Error("컬렉션을 처음부터 실행하세요: geoSaveId가 없습니다."); }
+}
+
+tests {
+  test("소유자 저장물 삭제", function () { expect(res.status).to.equal(204); });
+}

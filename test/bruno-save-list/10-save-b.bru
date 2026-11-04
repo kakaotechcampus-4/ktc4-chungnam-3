@@ -1,0 +1,37 @@
+meta {
+  name: LIST-10 B도 A 첫 영상을 저장 - 201
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/api/personal-saves
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{listSessionB}}
+}
+
+body:json {
+  {"url":"{{listUrl1}}"}
+}
+
+script:pre-request {
+  if (!bru.getVar("listSessionB")) { throw new Error("컬렉션을 처음부터 실행하세요: listSessionB가 없습니다."); }
+  if (!bru.getVar("listUrl1")) { throw new Error("컬렉션을 처음부터 실행하세요: listUrl1가 없습니다."); }
+  if (!bru.getVar("listSaveA1")) { throw new Error("컬렉션을 처음부터 실행하세요: listSaveA1가 없습니다."); }
+}
+
+tests {
+  test("콘텐츠는 공유하지만 개인 저장물은 별도", function () {
+    expect(res.status).to.equal(201);
+    expect(res.body.personalSaveId).to.match(/^[0-9a-f-]{36}$/i);
+    expect(res.body.personalSaveId).not.to.equal(bru.getVar("listSaveA1"));
+    expect(res.body.contentId).to.equal(bru.getVar("listSavesA")[0].contentId);
+    bru.setVar("listSaveB", res.body);
+  });
+}
+

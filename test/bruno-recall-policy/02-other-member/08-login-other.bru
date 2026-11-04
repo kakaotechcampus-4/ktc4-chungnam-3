@@ -1,0 +1,39 @@
+meta {
+  name: POL-OWNER-08 저장하지 않은 회원 B 로그인 - 200
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/auth/guest
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {"installationId":"{{policyInstallation}}"}
+}
+
+script:pre-request {
+  if (!bru.getVar("policySession")) { throw new Error("이 폴더를 처음부터 실행하세요: policySession가 없습니다."); }
+  if (!bru.getVar("policySaveId")) { throw new Error("이 폴더를 처음부터 실행하세요: policySaveId가 없습니다."); }
+  bru.setVar("policyOwnerSession", bru.getVar("policySession"));
+  bru.setVar("policyOwnerSaveId", bru.getVar("policySaveId"));
+  bru.setVar("policyOwnerInstallation", bru.getVar("policyInstallation"));
+  bru.deleteVar("policySaveId");
+  bru.setVar("policyInstallation", require("uuid").v4());
+}
+
+tests {
+  test("장소 소유자와 다른 회원", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.sessionToken).to.be.a("string").and.not.empty;
+    expect(res.body.sessionToken).not.to.equal(bru.getVar("policyOwnerSession"));
+    bru.setVar("policySession", res.body.sessionToken);
+  });
+}
+

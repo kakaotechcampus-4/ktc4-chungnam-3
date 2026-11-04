@@ -1,0 +1,21 @@
+meta {
+  name: RECALL-CLEANUP-01 저장 삭제 - 204
+  type: http
+  seq: 23
+}
+
+delete {
+  url: {{baseUrl}}/api/personal-saves/{{recallSaveId}}
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("recallSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: recallSessionA가 없습니다."); }
+  if (!bru.getVar("recallSaveId")) { throw new Error("컬렉션을 처음부터 실행하세요: recallSaveId가 없습니다."); }
+}
+
+tests {
+  test("HTTP 204", function () { expect(res.status).to.equal(204); });
+}
+

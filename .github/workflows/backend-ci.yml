@@ -1,0 +1,122 @@
+name: Backend CI
+
+on:
+  pull_request:
+    branches: [develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Backend build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend/Remembrall
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Compile backend and tests, build executable JAR
+        run: bash ./gradlew compileTestJava bootJar --no-daemon --console=plain
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-jar-${{ github.sha }}
+          path: backend/Remembrall/build/libs/Remembrall-0.0.1-SNAPSHOT.jar
+          if-no-files-found: error
+          retention-days: 7
+
+  junit:
+    name: Backend JUnit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: backend/Remembrall
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Run all non-live tests with isolated Testcontainers databases
+        env:
+          SPRING_CONFIG_ADDITIONAL_LOCATION: file:${{ github.workspace }}/.github/ci/application-ci.properties
+        run: bash ./gradlew test --no-daemon --console=plain
+      - name: Upload JUnit results, including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-junit-${{ github.sha }}
+          path: |
+            backend/Remembrall/build/test-results/test/
+            backend/Remembrall/build/reports/tests/test/
+          if-no-files-found: warn
+          retention-days: 7
+
+  bruno:
+    name: Bruno API regression
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: remembrall_ci
+          POSTGRES_USER: remembrall_ci
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U remembrall_ci -d remembrall_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-jar-${{ github.sha }}
+          path: backend/Remembrall/build/libs
+      - name: Install pinned Bruno CLI
+        run: npm install --global @usebruno/cli@4.3.0
+      - name: Start temporary backend and run basic API collection
+        env:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://127.0.0.1:5432/remembrall_ci
+          SPRING_DATASOURCE_USERNAME: remembrall_ci
+          SPRING_DATASOURCE_PASSWORD: ci-only-password
+        run: bash .github/ci/run-bruno.sh
+      - name: Upload Bruno report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bruno-results-${{ github.sha }}
+          path: test/bruno/reports/ci.xml
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Upload backend log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bruno-backend-log-${{ github.sha }}
+          path: test/bruno/reports/backend.log
+          if-no-files-found: warn
+          retention-days: 7

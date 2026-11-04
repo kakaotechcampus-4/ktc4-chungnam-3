@@ -1,0 +1,38 @@
+meta {
+  name: POL-DELETE-05 분석 완료 대기 - 200
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves/{{policySaveId}}
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("policySession")) { throw new Error("이 폴더를 처음부터 실행하세요: policySession가 없습니다."); }
+  if (!bru.getVar("policySaveId")) { throw new Error("이 폴더를 처음부터 실행하세요: policySaveId가 없습니다."); }
+  if (!bru.getVar("policyAnalysisDeadline")) { throw new Error("이 폴더를 처음부터 실행하세요: policyAnalysisDeadline가 없습니다."); }
+}
+
+script:post-response {
+  bru.setVar("policyWaiting", false);
+  if (res.status === 200 && ["PENDING","ANALYZING"].includes(res.body.analysisStatus) && Date.now() < bru.getVar("policyAnalysisDeadline")) {
+    bru.setVar("policyWaiting", true);
+    await bru.sleep(Number(bru.getEnvVar("pollIntervalMs")));
+    bru.runner.setNextRequest("POL-DELETE-05 분석 완료 대기 - 200");
+  } else if (res.status !== 200 || res.body.analysisStatus !== "SUCCESS") {
+    bru.runner.setNextRequest("POL-DELETE CLEANUP 저장 삭제 - 204");
+  }
+}
+
+tests {
+  test("상세 응답", function () { expect(res.status).to.equal(200); });
+  if (!bru.getVar("policyWaiting")) {
+    test("SUCCESS 분석 결과", function () {
+      expect(res.body.analysisStatus, "시간 초과 또는 분석 실패: " + res.body.analysisFailureCode).to.equal("SUCCESS");
+    });
+  }
+}
+

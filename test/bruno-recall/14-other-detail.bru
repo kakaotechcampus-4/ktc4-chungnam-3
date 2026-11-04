@@ -1,0 +1,28 @@
+meta {
+  name: RECALL-06 다른 회원 알림 상세 - 404
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{baseUrl}}/api/notifications/{{recallNotificationId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{recallSessionB}}
+}
+
+script:pre-request {
+  if (!bru.getVar("recallNotificationId")) { throw new Error("컬렉션을 처음부터 실행하세요: recallNotificationId가 없습니다."); }
+  if (!bru.getVar("recallSessionB")) { throw new Error("컬렉션을 처음부터 실행하세요: recallSessionB가 없습니다."); }
+}
+
+tests {
+  test("다른 회원 알림 노출 차단", function () {
+    expect(res.status).to.equal(404);
+    expect(res.body.code).to.equal("NOT_FOUND");
+  });
+}
+

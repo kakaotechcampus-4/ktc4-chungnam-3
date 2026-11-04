@@ -1,0 +1,23 @@
+meta {
+  name: CONFIRM-CLEANUP A 저장 삭제 - 204
+  type: http
+  seq: 28
+}
+
+delete {
+  url: {{baseUrl}}/api/personal-saves/{{confirmSaveA}}
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+if (!bru.getVar("confirmSessionA") || !bru.getVar("confirmSaveA")) { throw new Error("컬렉션을 처음부터 실행하세요."); }
+}
+
+script:post-response {
+if(!bru.getVar("confirmAnswered") || !bru.getVar("confirmAfter")) bru.runner.setNextRequest("CONFIRM-CLEANUP B 저장 삭제 - 204");
+}
+
+tests {
+test("A 개인 저장 삭제", function () { expect(res.status).to.equal(204);  });
+}

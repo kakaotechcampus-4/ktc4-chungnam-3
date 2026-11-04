@@ -1,0 +1,16 @@
+meta {
+  name: LIST-12 저장물이 있는 상태의 무인증 목록 - 401
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves
+  body: none
+  auth: none
+}
+
+tests {
+  test("인증 없는 목록 차단", function () { expect(res.status).to.equal(401); expect(res.body.code).to.equal("INVALID_SESSION"); });
+}
+

@@ -1,0 +1,55 @@
+meta {
+  name: LIVE-SAVE-03 분석 결과 검증 - 200
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves/{{livePersonalSaveId}}
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("liveSessionTokenA")) { throw new Error("컬렉션을 처음부터 실행하세요: liveSessionTokenA가 없습니다."); }
+  if (!bru.getVar("livePersonalSaveId")) { throw new Error("컬렉션을 처음부터 실행하세요: livePersonalSaveId가 없습니다."); }
+}
+
+tests {
+  test("상세 계약 및 상태별 필드", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.personalSaveId).to.equal(bru.getVar("livePersonalSaveId"));
+  expect(res.body.contentId).to.equal(bru.getVar("liveContentId"));
+    expect(res.body.videoId).to.equal(bru.getVar("liveVideoId"));
+    expect(res.body.sourceUrl).to.be.a("string").and.not.empty;
+    expect(Date.parse(res.body.savedAt)).to.equal(Date.parse(bru.getVar("liveSavedAt")));
+    expect(["SUCCESS","PARTIAL","FAILED"]).to.include(res.body.analysisStatus);
+    expect(res.body.places).to.be.an("array");
+    if (res.body.analysisStatus === "SUCCESS") {
+      expect(res.body.analysisFailureCode).to.equal(null);
+    } else {
+      expect(res.body.analysisFailureCode).to.be.a("string").and.not.empty;
+    }
+    if (res.body.analysisStatus !== "FAILED") {
+      expect(res.body.title).to.be.a("string").and.not.empty;
+      expect(res.body.summary).to.be.a("string").and.not.empty;
+    }
+    res.body.places.forEach(function (place) {
+      expect(place.placeId).to.match(/^[0-9a-f-]{36}$/i);
+      expect(place.name).to.be.a("string").and.not.empty;
+      expect(place.address).to.be.a("string");
+      expect(place.latitude).to.be.a("number").and.within(-90, 90);
+      expect(place.longitude).to.be.a("number").and.within(-180, 180);
+    });
+  });
+  if (res.status === 200) {
+    bru.setVar("liveLastStatus", res.body.analysisStatus);
+    bru.setVar("liveDetail", res.body);
+    console.log("분석 상태: " + res.body.analysisStatus + ", 장소 수: " + res.body.places.length + ", 실패 코드: " + res.body.analysisFailureCode);
+  }
+  test("기대한 분석 결과와 장소 수", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.analysisStatus, "실제 실패 코드: " + res.body.analysisFailureCode).to.equal(bru.getEnvVar("expectedAnalysisStatus"));
+    expect(res.body.places.length).to.be.at.least(Number(bru.getEnvVar("minPlaceCount")));
+  });
+}

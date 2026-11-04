@@ -1,0 +1,42 @@
+meta {
+  name: GEO-SETUP-01 회원 A 로그인 - 200
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/auth/guest
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "installationId": "{{geoInstallationA}}"
+  }
+}
+
+script:pre-request {
+  ["geoSessionA","geoSessionB","geoSaveId","geoContentId","geoLatitude","geoLongitude","geoExpectedPlaces","geoAndroidIds","geoIosIds","geoTermsA","geoTermsB","geoDeadline"].forEach(function (key) { bru.deleteVar(key); });
+  const match = /^https?:\/\/(?:www\.|m\.)?youtube\.com\/shorts\/([A-Za-z0-9_-]{11})\/?(?:[?#].*)?$/.exec(bru.getEnvVar("shortsUrl") || "");
+  if (!match) { throw new Error("shortsUrl에 공개 Shorts URL을 넣으세요."); }
+  const interval = Number(bru.getEnvVar("pollIntervalMs"));
+  const timeout = Number(bru.getEnvVar("analysisTimeoutMs"));
+  if (!Number.isInteger(interval) || interval < 1000 || interval > 30000 || !Number.isInteger(timeout) || timeout < interval || timeout > 900000) { throw new Error("폴링 간격과 제한 시간을 확인하세요."); }
+  bru.setVar("geoVideoId", match[1]);
+  bru.setVar("geoUrl", "https://www.youtube.com/shorts/" + match[1]);
+  bru.setVar("geoInstallationA", require("uuid").v4());
+}
+
+tests {
+  test("게스트 세션 발급", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.sessionToken).to.be.a("string").and.not.empty;
+    expect(Date.parse(res.body.sessionExpiresAt)).to.be.above(Date.now());
+    bru.setVar("geoSessionA", res.body.sessionToken);
+  });
+}
