@@ -1,0 +1,33 @@
+meta {
+  name: POL-OWNER-03 위치 동의 - 200
+  type: http
+  seq: 3
+}
+
+put {
+  url: {{baseUrl}}/api/me/consents/LOCATION_BASED_SERVICE
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {"agreed":true,"termsVersion":"{{policyTerms}}"}
+}
+
+script:pre-request {
+  if (!bru.getVar("policySession")) { throw new Error("이 폴더를 처음부터 실행하세요: policySession가 없습니다."); }
+  if (!bru.getVar("policyTerms")) { throw new Error("이 폴더를 처음부터 실행하세요: policyTerms가 없습니다."); }
+}
+
+tests {
+  test("동의 상태", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.agreed).to.equal(true);
+    expect(res.body.withdrawnAt).to.equal(null);
+  });
+}
+

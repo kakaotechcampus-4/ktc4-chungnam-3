@@ -1,0 +1,15 @@
+meta {
+  name: CONFIRM-CLEANUP A 상세 제거 - 404
+  type: http
+  seq: 32
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves/{{confirmSaveA}}
+  body: none
+  auth: inherit
+}
+
+tests {
+test("HTTP 상태와 오류 코드", function () { expect(res.status).to.equal(404); expect(res.body.code).to.equal("NOT_FOUND"); expect(res.body.message).to.be.a("string").and.not.empty; });
+}

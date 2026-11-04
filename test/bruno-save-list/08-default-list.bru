@@ -1,0 +1,44 @@
+meta {
+  name: LIST-08 A 기본 목록의 3개 저장물과 최신 저장 순 - 200
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("listSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: listSessionA가 없습니다."); }
+  if (!bru.getVar("listSavesA")) { throw new Error("컬렉션을 처음부터 실행하세요: listSavesA가 없습니다."); }
+}
+
+tests {
+  test("A 기본 목록의 3개 저장물과 최신 저장 순 - 200", function () {
+    expect(res.status).to.equal(200);
+    const saved = bru.getVar("listSavesA");
+    expect(res.body.items).to.be.an("array");
+    res.body.items.forEach(function (item) {
+      const source = saved.find(function (row) { return row.personalSaveId === item.personalSaveId; });
+      expect(source, "다른 회원 또는 생성하지 않은 저장물이 섞임").to.be.an("object");
+      expect(item.contentId).to.equal(source.contentId);
+      expect(item.videoId).to.equal(source.videoId);
+      expect(["PENDING","ANALYZING","SUCCESS","PARTIAL","FAILED"]).to.include(item.analysisStatus);
+      expect(item.title === null || typeof item.title === "string").to.equal(true);
+      expect(item.summary === null || typeof item.summary === "string").to.equal(true);
+      if (typeof item.summary === "string") { expect(Array.from(item.summary).length).to.be.at.most(Number(bru.getEnvVar("maxSummaryLength"))); }
+      expect(Number.isInteger(item.placeCount)).to.equal(true);
+      expect(item.placeCount).to.be.at.least(0);
+      expect(Number.isFinite(Date.parse(item.savedAt))).to.equal(true);
+      expect(Math.abs(Date.parse(item.savedAt) - Date.parse(source.savedAt))).to.be.at.most(1);
+    });
+    const ids = res.body.items.map(function (item) { return item.personalSaveId; });
+    expect(ids).to.deep.equal(bru.getVar("listSavesA").map(function (item) { return item.personalSaveId; }).reverse());
+    expect(new Set(ids).size).to.equal(ids.length);
+    expect(res.body.nextCursor).to.equal(null);
+    expect(ids).to.have.lengthOf(3);
+  });
+}
+

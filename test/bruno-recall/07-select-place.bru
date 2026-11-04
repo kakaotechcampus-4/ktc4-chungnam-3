@@ -1,0 +1,39 @@
+meta {
+  name: RECALL-SETUP-07 확정 장소 선택 - 200
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves/{{recallSaveId}}
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("recallSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: recallSessionA가 없습니다."); }
+  if (!bru.getVar("recallSaveId")) { throw new Error("컬렉션을 처음부터 실행하세요: recallSaveId가 없습니다."); }
+}
+
+script:post-response {
+  if (res.status !== 200 || res.body.analysisStatus !== "SUCCESS" || !Array.isArray(res.body.places) || res.body.places.length === 0) {
+    bru.runner.setNextRequest("RECALL-CLEANUP-01 저장 삭제 - 204");
+  }
+}
+
+tests {
+  test("저장한 콘텐츠의 확정 장소", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.contentId).to.equal(bru.getVar("recallContentId"));
+    expect(res.body.analysisStatus).to.equal("SUCCESS");
+    expect(res.body.places).to.be.an("array").and.not.empty;
+    const place = res.body.places[0];
+    expect(place.placeId).to.match(/^[0-9a-f-]{36}$/i);
+    expect(place.latitude).to.be.a("number").and.within(-90,90);
+    expect(place.longitude).to.be.a("number").and.within(-180,180);
+    bru.setVar("recallPlaceId", place.placeId);
+    bru.setVar("recallLatitude", place.latitude);
+    bru.setVar("recallLongitude", place.longitude);
+  });
+}
+

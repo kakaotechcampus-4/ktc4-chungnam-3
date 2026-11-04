@@ -1,0 +1,20 @@
+meta {
+  name: POL-COOLDOWN-15 현재 회원 로그아웃 - 204
+  type: http
+  seq: 15
+}
+
+post {
+  url: {{baseUrl}}/api/auth/logout
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("policySession")) { throw new Error("이 폴더를 처음부터 실행하세요: policySession가 없습니다."); }
+}
+
+tests {
+  test("HTTP 204", function () { expect(res.status).to.equal(204); });
+}
+

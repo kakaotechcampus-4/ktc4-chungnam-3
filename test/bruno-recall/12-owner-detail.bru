@@ -1,0 +1,50 @@
+meta {
+  name: RECALL-04 생성한 알림 상세 - 200
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{baseUrl}}/api/notifications/{{recallNotificationId}}
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("recallSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: recallSessionA가 없습니다."); }
+  if (!bru.getVar("recallNotificationId")) { throw new Error("컬렉션을 처음부터 실행하세요: recallNotificationId가 없습니다."); }
+  if (!bru.getVar("recallObserved")) { throw new Error("컬렉션을 처음부터 실행하세요: recallObserved가 없습니다."); }
+}
+
+tests {
+  test("DB에서 찾은 알림의 실제 API 응답", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.notificationId).to.equal(bru.getVar("recallNotificationId"));
+    expect(res.body.title).to.be.a("string").and.not.empty;
+    expect(res.body.body).to.be.a("string").and.not.empty;
+    expect(res.body.proposalType).to.equal(bru.getVar("recallObserved").proposalType);
+    expect(res.body.sentAt).to.equal(null);
+    expect(res.body.openedAt).to.equal(null);
+    const expected = bru.getVar("recallObserved").proposalPayload.items;
+    expect(res.body.items).to.be.an("array").with.lengthOf(expected.length);
+    const key = function (item) { return [item.contentId, item.source, item.placeId || ""].join("|"); };
+    const actual = res.body.items.map(function (item) {
+      expect(item.title).to.be.a("string");
+      expect(item.summary).to.be.a("string");
+      if (item.source === "PERSONAL") {
+        expect(item.personalSaveId).to.equal(bru.getVar("recallSaveId"));
+        expect(item.contentId).to.equal(bru.getVar("recallContentId"));
+      } else {
+        expect(item.source).to.equal("PUBLIC");
+        expect(item.personalSaveId).to.equal(null);
+      }
+      if (item.place) {
+        expect(item.place.latitude).to.be.a("number").and.within(-90,90);
+        expect(item.place.longitude).to.be.a("number").and.within(-180,180);
+      }
+      return key({contentId:item.contentId, source:item.source, placeId:item.place && item.place.placeId});
+    });
+    expect(actual).to.have.members(expected.map(key));
+  });
+}
+

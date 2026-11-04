@@ -1,0 +1,23 @@
+meta {
+  name: CONFIRM-SETUP 미응답 후보 준비 - 200
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves/{{confirmSaveA}}
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+if (!bru.getVar("confirmSessionA") || !bru.getVar("confirmSaveA")) { throw new Error("컬렉션을 처음부터 실행하세요."); }
+}
+
+script:post-response {
+const candidates=res.status===200 && Array.isArray(res.body.confirmCandidates)?res.body.confirmCandidates:[]; const wanted=bru.getEnvVar("candidateId"); const c=candidates.find(c=>(!wanted||c.candidateId===wanted)&&Array.isArray(c.options)&&c.options.length); const wantedOption=bru.getEnvVar("selectedOptionId"); const option=c&&c.options.find(o=>!wantedOption||o.candidateId===wantedOption); if(!c||!option) bru.runner.setNextRequest("CONFIRM-CLEANUP A 저장 삭제 - 204"); else { bru.setVar("confirmCandidate",c.candidateId); bru.setVar("confirmOption",option); bru.setVar("confirmAnswerBody",JSON.stringify({selectedOptionId:bru.getVar("confirmMode")==="reject"?null:option.candidateId})); bru.setVar("confirmLatitude",option.lat); bru.setVar("confirmLongitude",option.lng); const normalized = function (body) { const copy = JSON.parse(JSON.stringify(body)); copy.places.sort((a,b)=>a.placeId.localeCompare(b.placeId)); copy.confirmCandidates.sort((a,b)=>a.candidateId.localeCompare(b.candidateId)); return copy; }; bru.setVar("confirmBefore",normalized(res.body)); }
+}
+
+tests {
+test("실제 미응답 후보와 선택지 존재", function () { expect(res.status).to.equal(200); expect(res.body.confirmCandidates,"상세에 confirmCandidates 필드가 없습니다. 서버 JAR 버전을 확인하세요.").to.be.an("array"); expect(bru.getVar("confirmCandidate"),"미응답 후보가 없습니다. 후보가 남은 테스트 영상을 준비하세요.").to.be.a("string").and.not.empty; const o=bru.getVar("confirmOption"); expect(o.lat).to.be.a("number").within(-90,90); expect(o.lng).to.be.a("number").within(-180,180); });
+}

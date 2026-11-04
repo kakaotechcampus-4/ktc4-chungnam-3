@@ -1,0 +1,24 @@
+meta {
+  name: GEO-10 삭제한 저장물 상세 없음 - 404
+  type: http
+  seq: 34
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves/{{geoSaveId}}
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("geoSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: geoSessionA가 없습니다."); }
+  if (!bru.getVar("geoSaveId")) { throw new Error("컬렉션을 처음부터 실행하세요: geoSaveId가 없습니다."); }
+}
+
+tests {
+  test("HTTP 404 및 NOT_FOUND", function () {
+    expect(res.status).to.equal(404);
+    expect(res.body.code).to.equal("NOT_FOUND");
+    expect(res.body.message).to.be.a("string").and.not.empty;
+  });
+}

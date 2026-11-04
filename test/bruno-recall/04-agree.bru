@@ -1,0 +1,34 @@
+meta {
+  name: RECALL-SETUP-04 위치 동의 - 200
+  type: http
+  seq: 4
+}
+
+put {
+  url: {{baseUrl}}/api/me/consents/LOCATION_BASED_SERVICE
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {"agreed":true,"termsVersion":"{{recallTerms}}"}
+}
+
+script:pre-request {
+  if (!bru.getVar("recallSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: recallSessionA가 없습니다."); }
+  if (!bru.getVar("recallTerms")) { throw new Error("컬렉션을 처음부터 실행하세요: recallTerms가 없습니다."); }
+}
+
+tests {
+  test("위치 동의 저장", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.agreed).to.equal(true);
+    expect(res.body.termsVersion).to.equal(bru.getVar("recallTerms"));
+    expect(res.body.withdrawnAt).to.equal(null);
+  });
+}
+

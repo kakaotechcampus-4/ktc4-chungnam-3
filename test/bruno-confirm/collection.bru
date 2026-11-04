@@ -1,0 +1,13 @@
+auth {
+  mode: bearer
+}
+auth:bearer {
+  token: {{confirmSessionA}}
+}
+docs {
+  별도 수동 컬렉션이다. local 환경에서 전체 Runner로 실행한다.
+  confirmAction=validate는 권한·오류 및 변경 없음만 검사한다. select는 실제 장소 선택, reject는 후보 중에 없음(null)을 답한다.
+  select/reject는 공용 콘텐츠 후보를 영구 소모하므로 전용 테스트 데이터에서만 실행한다. 개인 저장물을 삭제해도 후보는 복원되지 않는다.
+  기존 분석 결과를 재사용할 수 있다. 새 분석과 실제 장소 선택에는 외부 API 비용이 발생할 수 있다.
+  요청·응답에 세션 토큰이 있으므로 보고서에는 본문/헤더를 제외한다. CI에는 포함하지 않는다.
+}

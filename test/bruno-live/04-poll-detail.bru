@@ -1,0 +1,43 @@
+meta {
+  name: LIVE-SAVE-02 분석 완료 대기 - 200
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves/{{livePersonalSaveId}}
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("liveSessionTokenA")) { throw new Error("컬렉션을 처음부터 실행하세요: liveSessionTokenA가 없습니다."); }
+  if (!bru.getVar("livePersonalSaveId")) { throw new Error("컬렉션을 처음부터 실행하세요: livePersonalSaveId가 없습니다."); }
+  if (!bru.getVar("livePollDeadline")) { throw new Error("컬렉션을 처음부터 실행하세요: livePollDeadline가 없습니다."); }
+}
+
+script:post-response {
+  bru.setVar("livePollContinue", false);
+  if (res.status === 200) {
+    bru.setVar("liveLastStatus", res.body.analysisStatus);
+    if (["PENDING","ANALYZING"].includes(res.body.analysisStatus) && Date.now() < bru.getVar("livePollDeadline")) {
+      bru.setVar("livePollContinue", true);
+      await bru.sleep(Math.min(Number(bru.getEnvVar("pollIntervalMs")), bru.getVar("livePollDeadline") - Date.now()));
+      bru.runner.setNextRequest("LIVE-SAVE-02 분석 완료 대기 - 200");
+    }
+  }
+}
+
+tests {
+  test("상세 응답의 ID와 분석 상태", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.personalSaveId).to.equal(bru.getVar("livePersonalSaveId"));
+  expect(res.body.contentId).to.equal(bru.getVar("liveContentId"));
+    expect(["PENDING","ANALYZING","SUCCESS","PARTIAL","FAILED"]).to.include(res.body.analysisStatus);
+  });
+  if (!bru.getVar("livePollContinue")) {
+    test("제한 시간 안에 분석 종료", function () {
+      expect(["SUCCESS","PARTIAL","FAILED"], "분석 대기 제한 시간 초과").to.include(res.body.analysisStatus);
+    });
+  }
+}

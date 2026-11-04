@@ -26,6 +26,10 @@ FCM 인증 파일은 사용하지 않으며 꺼내기 에이전트는 기존 stu
 기본 Bruno 컬렉션은 유효한 영상 분석 요청을 보내지 않는다.
 실제 분석용 `test/bruno/07-save-confirm-flow`, `test/bruno-live`, 저장·분석 데이터가 필요한 `test/bruno-geofence`, Gradle `liveTest`,
 `recallEval`, `recallJudge`는 이번 CI에 포함하지 않는다.
+실제 LLM과 읽기 전용 DB 관찰이 필요한 `test/bruno-recall`도 별도 수동 실행하며 기본 CI에 포함하지 않는다.
+차단 정책용 `test/bruno-recall-policy`도 실제 저장·분석 데이터와 DB 관찰이 필요하므로 별도 수동 실행한다.
+목록·페이지네이션용 `test/bruno-save-list`는 서로 다른 실제 영상 3개가 필요하여 별도 수동 실행한다.
+장소 후보 답변용 `test/bruno-confirm`은 실제 분석 데이터가 필요하고 답변 시 공용 후보가 소모되므로 별도 수동 실행한다. 기본 모드는 답변하지 않는 `validate`이다.
 더미 키는 외부 API의 테스트 대역이 아니다. 실제 연동 동작이나 FCM 기기 수신이 검증됐다는 뜻은 아니다.
 
 ## 결과 확인

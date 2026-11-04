@@ -1,0 +1,33 @@
+meta {
+  name: CONFIRM-ERROR 잘못된 세션 - 401
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/api/personal-saves/{{confirmSaveA}}/places/{{confirmCandidate}}/confirm
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer invalid-qa-session
+}
+
+body:json {
+  {{confirmAnswerBody}}
+}
+
+script:pre-request {
+if (!bru.getVar("confirmSessionA") || !bru.getVar("confirmSaveA")) { throw new Error("컬렉션을 처음부터 실행하세요."); }
+if(!bru.getVar("confirmCandidate")) throw new Error("미응답 후보를 먼저 준비하세요.");
+}
+
+script:post-response {
+  if(res.status!==401 || !res.body || res.body.code!=="INVALID_SESSION") bru.setVar("confirmChecksFailed",true);
+}
+
+tests {
+test("HTTP 상태와 오류 코드", function () { expect(res.status).to.equal(401); expect(res.body.code).to.equal("INVALID_SESSION"); expect(res.body.message).to.be.a("string").and.not.empty; });
+}

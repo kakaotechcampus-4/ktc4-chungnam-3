@@ -1,0 +1,23 @@
+meta {
+  name: LIVE-SAVE-10 삭제 후 목록 비어 있음 - 200
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("liveSessionTokenA")) { throw new Error("컬렉션을 처음부터 실행하세요: liveSessionTokenA가 없습니다."); }
+}
+
+tests {
+  test("개인 저장물 정리 확인", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.items).to.be.an("array").with.lengthOf(0);
+    expect(res.body.nextCursor).to.equal(null);
+  });
+}

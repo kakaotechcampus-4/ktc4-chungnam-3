@@ -1,0 +1,26 @@
+meta {
+  name: LIST-38 B 저장물 삭제 - 204
+  type: http
+  seq: 38
+}
+
+delete {
+  url: {{baseUrl}}/api/personal-saves/{{listSaveBId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{listSessionB}}
+}
+
+script:pre-request {
+  if (!bru.getVar("listSessionB")) { throw new Error("컬렉션을 처음부터 실행하세요: listSessionB가 없습니다."); }
+  if (!bru.getVar("listSaveB")) { throw new Error("컬렉션을 처음부터 실행하세요: listSaveB가 없습니다."); }
+  bru.setVar("listSaveBId", bru.getVar("listSaveB").personalSaveId);
+}
+
+tests {
+  test("HTTP 204", function () { expect(res.status).to.equal(204); });
+}
+

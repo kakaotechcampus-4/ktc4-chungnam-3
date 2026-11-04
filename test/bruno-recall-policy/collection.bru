@@ -1,0 +1,18 @@
+auth {
+  mode: bearer
+}
+
+auth:bearer {
+  token: {{policySession}}
+}
+
+docs {
+  node test/bruno-recall/run.mjs --policy로 전체 실행한다.
+  동의 철회·미저장 회원·저장 삭제·오래된 이벤트·쿨다운을 각기 새로운 회원으로 분리한다.
+  202와 함께 DB의 조건·회원 전체 실행 및 알림 건수·대상 이벤트 기록을 확인한다.
+  차단 후 조건을 복구한 대조 요청으로 정상 이벤트의 실행 생성도 확인한다.
+  쿨다운은 새 이벤트 UUID를 사용하여 중복 이벤트 검사와 구분한다.
+  기본 stub 서버로 차단 정책을 검증할 수 있다. 대조 요청은 COMPLETED 및 NO_ACTION 또는 PROPOSE를 요구한다.
+  실제 AI의 판단 품질·푸시 수신 검사는 아니다. FCM 토큰은 등록하지 않는다.
+}
+

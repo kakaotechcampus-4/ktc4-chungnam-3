@@ -1,0 +1,19 @@
+meta {
+  name: CONFIRM-CLEANUP A 로그아웃 - 204
+  type: http
+  seq: 35
+}
+
+post {
+  url: {{baseUrl}}/api/auth/logout
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{confirmSessionA}}
+}
+
+tests {
+test("테스트 세션 종료", function () { expect(res.status).to.equal(204); bru.deleteVar("confirmSessionA"); });
+}

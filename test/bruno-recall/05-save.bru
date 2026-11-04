@@ -1,0 +1,35 @@
+meta {
+  name: RECALL-SETUP-05 영상 저장 - 201
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/personal-saves
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {"url":"{{shortsUrl}}"}
+}
+
+script:pre-request {
+  if (!bru.getVar("recallSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: recallSessionA가 없습니다."); }
+}
+
+tests {
+  test("새 개인 저장물", function () {
+    expect(res.status).to.equal(201);
+    expect(res.body.personalSaveId).to.match(/^[0-9a-f-]{36}$/i);
+    expect(res.body.contentId).to.match(/^[0-9a-f-]{36}$/i);
+    bru.setVar("recallSaveId", res.body.personalSaveId);
+    bru.setVar("recallContentId", res.body.contentId);
+    bru.setVar("recallAnalysisDeadline", Date.now() + Number(bru.getEnvVar("analysisTimeoutMs")));
+  });
+}
+

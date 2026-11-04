@@ -1,0 +1,25 @@
+meta {
+  name: GEO-06 세션 없는 목록 조회 - 401
+  type: http
+  seq: 17
+}
+
+get {
+  url: {{baseUrl}}/api/geofences?latitude={{geoLatitude}}&longitude={{geoLongitude}}&platform=ANDROID
+  body: none
+  auth: none
+}
+
+script:pre-request {
+  if (!bru.getVar("geoSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: geoSessionA가 없습니다."); }
+  if (!bru.getVar("geoExpectedPlaces")) { throw new Error("컬렉션을 처음부터 실행하세요: geoExpectedPlaces가 없습니다."); }
+  if (!Number.isFinite(bru.getVar("geoLatitude")) || !Number.isFinite(bru.getVar("geoLongitude"))) { throw new Error("저장물 상세에서 확정 좌표를 먼저 준비하세요."); }
+}
+
+tests {
+  test("HTTP 401 및 INVALID_SESSION", function () {
+    expect(res.status).to.equal(401);
+    expect(res.body.code).to.equal("INVALID_SESSION");
+    expect(res.body.message).to.be.a("string").and.not.empty;
+  });
+}

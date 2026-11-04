@@ -1,0 +1,19 @@
+meta {
+  name: CONFIRM-SETUP B 약관 조회 - 200
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/me/consents
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{confirmSessionB}}
+}
+
+tests {
+test("현재 위치 약관 확인", function () { expect(res.status).to.equal(200); const c=res.body.find(c=>c.consentType==="LOCATION_BASED_SERVICE"); expect(c).to.be.an("object"); expect(c.currentTermsVersion).to.be.a("string").and.not.empty; bru.setVar("confirmTermsB",c.currentTermsVersion); });
+}

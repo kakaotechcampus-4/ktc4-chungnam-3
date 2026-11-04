@@ -1,0 +1,26 @@
+meta {
+  name: POL-OWNER-02 현재 위치 약관 조회 - 200
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/me/consents
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("policySession")) { throw new Error("이 폴더를 처음부터 실행하세요: policySession가 없습니다."); }
+}
+
+tests {
+  test("위치 약관 버전", function () {
+    expect(res.status).to.equal(200);
+    const row = res.body.find(function (item) { return item.consentType === "LOCATION_BASED_SERVICE"; });
+    expect(row).to.be.an("object");
+    expect(row.currentTermsVersion).to.be.a("string").and.not.empty;
+    bru.setVar("policyTerms", row.currentTermsVersion);
+  });
+}
+

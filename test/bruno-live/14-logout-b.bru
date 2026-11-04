@@ -1,0 +1,24 @@
+meta {
+  name: LIVE-AUTH-04 회원 B 로그아웃 - 204
+  type: http
+  seq: 14
+}
+
+post {
+  url: {{baseUrl}}/api/auth/logout
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{liveSessionTokenB}}
+}
+
+script:pre-request {
+  if (!bru.getVar("liveSessionTokenB")) { throw new Error("컬렉션을 처음부터 실행하세요: liveSessionTokenB가 없습니다."); }
+}
+
+tests {
+  test("회원 B 로그아웃", function () { expect(res.status).to.equal(204); });
+  if (res.status === 204) { bru.deleteVar("liveSessionTokenB"); }
+}

@@ -1,0 +1,47 @@
+meta {
+  name: LIVE-AUTH-01 회원 A 로그인 - 200
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/auth/guest
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "installationId": "{{liveInstallationIdA}}"
+  }
+}
+
+script:pre-request {
+  ["liveSessionTokenA","liveSessionTokenB","livePersonalSaveId","liveContentId","livePollDeadline","liveLastStatus","liveDetail","liveSavedAt"].forEach(function (key) { bru.deleteVar(key); });
+  const url = bru.getEnvVar("shortsUrl");
+  const match = /^https?:\/\/(?:www\.|m\.)?youtube\.com\/shorts\/([A-Za-z0-9_-]{11})\/?(?:[?#].*)?$/.exec(url || "");
+  if (!match) { throw new Error("local 환경의 shortsUrl에 공개 Shorts URL을 넣으세요."); }
+  const expected = bru.getEnvVar("expectedAnalysisStatus");
+  if (!["SUCCESS","PARTIAL","FAILED"].includes(expected)) { throw new Error("expectedAnalysisStatus는 SUCCESS, PARTIAL, FAILED 중 하나여야 합니다."); }
+  const interval = Number(bru.getEnvVar("pollIntervalMs"));
+  const timeout = Number(bru.getEnvVar("analysisTimeoutMs"));
+  const minPlaces = Number(bru.getEnvVar("minPlaceCount"));
+  if (!Number.isInteger(interval) || interval < 1000 || interval > 30000 || !Number.isInteger(timeout) || timeout < interval || timeout > 900000 || !Number.isInteger(minPlaces) || minPlaces < 0) { throw new Error("폴링 간격(1~30초), 제한 시간(최대 15분), minPlaceCount를 확인하세요."); }
+  bru.setVar("liveVideoId", match[1]);
+  bru.setVar("liveShortsUrl", "https://www.youtube.com/shorts/" + match[1]);
+  bru.setVar("liveInstallationIdA", require("uuid").v4());
+}
+
+tests {
+  test("게스트 세션 발급", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.sessionToken).to.be.a("string").and.not.empty;
+    expect(Number.isFinite(Date.parse(res.body.sessionExpiresAt))).to.equal(true);
+    expect(Date.parse(res.body.sessionExpiresAt)).to.be.above(Date.now());
+    bru.setVar("liveSessionTokenA", res.body.sessionToken);
+  });
+}

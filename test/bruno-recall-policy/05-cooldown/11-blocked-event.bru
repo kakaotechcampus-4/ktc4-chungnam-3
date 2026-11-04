@@ -1,0 +1,34 @@
+meta {
+  name: POL-COOLDOWN-11 쿨다운 중 새 이벤트 UUID로 전송 - 202
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/api/location-events
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {"placeId":"{{policyPlaceId}}","triggerEventId":"{{policyEventId}}","eventType":"DWELL","eventOccurredAt":"{{policyEventAt}}","location":{"latitude":{{policyLatitude}},"longitude":{{policyLongitude}},"accuracyMeters":10,"locatedAt":"{{policyLocationAt}}"}}
+}
+
+script:pre-request {
+  if (!bru.getVar("policySession")) { throw new Error("이 폴더를 처음부터 실행하세요: policySession가 없습니다."); }
+  if (!bru.getVar("policyPlaceId")) { throw new Error("이 폴더를 처음부터 실행하세요: policyPlaceId가 없습니다."); }
+  if (!bru.getVar("policyEventId")) { throw new Error("이 폴더를 처음부터 실행하세요: policyEventId가 없습니다."); }
+  if (!bru.getVar("policyReady")) { throw new Error("DB 사전 조건 검사를 먼저 통과해야 합니다."); }
+  bru.setVar("policyReady", false);
+  bru.setVar("policyLocationAt", new Date().toISOString());
+  bru.setVar("policyEventAt", new Date(Date.now()).toISOString());
+}
+
+tests {
+  test("HTTP 202", function () { expect(res.status).to.equal(202); });
+}
+
