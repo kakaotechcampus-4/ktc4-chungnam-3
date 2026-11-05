@@ -678,4 +678,51 @@ class PlaceResolverTest {
         assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.NEEDS_CONFIRMATION);
         assertThat(resolved.confirmRequest().candidates()).hasSize(2);
     }
+
+    @Test
+    void 지점명없는_개인가게는_regionHint_기준점_주변_공공데이터_상호명으로_확정한다() {
+        // 실측 사례("오문창순대국밥", 2026-11-04) - OSM(LocationIQ)엔 없고 공공상가정보엔
+        // "오문창순대국밥식당"으로 등록돼 있다. 기존엔 LocationIQ 0건이라 NO_PLACE였다.
+        var anchor = result("중리동, 대덕구, 대전광역시", 36.360, 127.421);
+        var shop = new DataportalStoreClient.StoreResult("MA0001", "오문창순대국밥식당", null, "음식",
+                "대전광역시 대덕구 한밭대로 1153", 36.359, 127.426);
+        var resolver = resolverForAnchor(List.of(anchor), List.of(shop, store("다른국밥집")));
+
+        PlaceResolver.Result resolved = resolver.resolve("p1", "오문창순대국밥", null, "대전 대덕구 중리동", List.of());
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+        assertThat(resolved.resolvedPlace().address()).isEqualTo("대전광역시 대덕구 한밭대로 1153");
+        assertThat(resolved.resolvedPlace().geocodingProvider()).isEqualTo(GeocodingProvider.DATAPORTAL);
+        assertThat(resolved.resolvedPlace().geocodingPlaceId()).isEqualTo("MA0001");
+    }
+
+    @Test
+    void 지점명없는_개인가게는_regionHint가_구단위여도_VWorld_상호명_기준점으로_확정한다() {
+        // 실측("오문창순대국밥", regionHint="대전 대덕구") - 구청 기준점에선 1.7km 밖이라 못 찾았다.
+        // VWorld가 상호명으로 가게 좌표를 주면 그 주변에서 공공데이터 상호명으로 확정한다.
+        var vworldAnchor = result("오문창순대국밥", 36.359, 127.426);
+        var shop = new DataportalStoreClient.StoreResult("MA0001", "오문창순대국밥식당", null, "음식",
+                "대전광역시 대덕구 한밭대로 1153", 36.359, 127.426);
+        var resolver = resolverForVWorldAnchor(vworldAnchor, List.of(shop));
+
+        PlaceResolver.Result resolved = resolver.resolve("p1", "오문창순대국밥", null, "대전 대덕구", List.of());
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+        assertThat(resolved.resolvedPlace().geocodingProvider()).isEqualTo(GeocodingProvider.DATAPORTAL);
+        assertThat(resolved.resolvedPlace().geocodingPlaceId()).isEqualTo("MA0001");
+    }
+
+    @Test
+    void 지점명없는_가게가_기준점_주변_공공데이터에_없으면_기존_LocationIQ_흐름으로_폴백한다() {
+        var anchor = result("중리동, 대덕구, 대전광역시", 36.360, 127.421);
+        var resolver = resolverForAnchor(List.of(anchor), List.of(store("전혀다른가게")));
+
+        var fallback = List.of(result("오문창순대국밥, 대전광역시", 36.359, 127.426));
+        PlaceResolver.Result resolved = resolver.resolve("p1", "오문창순대국밥", null, "대전 대덕구 중리동", fallback);
+
+        // 공공데이터 경로가 못 찾았으니 기존 흐름대로 - LocationIQ 1건, 반경 내 상호명 불일치라 되묻기.
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.NEEDS_CONFIRMATION);
+        assertThat(resolved.confirmRequest().candidates().get(0).geocodingProvider())
+                .isEqualTo(GeocodingProvider.LOCATIONIQ);
+    }
 }
