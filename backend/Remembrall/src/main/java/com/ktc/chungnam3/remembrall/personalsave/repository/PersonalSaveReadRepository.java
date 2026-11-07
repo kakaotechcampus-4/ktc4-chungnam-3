@@ -37,7 +37,8 @@ public class PersonalSaveReadRepository {
                             THEN c.last_analysis_error_code END AS failure_code,
                        (SELECT count(*) FROM content_place cp WHERE cp.content_id = c.id) AS place_count,
                        (SELECT p.name FROM content_place cp JOIN place p ON p.id = cp.place_id
-                         WHERE cp.content_id = c.id ORDER BY p.id LIMIT 1) AS representative_place_name,
+                         WHERE cp.content_id = c.id
+                         ORDER BY cp.appearance_order NULLS LAST, p.id LIMIT 1) AS representative_place_name,
                        (SELECT count(*) FROM confirm_candidate cc
                          WHERE cc.content_id = c.id AND cc.status = 'PENDING') AS pending_confirm_count
                   FROM personal_save ps

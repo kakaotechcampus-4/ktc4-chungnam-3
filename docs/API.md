@@ -123,7 +123,7 @@
        pendingConfirmCount, savedAt }
 ```
 
-`analysisFailureCode`는 PARTIAL·FAILED일 때만. `representativePlaceName`은 연결된 장소가 없으면 null.
+`analysisFailureCode`는 PARTIAL·FAILED일 때만. `representativePlaceName`은 영상에 먼저 나온 장소(되묻기로 나중에 확정된 장소는 뒤로), 연결된 장소가 없으면 null.
 
 **`GET /api/personal-saves/{personalSaveId}`**
 

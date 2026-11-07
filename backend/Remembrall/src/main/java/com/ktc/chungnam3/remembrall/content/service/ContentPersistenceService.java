@@ -22,7 +22,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -133,9 +135,16 @@ public class ContentPersistenceService {
             if (outcome.places().isEmpty()) {
                 return true;
             }
+            // outcome.places()는 Gemini가 준 후보 순서 그대로다 - 정렬 전에 영상 속 순서를 잡아둔다(같은 장소가
+            // 두 번 나오면 처음 나온 순서). 저장 자체는 기존처럼 verificationPlaceId 순(잠금 순서 고정)으로 한다.
+            Map<String, Integer> appearanceOrder = new HashMap<>();
+            for (int i = 0; i < outcome.places().size(); i++) {
+                appearanceOrder.putIfAbsent(outcome.places().get(i).verificationPlaceId(), i);
+            }
             outcome.places().stream()
                     .sorted(Comparator.comparing(AnalysisOutcome.PlaceResult::verificationPlaceId))
-                    .forEach(place -> savePlaceAndLink(contentId, place, now));
+                    .forEach(place -> savePlaceAndLink(contentId, place,
+                            appearanceOrder.get(place.verificationPlaceId()), now));
             List<UUID> placeIds = contentPlaceRepository.findPlaceIdsByContentId(contentId);
             memberIds.forEach(memberId -> createTriggers(memberId, placeIds, now));
             return true;
@@ -163,7 +172,7 @@ public class ContentPersistenceService {
                     .stream().sorted().toList();
             memberIds.forEach(this::lockMember);
 
-            savePlaceAndLink(contentId, placeResult, now);
+            savePlaceAndLink(contentId, placeResult, null, now);
             List<UUID> placeIds = contentPlaceRepository.findPlaceIdsByContentId(contentId);
             memberIds.forEach(memberId -> createTriggers(memberId, placeIds, now));
             return true;
@@ -215,6 +224,7 @@ public class ContentPersistenceService {
     private void savePlaceAndLink(
             UUID contentId,
             AnalysisOutcome.PlaceResult placeResult,
+            Integer appearanceOrder,
             Instant now
     ) {
         placeRepository.insertIfAbsent(
@@ -238,6 +248,7 @@ public class ContentPersistenceService {
                 contentId,
                 place.getId(),
                 placeResult.description(),
+                appearanceOrder,
                 now
         );
     }

@@ -22,11 +22,14 @@ import java.time.Instant;
 public class StaleAnalysisRecoveryScheduler {
 
     private final ContentRepository contents;
+    private final PersonalSaveAnalysisService analysis;
     private final PersonalSaveProperties properties;
     private final Clock clock;
 
-    public StaleAnalysisRecoveryScheduler(ContentRepository contents, PersonalSaveProperties properties, Clock clock) {
+    public StaleAnalysisRecoveryScheduler(ContentRepository contents, PersonalSaveAnalysisService analysis,
+                                          PersonalSaveProperties properties, Clock clock) {
         this.contents = contents;
+        this.analysis = analysis;
         this.properties = properties;
         this.clock = clock;
     }
@@ -35,6 +38,9 @@ public class StaleAnalysisRecoveryScheduler {
     @Transactional
     public void failStaleAnalyses() {
         Instant now = clock.instant();
+        // 아직 대기열에 있는 건은 시작 시각을 지금으로 갱신해 판정에서 뺀다 - 분석이 실제로 시작되면
+        // refreshAnalysisStartedAt이 시작 시각으로 다시 찍으므로 5분은 실제 분석 시간만 센다(멘토 리뷰).
+        analysis.queuedContentIds().forEach(id -> contents.refreshAnalysisStartedAt(id, now));
         Instant threshold = now.minus(properties.staleAnalyzingTimeout());
         int failed = contents.failStaleAnalyzing(threshold, now);
         if (failed > 0) {
