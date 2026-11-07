@@ -1,0 +1,35 @@
+meta {
+  name: POL-STALE-01 새 독립 회원 로그인 - 200
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/auth/guest
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {"installationId":"{{policyInstallation}}"}
+}
+
+script:pre-request {
+  if (!bru.getEnvVar("observerUrl") || !bru.getEnvVar("observerSecret")) { throw new Error("node test/bruno-recall/run.mjs --policy로 실행하세요."); }
+  ["policySession","policySaveId","policyOriginalPlaceId","policyPlaceId","policyOwnerSession","policyOwnerSaveId","policyOwnerInstallation","policyBaselineEventId","policyBaselineExecutionId","policyBaselineNotifications","policyReady"].forEach(function (key) { bru.deleteVar(key); });
+  bru.setVar("policyInstallation", require("uuid").v4());
+  bru.setVar("policyEventId", require("uuid").v4());
+}
+
+tests {
+  test("신규 회원과 세션", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.sessionToken).to.be.a("string").and.not.empty;
+    bru.setVar("policySession", res.body.sessionToken);
+  });
+}
+

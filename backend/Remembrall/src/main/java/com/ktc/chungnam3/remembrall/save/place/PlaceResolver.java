@@ -192,6 +192,10 @@ public class PlaceResolver {
             if (viaTourApi.isPresent()) {
                 return viaTourApi.get();
             }
+            Optional<Result> viaRegionStores = resolveViaRegionStores(candidateId, name, regionHint);
+            if (viaRegionStores.isPresent()) {
+                return viaRegionStores.get();
+            }
         }
 
         List<PlaceSearchClient.PlaceSearchResult> filtered =
@@ -529,24 +533,7 @@ public class PlaceResolver {
             return viaVWorldAnchor;
         }
 
-        Optional<String> anchorQuery = extractAnchorQuery(regionHint);
-        if (anchorQuery.isEmpty()) {
-            return Optional.empty();
-        }
-
-        List<PlaceSearchClient.PlaceSearchResult> anchorCandidates;
-        try {
-            anchorCandidates = placeLookup.search(anchorQuery.get(), null, regionHint);
-        } catch (RuntimeException e) {
-            return Optional.empty();
-        }
-
-        // 기준점은 "정확한 업체"가 아니라 "그 근방 좌표"만 있으면 되므로, class 필터는 안 걸고
-        // 이름만 대충 맞으면 첫 번째 것을 쓴다 - 같은 역 이름의 여러 표기(출구별 등)는 서로 몇십m
-        // 안쪽이라 반경 검색에 지장 없음.
-        Optional<PlaceSearchClient.PlaceSearchResult> anchor = anchorCandidates.stream()
-                .filter(c -> containsIgnoreCase(c.displayName(), anchorQuery.get()))
-                .findFirst();
+        Optional<PlaceSearchClient.PlaceSearchResult> anchor = findRegionAnchor(regionHint);
         if (anchor.isEmpty()) {
             return Optional.empty();
         }
@@ -567,6 +554,79 @@ public class PlaceResolver {
 
         return narrowByBrandThenDistance(
                 candidateId, name, branchName, anchor.get().lat(), anchor.get().lon(), brandMatches);
+    }
+
+    /**
+     * regionHint의 세부 지역명("대전 대덕구 중리동" → "대덕구 중리동")을 LocationIQ로 검색해 반경검색의
+     * 중심 좌표로 쓴다. 기준점은 "정확한 업체"가 아니라 "그 근방 좌표"만 있으면 되므로, class 필터는 안
+     * 걸고 이름만 대충 맞으면 첫 번째 것을 쓴다 - 같은 역 이름의 여러 표기(출구별 등)는 서로 몇십m
+     * 안쪽이라 반경 검색에 지장 없음.
+     */
+    private Optional<PlaceSearchClient.PlaceSearchResult> findRegionAnchor(String regionHint) {
+        Optional<String> anchorQuery = extractAnchorQuery(regionHint);
+        if (anchorQuery.isEmpty()) {
+            return Optional.empty();
+        }
+
+        List<PlaceSearchClient.PlaceSearchResult> anchorCandidates;
+        try {
+            anchorCandidates = placeLookup.search(anchorQuery.get(), null, regionHint);
+        } catch (RuntimeException e) {
+            return Optional.empty();
+        }
+
+        // 토큰별로 본다 - LocationIQ displayName은 "중리동, 대덕구, 대전광역시"처럼 작은 단위부터 거꾸로
+        // 오므로 "대덕구 중리동" 통째 포함 비교는 항상 실패한다(2026-11-04 발견, 토큰 1개면 동작 동일).
+        List<String> tokens = List.of(anchorQuery.get().split("\\s+"));
+        return anchorCandidates.stream()
+                .filter(c -> tokens.stream().allMatch(t -> containsIgnoreCase(c.displayName(), t)))
+                .findFirst();
+    }
+
+    /**
+     * 지점명 없는 개인 가게(2026-11-04, "오문창순대국밥" 실측) - OSM(LocationIQ)엔 동네 개인 식당이
+     * 거의 없어서 이름검색이 0건이면 그대로 NO_PLACE였다. 공공상가정보엔 소상공인 업소가 등록돼 있으니,
+     * {@link #resolveViaAnchor}와 같은 방식(regionHint 기준점 → 반경 상가 → 상호명 매칭)으로 찾는다.
+     * 1건이면 확정, 2~3건이면 되묻기, 0건이거나 상한 초과면 빈 값을 반환해 기존 ①~④ 흐름으로 폴백한다.
+     * <p>
+     * 기준점은 VWorld 상호명 검색을 먼저 쓴다 - regionHint가 구 단위("대전 대덕구")면 구청 좌표가 기준점이
+     * 돼서 가게가 반경(1km) 밖이었다(오문창 실측 ~1.7km). VWorld는 "오문창순대국밥"으로 그 가게 좌표를
+     * 정확히 준다. 못 찾으면 regionHint 기준점으로 폴백. VWorld가 동명 다른 지역 가게를 줘도(예: "오일내"
+     * → 구미) {@link #filterStoresByRegion}에서 걸러진다.
+     * ponytail: 둘 다 못 잡으면(VWorld 미등록 + regionHint 시·도뿐) 여기선 못 찾는다.
+     */
+    private Optional<Result> resolveViaRegionStores(String candidateId, String name, String regionHint) {
+        Optional<PlaceSearchClient.PlaceSearchResult> vworldAnchor;
+        try {
+            vworldAnchor = franchiseAnchorLookup.findAnchor(name);
+        } catch (RuntimeException e) {
+            vworldAnchor = Optional.empty();
+        }
+        Optional<Result> viaVWorld = vworldAnchor.flatMap(a ->
+                matchStoresAround(candidateId, name, regionHint, a, VWORLD_ANCHOR_RADIUS_METERS));
+        if (viaVWorld.isPresent()) {
+            return viaVWorld;
+        }
+        return findRegionAnchor(regionHint).flatMap(a ->
+                matchStoresAround(candidateId, name, regionHint, a, franchiseAnchorRadiusMeters));
+    }
+
+    private Optional<Result> matchStoresAround(String candidateId, String name, String regionHint,
+                                               PlaceSearchClient.PlaceSearchResult anchor, int radiusMeters) {
+        List<DataportalStoreClient.StoreResult> nearby;
+        try {
+            nearby = nearbyStores(name, anchor.lon(), anchor.lat(), radiusMeters);
+        } catch (RuntimeException e) {
+            return Optional.empty();
+        }
+
+        List<DataportalStoreClient.StoreResult> matches = filterStoresByRegion(regionHint, nearby).stream()
+                .filter(s -> matchesBrand(s.bizesNm(), name))
+                .toList();
+        if (matches.isEmpty() || matches.size() > MAX_CONFIRMATION_CANDIDATES) {
+            return Optional.empty();
+        }
+        return Optional.of(buildResult(candidateId, name, null, matches));
     }
 
     /**

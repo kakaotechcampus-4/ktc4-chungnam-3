@@ -1,0 +1,29 @@
+meta {
+  name: RECALL-01 이벤트 전 DB 기록 없음 - 200
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{observerUrl}}/executions/{{recallEventId}}?installationId={{recallInstallationA}}&placeId={{recallPlaceId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{observerSecret}}
+}
+
+script:pre-request {
+  if (!bru.getVar("recallEventId")) { throw new Error("컬렉션을 처음부터 실행하세요: recallEventId가 없습니다."); }
+  if (!bru.getVar("recallInstallationA")) { throw new Error("컬렉션을 처음부터 실행하세요: recallInstallationA가 없습니다."); }
+  if (!bru.getVar("recallPlaceId")) { throw new Error("컬렉션을 처음부터 실행하세요: recallPlaceId가 없습니다."); }
+}
+
+tests {
+  test("동일 회원·장소·이벤트의 기존 실행 없음", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.executions).to.be.an("array").with.lengthOf(0);
+  });
+}
+

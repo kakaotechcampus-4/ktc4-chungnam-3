@@ -1,0 +1,35 @@
+meta {
+  name: DEVICE-13 입력 거절 후 정상 등록 접수 - 204
+  type: http
+  seq: 13
+}
+
+put {
+  url: {{baseUrl}}/api/devices/fcm-token
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {"fcmToken":"{{deviceFcmToken}}"}
+}
+
+script:pre-request {
+  if (!bru.getVar("sessionToken")) { throw new Error("먼저 02-auth-session의 게스트 로그인을 실행하세요. 컬렉션 전체 실행을 권장합니다."); }
+  if (!bru.getVar("deviceFcmToken")) { throw new Error("03-device의 08-register부터 실행하세요."); }
+}
+
+tests {
+  test("HTTP 204 및 빈 응답", function () {
+    expect(res.status).to.equal(204);
+    expect(res.body).to.be.oneOf(["", null, undefined]);
+  });
+  if (res.status === 204) {
+    ["deviceFcmToken", "deviceNextFcmToken", "deviceBoundaryFcmToken", "deviceTooLongFcmToken"].forEach(function (key) { bru.deleteVar(key); });
+  }
+}
+

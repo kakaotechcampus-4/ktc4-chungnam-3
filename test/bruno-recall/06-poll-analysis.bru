@@ -1,0 +1,41 @@
+meta {
+  name: RECALL-SETUP-06 분석 완료 대기 - 200
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves/{{recallSaveId}}
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("recallSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: recallSessionA가 없습니다."); }
+  if (!bru.getVar("recallSaveId")) { throw new Error("컬렉션을 처음부터 실행하세요: recallSaveId가 없습니다."); }
+  if (!bru.getVar("recallAnalysisDeadline")) { throw new Error("컬렉션을 처음부터 실행하세요: recallAnalysisDeadline가 없습니다."); }
+}
+
+script:post-response {
+  bru.setVar("recallAnalysisWaiting", false);
+  if (res.status === 200 && ["PENDING","ANALYZING"].includes(res.body.analysisStatus) && Date.now() < bru.getVar("recallAnalysisDeadline")) {
+    bru.setVar("recallAnalysisWaiting", true);
+    await bru.sleep(Math.max(1, Math.min(Number(bru.getEnvVar("pollIntervalMs")), bru.getVar("recallAnalysisDeadline") - Date.now())));
+    bru.runner.setNextRequest("RECALL-SETUP-06 분석 완료 대기 - 200");
+  } else if (res.status !== 200 || res.body.analysisStatus !== "SUCCESS") {
+    bru.runner.setNextRequest("RECALL-CLEANUP-01 저장 삭제 - 204");
+  }
+}
+
+tests {
+  test("분석 응답", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.personalSaveId).to.equal(bru.getVar("recallSaveId"));
+  });
+  if (!bru.getVar("recallAnalysisWaiting")) {
+    test("기한 내 SUCCESS 분석 결과", function () {
+      expect(res.body.analysisStatus, "분석 실패 또는 시간 초과: " + res.body.analysisFailureCode).to.equal("SUCCESS");
+    });
+  }
+}
+

@@ -1,0 +1,36 @@
+meta {
+  name: GEO-SETUP-10 회원 A 위치 재동의 - 200
+  type: http
+  seq: 31
+}
+
+put {
+  url: {{baseUrl}}/api/me/consents/LOCATION_BASED_SERVICE
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "agreed": true,
+    "termsVersion": "{{geoTermsA}}"
+  }
+}
+
+script:pre-request {
+  if (!bru.getVar("geoSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: geoSessionA가 없습니다."); }
+  if (!bru.getVar("geoTermsA")) { throw new Error("컬렉션을 처음부터 실행하세요: geoTermsA가 없습니다."); }
+}
+
+tests {
+  test("위치 동의 부여", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.agreed).to.equal(true);
+    expect(res.body.termsVersion).to.equal(bru.getVar("geoTermsA"));
+    expect(res.body.withdrawnAt).to.equal(null);
+  });
+}

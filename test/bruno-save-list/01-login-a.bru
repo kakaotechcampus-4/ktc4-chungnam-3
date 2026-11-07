@@ -1,0 +1,53 @@
+meta {
+  name: LIST-01 회원 A 로그인 - 200
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/auth/guest
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {"installationId":"{{listInstallationA}}"}
+}
+
+script:pre-request {
+  ["listSessionA","listSessionB","listSavesA","listSaveB","listCursorA","listPageOneIds","listPageTwoIds","listWalkCursor","listWalkIds","listWalkVisits","listWalkDone"].forEach(function (key) { bru.deleteVar(key); });
+  const ids = [];
+  [1,2,3].forEach(function (slot) {
+    const value = bru.getEnvVar("shortsUrl" + slot) || "";
+    const match = /^https?:\/\/(?:www\.|m\.)?youtube\.com\/shorts\/([A-Za-z0-9_-]{11})\/?(?:[?#].*)?$/.exec(value);
+    if (!match) { throw new Error("local 환경의 shortsUrl1·2·3에 서로 다른 공개 Shorts URL을 넣으세요."); }
+    ids.push(match[1]);
+    bru.setVar("listUrl" + slot, "https://www.youtube.com/shorts/" + match[1]);
+    bru.setVar("listVideo" + slot, match[1]);
+  });
+  if (new Set(ids).size !== 3) { throw new Error("서로 다른 영상 3개가 필요합니다. 같은 영상의 공유 URL만 바꾸면 안 됩니다."); }
+  ["maxPageSize","defaultPageSize","maxSummaryLength"].forEach(function (key) {
+    const value = Number(bru.getEnvVar(key));
+    if (!Number.isInteger(value) || value < 1 || value > 10000) { throw new Error(key + " 설정을 확인하세요."); }
+  });
+  if (Number(bru.getEnvVar("defaultPageSize")) < 3 || Number(bru.getEnvVar("maxPageSize")) < Number(bru.getEnvVar("defaultPageSize"))) {
+    throw new Error("이 3개 영상 시나리오는 기본 페이지 크기 3 이상, 최대 크기 >= 기본 크기가 필요합니다.");
+  }
+  bru.setVar("listSavesA", []);
+  bru.setVar("listWalkIds", []);
+  bru.setVar("listWalkVisits", 0);
+  bru.setVar("listInstallationA", require("uuid").v4());
+}
+
+tests {
+  test("새 A 세션", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.sessionToken).to.be.a("string").and.not.empty;
+    bru.setVar("listSessionA", res.body.sessionToken);
+  });
+}
+

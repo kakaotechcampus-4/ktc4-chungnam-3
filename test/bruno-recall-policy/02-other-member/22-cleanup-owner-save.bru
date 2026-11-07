@@ -1,0 +1,25 @@
+meta {
+  name: POL-OWNER-22 A의 저장 삭제 - 204
+  type: http
+  seq: 22
+}
+
+delete {
+  url: {{baseUrl}}/api/personal-saves/{{policyOwnerSaveId}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{policyOwnerSession}}
+}
+
+script:pre-request {
+  if (!bru.getVar("policyOwnerSession")) { throw new Error("이 폴더를 처음부터 실행하세요: policyOwnerSession가 없습니다."); }
+  if (!bru.getVar("policyOwnerSaveId")) { throw new Error("이 폴더를 처음부터 실행하세요: policyOwnerSaveId가 없습니다."); }
+}
+
+tests {
+  test("HTTP 204", function () { expect(res.status).to.equal(204); });
+}
+

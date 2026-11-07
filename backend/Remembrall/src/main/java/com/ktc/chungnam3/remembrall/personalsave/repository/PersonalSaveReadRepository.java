@@ -33,7 +33,14 @@ public class PersonalSaveReadRepository {
         String sql = """
                 SELECT ps.id, ps.content_id, c.video_id, c.title, left(c.summary, :summaryLength) AS summary,
                        c.analysis_status, ps.saved_at,
-                       (SELECT count(*) FROM content_place cp WHERE cp.content_id = c.id) AS place_count
+                       CASE WHEN c.analysis_status IN ('PARTIAL', 'FAILED')
+                            THEN c.last_analysis_error_code END AS failure_code,
+                       (SELECT count(*) FROM content_place cp WHERE cp.content_id = c.id) AS place_count,
+                       (SELECT p.name FROM content_place cp JOIN place p ON p.id = cp.place_id
+                         WHERE cp.content_id = c.id
+                         ORDER BY cp.appearance_order NULLS LAST, p.id LIMIT 1) AS representative_place_name,
+                       (SELECT count(*) FROM confirm_candidate cc
+                         WHERE cc.content_id = c.id AND cc.status = 'PENDING') AS pending_confirm_count
                   FROM personal_save ps
                   JOIN content c ON c.id = ps.content_id
                  WHERE ps.member_id = :memberId
@@ -41,8 +48,9 @@ public class PersonalSaveReadRepository {
         return jdbc.query(sql, parameters, (row, index) -> new PersonalSaveResponse.Item(
                 row.getObject("id", UUID.class), row.getObject("content_id", UUID.class),
                 row.getString("video_id"), row.getString("title"), row.getString("summary"),
-                ContentAnalysisStatus.valueOf(row.getString("analysis_status")), row.getLong("place_count"),
-                row.getTimestamp("saved_at").toInstant()));
+                ContentAnalysisStatus.valueOf(row.getString("analysis_status")), row.getString("failure_code"),
+                row.getLong("place_count"), row.getString("representative_place_name"),
+                row.getLong("pending_confirm_count"), row.getTimestamp("saved_at").toInstant()));
     }
 
     public Optional<PersonalSaveResponse.Detail> findOwnedDetail(UUID memberId, UUID personalSaveId) {
@@ -61,6 +69,24 @@ public class PersonalSaveReadRepository {
                         row.getString("title"), row.getString("summary"), row.getString("category"),
                         ContentAnalysisStatus.valueOf(row.getString("analysis_status")), row.getString("failure_code"),
                         row.getTimestamp("saved_at").toInstant(), List.of(), List.of())).stream().findFirst();
+    }
+
+    public List<PersonalSaveResponse.PlacePin> findAllPlaces(UUID memberId) {
+        return jdbc.query("""
+                SELECT p.id, p.name, p.address, p.latitude, p.longitude, ps.id AS personal_save_id,
+                       c.video_id, ps.saved_at
+                  FROM personal_save ps
+                  JOIN content c ON c.id = ps.content_id
+                  JOIN content_place cp ON cp.content_id = ps.content_id
+                  JOIN place p ON p.id = cp.place_id
+                 WHERE ps.member_id = :memberId
+                 ORDER BY ps.saved_at DESC
+                """, new MapSqlParameterSource("memberId", memberId),
+                (row, index) -> new PersonalSaveResponse.PlacePin(
+                        row.getObject("id", UUID.class), row.getString("name"), row.getString("address"),
+                        row.getDouble("latitude"), row.getDouble("longitude"),
+                        row.getObject("personal_save_id", UUID.class), row.getString("video_id"),
+                        row.getTimestamp("saved_at").toInstant()));
     }
 
     public List<PersonalSaveResponse.Place> findPlaces(UUID contentId) {

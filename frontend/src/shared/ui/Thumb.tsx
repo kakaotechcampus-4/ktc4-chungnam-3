@@ -13,6 +13,8 @@ export type ThumbFade = keyof typeof fade;
 type Props = {
     fade: ThumbFade;
     uri?: string;
+    // 앱에 번들한 이미지(require). 있으면 uri 대신 쓴다. 네트워크 없이 바로 그려진다(00a 일러스트).
+    image?: number;
     showSource?: boolean;
     style?: StyleProp<ViewStyle>;
 };
@@ -20,17 +22,18 @@ type Props = {
 export default function Thumb({
     fade: level,
     uri,
+    image,
     showSource = true,
     style,
 }: Props) {
     const [failed, setFailed] = useState(false);
-    useEffect(() => setFailed(false), [uri]);
+    useEffect(() => setFailed(false), [uri, image]);
 
     return (
         <View style={[styles.frame, style]}>
-            {uri != null && !failed && (
+            {(image != null || uri != null) && !failed && (
                 <Image
-                    source={{ uri }}
+                    source={image ?? { uri }}
                     style={StyleSheet.absoluteFill}
                     contentFit="cover"
                     onError={() => setFailed(true)}

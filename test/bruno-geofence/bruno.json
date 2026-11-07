@@ -1,0 +1,10 @@
+{
+  "version": "1",
+  "name": "REMEMBRALL 지오펜스 API",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git",
+    "reports"
+  ]
+}

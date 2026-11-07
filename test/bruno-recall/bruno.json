@@ -1,0 +1,6 @@
+{
+  "version": "1",
+  "name": "REMEMBRALL 위치 이벤트와 알림 실제 흐름",
+  "type": "collection",
+  "ignore": ["node_modules", ".git", "reports"]
+}

@@ -1,0 +1,24 @@
+meta {
+  name: LIST-03 A 신규 빈 목록 - 200
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("listSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: listSessionA가 없습니다."); }
+}
+
+tests {
+  test("빈 목록과 마지막 커서", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.items).to.be.an("array").with.lengthOf(0);
+    expect(res.body.nextCursor).to.equal(null);
+  });
+}
+

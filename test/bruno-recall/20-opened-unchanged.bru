@@ -1,0 +1,26 @@
+meta {
+  name: RECALL-12 반복 열람 시각 유지 - 200
+  type: http
+  seq: 20
+}
+
+get {
+  url: {{baseUrl}}/api/notifications/{{recallNotificationId}}
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("recallNotificationId")) { throw new Error("컬렉션을 처음부터 실행하세요: recallNotificationId가 없습니다."); }
+  if (!bru.getVar("recallSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: recallSessionA가 없습니다."); }
+  if (!bru.getVar("recallOpenedAt")) { throw new Error("컬렉션을 처음부터 실행하세요: recallOpenedAt가 없습니다."); }
+}
+
+tests {
+  test("최초 openedAt 유지", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.notificationId).to.equal(bru.getVar("recallNotificationId"));
+    expect(res.body.openedAt).to.equal(bru.getVar("recallOpenedAt"));
+  });
+}
+

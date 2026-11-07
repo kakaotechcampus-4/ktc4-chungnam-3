@@ -1,0 +1,32 @@
+meta {
+  name: DEVICE-10 다른 토큰으로 갱신 접수 - 204
+  type: http
+  seq: 10
+}
+
+put {
+  url: {{baseUrl}}/api/devices/fcm-token
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {"fcmToken":"{{deviceNextFcmToken}}"}
+}
+
+script:pre-request {
+  if (!bru.getVar("sessionToken")) { throw new Error("먼저 02-auth-session의 게스트 로그인을 실행하세요. 컬렉션 전체 실행을 권장합니다."); }
+  if (!bru.getVar("deviceNextFcmToken")) { throw new Error("03-device의 08-register부터 실행하세요."); }
+}
+
+tests {
+  test("HTTP 204 및 빈 응답", function () {
+    expect(res.status).to.equal(204);
+    expect(res.body).to.be.oneOf(["", null, undefined]);
+  });
+}
+

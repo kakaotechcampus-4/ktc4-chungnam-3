@@ -2,6 +2,7 @@ package com.ktc.chungnam3.remembrall.save.youtube;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
@@ -26,9 +27,24 @@ public class YoutubeMetadataClient {
     private final RestClient restClient;
     private final String apiKey;
 
-    public YoutubeMetadataClient(@Value("${youtube.api.key}") String apiKey) {
+    /**
+     * connect/read 타임아웃을 명시적으로 건다(2026-11-02 추가) - 이전엔 둘 다 무제한이라 YouTube가
+     * 멈추면 분석 스레드가 끝없이 블로킹됐다(LocationIQ/공공데이터 클라이언트는 2026-10-01에 이미
+     * 고쳐졌는데 이 클라이언트만 빠져 있었음). 기본값은 같은 REST 직접 호출 패턴인 LocationIQ
+     * ({@link com.ktc.chungnam3.remembrall.save.place.PlaceSearchClient})와 동일하게 맞췄다.
+     */
+    public YoutubeMetadataClient(
+            @Value("${youtube.api.key}") String apiKey,
+            @Value("${youtube.connect-timeout-ms:2000}") int connectTimeoutMs,
+            @Value("${youtube.read-timeout-ms:3000}") int readTimeoutMs) {
         this.apiKey = apiKey;
-        this.restClient = RestClient.create(BASE_URL);
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(connectTimeoutMs);
+        requestFactory.setReadTimeout(readTimeoutMs);
+        this.restClient = RestClient.builder()
+                .baseUrl(BASE_URL)
+                .requestFactory(requestFactory)
+                .build();
     }
 
     public record VideoInfo(String videoId, String title, String description,

@@ -13,7 +13,8 @@ import java.util.Objects;
 public record RecallProperties(
         @DefaultValue("30m") Duration maxEventAge,
         @DefaultValue("2h") Duration memberCooldown,
-        @DefaultValue("30") @Positive double maxCourseWalkingMinutes
+        @DefaultValue("30") @Positive double maxCourseWalkingMinutes,
+        @DefaultValue("1") int maxEventRetries
 ) {
     public RecallProperties {
         Objects.requireNonNull(maxEventAge, "maxEventAge");
@@ -23,6 +24,9 @@ public record RecallProperties(
         }
         if (memberCooldown.isNegative()) {
             throw new IllegalArgumentException("memberCooldown must not be negative");
+        }
+        if (maxEventRetries < 0) {
+            throw new IllegalArgumentException("maxEventRetries must not be negative");
         }
         if (!Double.isFinite(maxCourseWalkingMinutes) || maxCourseWalkingMinutes <= 0) {
             throw new IllegalArgumentException("maxCourseWalkingMinutes must be finite and positive");

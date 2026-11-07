@@ -1,0 +1,24 @@
+meta {
+  name: GEO-01 위치 미동의 - 200
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/geofences?latitude=37.5&longitude=127&platform=ANDROID
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("geoSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: geoSessionA가 없습니다."); }
+}
+
+tests {
+  test("HTTP 200 및 등록 대상 없음", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.regions).to.be.an("array").with.lengthOf(0);
+    expect(res.body.places).to.be.an("array").with.lengthOf(0);
+    expect(res.body.resync).to.equal(null);
+  });
+}

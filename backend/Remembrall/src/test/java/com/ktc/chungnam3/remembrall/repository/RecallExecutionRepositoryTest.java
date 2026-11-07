@@ -77,7 +77,7 @@ class RecallExecutionRepositoryTest {
                 """, String.class)).containsExactly(
                 "id", "trigger_id", "trigger_event_id", "status", "result", "proposal_type", "proposal_payload",
                 "decision_summary", "failure_code", "agent_version", "event_occurred_at", "started_at",
-                "finished_at", "created_at", "updated_at");
+                "finished_at", "created_at", "updated_at", "retry_count");
         assertThat(jdbcTemplate.queryForList("""
                 SELECT indexname FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'recall_execution'
                 """, String.class)).containsExactlyInAnyOrder(
@@ -169,5 +169,35 @@ class RecallExecutionRepositoryTest {
         UUID id = UUID.randomUUID();
         repository.insertPendingIfAbsent(id, triggerId, UUID.randomUUID(), "stub-v1", NOW, NOW);
         return id;
+    }
+
+    @Test
+    void retryResetsAttemptOutputAndHonorsZeroAndCustomLimits() {
+        UUID id = insertPending();
+        jdbcTemplate.update("""
+                UPDATE recall_execution SET status='TIMED_OUT', result='PROPOSE', proposal_type='PLACE',
+                    proposal_payload='{"items":[]}'::jsonb, decision_summary='old', failure_code='old',
+                    started_at=CURRENT_TIMESTAMP, finished_at=CURRENT_TIMESTAMP WHERE id=?
+                """, id);
+        assertThat(repository.retryFailed(id, 0, "new-agent", NOW)).isZero();
+        assertThat(repository.retryFailed(id, 2, "new-agent", NOW)).isOne();
+        var pending = repository.findById(id).orElseThrow();
+        assertThat(pending.getRetryCount()).isEqualTo(1);
+        assertThat(pending.getStatus()).isEqualTo(RecallExecutionStatus.PENDING);
+        assertThat(pending.getAgentVersion()).isEqualTo("new-agent");
+        assertThat(pending.getCreatedAt()).isEqualTo(NOW);
+        assertThat(pending.getResult()).isNull();
+        assertThat(pending.getProposalType()).isNull();
+        assertThat(pending.getProposalPayload()).isNull();
+        assertThat(pending.getDecisionSummary()).isNull();
+        assertThat(pending.getFailureCode()).isNull();
+        assertThat(pending.getStartedAt()).isNull();
+        assertThat(pending.getFinishedAt()).isNull();
+        assertThat(repository.retryFailed(id, 2, "new-agent", NOW)).isZero();
+        jdbcTemplate.update("UPDATE recall_execution SET status='FAILED' WHERE id=?", id);
+        assertThat(repository.retryFailed(id, 2, "new-agent", NOW)).isOne();
+        jdbcTemplate.update("UPDATE recall_execution SET status='FAILED' WHERE id=?", id);
+        assertThat(repository.retryFailed(id, 2, "new-agent", NOW)).isZero();
+        assertThat(repository.findById(id).orElseThrow().getRetryCount()).isEqualTo(2);
     }
 }

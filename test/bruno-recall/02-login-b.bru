@@ -1,0 +1,33 @@
+meta {
+  name: RECALL-SETUP-02 회원 B 로그인 - 200
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/auth/guest
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {"installationId":"{{recallInstallationB}}"}
+}
+
+script:pre-request {
+  if (!bru.getVar("recallSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: recallSessionA가 없습니다."); }
+  bru.setVar("recallInstallationB", require("uuid").v4());
+}
+
+tests {
+  test("다른 회원 세션", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.sessionToken).to.be.a("string").and.not.empty;
+    bru.setVar("recallSessionB", res.body.sessionToken);
+  });
+}
+

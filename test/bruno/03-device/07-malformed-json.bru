@@ -1,0 +1,32 @@
+meta {
+  name: DEVICE-07 깨진 JSON - 400
+  type: http
+  seq: 7
+}
+
+put {
+  url: {{baseUrl}}/api/devices/fcm-token
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {"fcmToken":
+}
+
+script:pre-request {
+  if (!bru.getVar("sessionToken")) { throw new Error("먼저 02-auth-session의 게스트 로그인을 실행하세요. 컬렉션 전체 실행을 권장합니다."); }
+}
+
+tests {
+  test("HTTP 400 및 INVALID_REQUEST", function () {
+    expect(res.status).to.equal(400);
+    expect(res.body.code).to.equal("INVALID_REQUEST");
+    expect(res.body.message).to.be.a("string").and.not.empty;
+  });
+}
+

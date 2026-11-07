@@ -1,4 +1,5 @@
-// 저장물 카드. Figma C/Card/Memory.
+// 저장물 카드. Figma C/Card/Memory. meta 는 도보 시간이다(카테고리는 응답에 없다).
+// 태그 줄은 응답에 태그가 없어 그리지 않는다. 요약이 없으면 그 줄을 숨긴다.
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import Thumb, { type ThumbFade } from "../../../shared/ui/Thumb";
@@ -14,8 +15,7 @@ export type MemoryCardProps = {
     time: string;
     place: string;
     meta: string;
-    summary: string;
-    tags: readonly string[];
+    summary?: string;
     thumbUri?: string;
     fade: ThumbFade;
     onPress?: () => void;
@@ -26,7 +26,6 @@ export default function MemoryCard({
     place,
     meta,
     summary,
-    tags,
     thumbUri,
     fade,
     onPress,
@@ -51,15 +50,14 @@ export default function MemoryCard({
                 <Text numberOfLines={1} style={styles.meta}>
                     {meta}
                 </Text>
-                <Text
-                    numberOfLines={metrics.memoryCard.summaryMaxLines}
-                    style={styles.summary}
-                >
-                    {summary}
-                </Text>
-                <Text numberOfLines={1} style={styles.meta}>
-                    {tags.map((tag) => `#${tag}`).join("  ")}
-                </Text>
+                {summary != null && (
+                    <Text
+                        numberOfLines={metrics.memoryCard.summaryMaxLines}
+                        style={styles.summary}
+                    >
+                        {summary}
+                    </Text>
+                )}
             </View>
         </Pressable>
     );

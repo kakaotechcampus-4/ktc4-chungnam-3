@@ -29,6 +29,7 @@ import com.ktc.chungnam3.remembrall.personalsave.dto.PersonalSaveResponse;
 import com.ktc.chungnam3.remembrall.personalsave.repository.PersonalSaveReadRepository;
 import com.ktc.chungnam3.remembrall.personalsave.service.PersonalSaveAnalysisService;
 import com.ktc.chungnam3.remembrall.personalsave.service.PersonalSaveService;
+import com.ktc.chungnam3.remembrall.personalsave.service.StaleAnalysisRecoveryScheduler;
 import com.ktc.chungnam3.remembrall.repository.ConfirmCandidateRepository;
 import com.ktc.chungnam3.remembrall.repository.ContentPlaceRepository;
 import com.ktc.chungnam3.remembrall.repository.ContentRepository;
@@ -132,6 +133,7 @@ class PersonalSaveIntegrationTest {
     @Autowired private ContentPersistenceService persistence;
     @Autowired private ContentRepository contents;
     @Autowired private PersonalSaveService saves;
+    @Autowired private PersonalSaveAnalysisService analysis;
     @Autowired private PlatformTransactionManager transactionManager;
     @Autowired private PersonalSaveProperties properties;
     @Autowired @Qualifier("personalSaveAnalysisExecutor") private ThreadPoolTaskExecutor executor;
@@ -420,6 +422,25 @@ class PersonalSaveIntegrationTest {
     }
 
     @Test
+    void listIncludesFailureCodeRepresentativePlaceNameAndPendingConfirmCount() throws Exception {
+        UUID contentId = content("list-extra", "FAILED");
+        jdbc.update("UPDATE content SET last_analysis_error_code = 'EXTRACTION_API_ERROR' WHERE id = ?", contentId);
+        UUID saveId = savedRow(memberId, contentId, NOW, UUID.randomUUID());
+        link(contentId, "rep");
+        confirmCandidate(contentId, "p1", "PENDING", question("질문1", "option-1"));
+        confirmCandidate(contentId, "p2", "PENDING", question("질문2", "option-2"));
+        confirmCandidate(contentId, "p3", "ANSWERED", question("질문3", "option-3"));
+
+        var page = saves.list(memberId, null, null);
+
+        var item = page.items().getFirst();
+        assertThat(item.personalSaveId()).isEqualTo(saveId);
+        assertThat(item.analysisFailureCode()).isEqualTo("EXTRACTION_API_ERROR");
+        assertThat(item.representativePlaceName()).isEqualTo("장소 rep");
+        assertThat(item.pendingConfirmCount()).isEqualTo(2);
+    }
+
+    @Test
     void cursorPaginationHasNoGapsOrDuplicatesWithTimestampAndUuidTies() throws Exception {
         var tiedIds = List.of("80000000-0000-0000-0000-000000000000", "00000000-0000-0000-0000-000000000001",
                 "7fffffff-ffff-ffff-ffff-ffffffffffff", "00000000-0000-0000-0000-000000000002");
@@ -476,6 +497,69 @@ class PersonalSaveIntegrationTest {
                 .toInstant()).isEqualTo(NOW);
     }
 
+    @Test
+    void failStaleAnalyzingOnlyFlipsAnalyzingRowsOlderThanTheThreshold() {
+        UUID stale = content("stale", "ANALYZING");
+        jdbc.update("UPDATE content SET analysis_started_at = ? WHERE id = ?", Timestamp.from(NOW.minusSeconds(400)), stale);
+        UUID fresh = content("fresh", "ANALYZING");
+        jdbc.update("UPDATE content SET analysis_started_at = ? WHERE id = ?", Timestamp.from(NOW.minusSeconds(100)), fresh);
+        UUID alreadyFailed = content("already-failed", "FAILED");
+        jdbc.update("UPDATE content SET analysis_started_at = ? WHERE id = ?", Timestamp.from(NOW.minusSeconds(400)), alreadyFailed);
+
+        var updated = new TransactionTemplate(transactionManager)
+                .execute(transaction -> contents.failStaleAnalyzing(NOW.minusSeconds(300), NOW));
+
+        assertThat(updated).isEqualTo(1);
+        assertThat(status(stale)).isEqualTo("FAILED");
+        assertThat(jdbc.queryForObject("SELECT last_analysis_error_code FROM content WHERE id = ?", String.class, stale))
+                .isEqualTo("EXTRACTION_API_ERROR");
+        assertThat(status(fresh)).isEqualTo("ANALYZING");
+        assertThat(status(alreadyFailed)).isEqualTo("FAILED");
+    }
+
+    @Test
+    void staleRecoverySkipsSavesStillWaitingInTheQueueButFailsAbandonedOnes() throws Exception {
+        // 멘토 리뷰(2026-11-07): 분석 스레드가 바쁜 동안 대기열에서 5분 넘게 기다린 저장이 시작도 전에 FAILED가 됐다.
+        var started = new CountDownLatch(1);
+        var release = gate();
+        doAnswer(call -> {
+            started.countDown();
+            assertThat(release.await(20, TimeUnit.SECONDS)).isTrue();
+            persistence.applyOutcome(call.getArgument(0), success(List.of()));
+            return null;
+        }).when(pipeline).saveAndPersist(any(), any());
+        post("running", token);
+        assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+        var queued = saved(post("queued", token));
+        UUID abandoned = content("abandoned", "ANALYZING");
+        jdbc.update("UPDATE content SET analysis_started_at = ? WHERE id = ?", Timestamp.from(NOW), abandoned);
+        clock.now.set(NOW.plusSeconds(360));
+
+        var scheduler = new StaleAnalysisRecoveryScheduler(contents, analysis, properties, clock);
+        new TransactionTemplate(transactionManager).executeWithoutResult(transaction -> scheduler.failStaleAnalyses());
+
+        assertThat(status(queued.contentId())).isEqualTo("ANALYZING");
+        assertThat(status(abandoned)).isEqualTo("FAILED");
+        release.countDown();
+        await(() -> status(queued.contentId()).equals("SUCCESS"));
+    }
+
+    @Test
+    void representativePlaceIsTheOneThatAppearedFirstInTheVideo() {
+        // 멘토 리뷰(2026-11-07): 예전엔 ORDER BY p.id(무작위 UUID)라 영상 순서와 무관한 곳이 대표가 됐다.
+        // 영상 순서(c, a, b)를 저장 순서(verificationPlaceId 정렬: a, b, c)와 다르게 둔다.
+        UUID contentId = content("appearance", "ANALYZING");
+        savedRow(memberId, contentId, NOW, UUID.randomUUID());
+
+        persistence.applyOutcome(contentId, success(List.of(place("c"), place("a"), place("b"))));
+
+        assertThat(jdbc.queryForList("""
+                SELECT p.name FROM content_place cp JOIN place p ON p.id = cp.place_id
+                 WHERE cp.content_id = ? ORDER BY cp.appearance_order
+                """, String.class, contentId)).containsExactly("장소 c", "장소 a", "장소 b");
+        assertThat(saves.list(memberId, null, null).items().getFirst().representativePlaceName()).isEqualTo("장소 c");
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"?size=0", "?size=-1", "?size=101", "?size=abc", "?cursor=bad", "?cursor="})
     void invalidPaginationReturns400(String query) throws Exception {
@@ -509,6 +593,23 @@ class PersonalSaveIntegrationTest {
                 "서울시", 37, 127, "영상 장소 소개"));
         assertError(request("GET", "/" + saveId, session(member()), null), 404, ErrorCode.NOT_FOUND);
         assertError(request("GET", "/" + UUID.randomUUID(), token, null), 404, ErrorCode.NOT_FOUND);
+    }
+
+    @Test
+    void placesReturnsAllOwnedPlacesWithPersonalSaveIdAndExcludesOtherMembers() throws Exception {
+        UUID contentId = content("places", "SUCCESS");
+        UUID saveId = savedRow(memberId, contentId, NOW, UUID.randomUUID());
+        UUID placeId = link(contentId, "pin");
+        UUID otherContentId = content("other-places", "SUCCESS");
+        savedRow(member(), otherContentId, NOW, UUID.randomUUID());
+        link(otherContentId, "other-pin");
+
+        var response = request("GET", "/places", token, null);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        var pins = List.of(mapper.readValue(response.body(), PersonalSaveResponse.PlacePin[].class));
+        assertThat(pins).containsExactly(new PersonalSaveResponse.PlacePin(placeId, "장소 pin", "서울시", 37, 127, saveId,
+                "places", NOW));
     }
 
     @Test

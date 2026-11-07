@@ -1,0 +1,36 @@
+meta {
+  name: RECALL-SETUP-01 회원 A 로그인 - 200
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/auth/guest
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {"installationId":"{{recallInstallationA}}"}
+}
+
+script:pre-request {
+  if (!bru.getEnvVar("observerUrl") || !bru.getEnvVar("observerSecret")) { throw new Error("node test/bruno-recall/run.mjs로 실행하세요. DB 확인 도구가 필요합니다."); }
+  ["recallSessionA","recallSessionB","recallSaveId","recallPlaceId","recallNotificationId","recallExecutionId","recallOpenedAt","recallObserved"].forEach(function (key) { bru.deleteVar(key); });
+  bru.setVar("recallInstallationA", require("uuid").v4());
+  bru.setVar("recallEventId", require("uuid").v4());
+}
+
+tests {
+  test("새 게스트 세션", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.sessionToken).to.be.a("string").and.not.empty;
+    expect(Date.parse(res.body.sessionExpiresAt)).to.be.above(Date.now());
+    bru.setVar("recallSessionA", res.body.sessionToken);
+  });
+}
+

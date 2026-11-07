@@ -1,0 +1,25 @@
+meta {
+  name: LIVE-SAVE-07 타인 삭제 요청 후 소유자 조회 - 200
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves/{{livePersonalSaveId}}
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("liveSessionTokenA")) { throw new Error("컬렉션을 처음부터 실행하세요: liveSessionTokenA가 없습니다."); }
+  if (!bru.getVar("livePersonalSaveId")) { throw new Error("컬렉션을 처음부터 실행하세요: livePersonalSaveId가 없습니다."); }
+}
+
+tests {
+  test("소유자의 저장물 유지", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.personalSaveId).to.equal(bru.getVar("livePersonalSaveId"));
+  expect(res.body.contentId).to.equal(bru.getVar("liveContentId"));
+    expect(res.body.videoId).to.equal(bru.getVar("liveVideoId"));
+  });
+}

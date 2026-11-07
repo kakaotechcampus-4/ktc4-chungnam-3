@@ -6,6 +6,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.validation.annotation.Validated;
 
+import java.time.Duration;
+
 @Validated
 @ConfigurationProperties(prefix = "personal-save")
 public record PersonalSaveProperties(
@@ -13,7 +15,8 @@ public record PersonalSaveProperties(
         @DefaultValue("100") @Min(1) int maxPageSize,
         @DefaultValue("200") @Min(1) int maxSummaryLength,
         @DefaultValue("2") @Min(1) int analysisConcurrency,
-        @DefaultValue("100") @Min(0) int analysisQueueCapacity
+        @DefaultValue("100") @Min(0) int analysisQueueCapacity,
+        @DefaultValue("5m") Duration staleAnalyzingTimeout
 ) {
     @AssertTrue(message = "default-page-size must not exceed max-page-size")
     public boolean isPageSizeValid() {

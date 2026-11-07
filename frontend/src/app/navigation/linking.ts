@@ -2,12 +2,15 @@
 import type { LinkingOptions } from "@react-navigation/native";
 import * as Linking from "expo-linking";
 
+import { parseDevShareUrl } from "../share/devShareLink";
 import { ROUTES, type RootStackParamList } from "./routes";
 
 // prefix 는 scheme 을 하드코딩하지 않는다. Expo Go 에서는 exp://…/--/ 가 된다.
 export function buildLinkingConfig(): LinkingOptions<RootStackParamList> {
     return {
         prefixes: [Linking.createURL("/")],
+        // 개발용 공유 주소는 화면 경로가 아니다. ShareReceiverHost 가 따로 받는다.
+        filter: (url) => parseDevShareUrl(url) == null,
         config: {
             // 딥링크로 콜드 스타트해도 Main 이 항상 아래에 깔리게 한다. 뒤로 가기 · popTo 의 목적지다.
             initialRouteName: ROUTES.Main,
@@ -20,13 +23,18 @@ export function buildLinkingConfig(): LinkingOptions<RootStackParamList> {
                     },
                 },
                 [ROUTES.Settings]: "settings",
-                [ROUTES.ContentDetail]: "detail/:placeId",
+                // 알림으로 여는 08 은 개발 · 확인용 주소다(실제 알림은 화면을 직접 연다).
+                [ROUTES.ContentDetail]: {
+                    path: "detail/:placeId",
+                    alias: ["notification/:notificationId"],
+                },
                 // 기존 경로는 그대로 Result 로 열린다. search 로 열어도 Result 가 아래에 깔린다.
                 [ROUTES.SaveResult]: {
                     initialRouteName: ROUTES.Result,
                     screens: {
-                        [ROUTES.Result]: "save-result/:resultId",
-                        [ROUTES.PlaceSearch]: "save-result/:resultId/search",
+                        [ROUTES.Result]: "save-result/:personalSaveId",
+                        [ROUTES.PlaceSearch]:
+                            "save-result/:personalSaveId/search",
                     },
                 },
             },

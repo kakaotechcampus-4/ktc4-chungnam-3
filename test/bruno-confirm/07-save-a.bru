@@ -1,0 +1,24 @@
+meta {
+  name: CONFIRM-SETUP A 영상 저장 - 201
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/personal-saves
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{confirmSessionA}}
+}
+
+body:json {
+  {"url":"{{confirmUrl}}"}
+}
+
+tests {
+test("서로 다른 개인 저장물, 동일 공용 콘텐츠", function () { expect(res.status).to.equal(201); expect(res.body.personalSaveId).to.be.a("string").and.not.empty; bru.setVar("confirmSaveA",res.body.personalSaveId); bru.setVar("confirmContent",res.body.contentId); bru.setVar("confirmDeadline",Date.now()+Number(bru.getEnvVar("analysisTimeoutMs"))); });
+}

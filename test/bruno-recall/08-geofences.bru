@@ -1,0 +1,28 @@
+meta {
+  name: RECALL-SETUP-08 저장 장소 지오펜스 - 200
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/geofences?latitude={{recallLatitude}}&longitude={{recallLongitude}}&platform=ANDROID
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("recallSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: recallSessionA가 없습니다."); }
+  if (!bru.getVar("recallPlaceId")) { throw new Error("컬렉션을 처음부터 실행하세요: recallPlaceId가 없습니다."); }
+}
+
+tests {
+  test("이벤트를 보낼 장소가 실제 등록 대상", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.places).to.be.an("array");
+    const place = res.body.places.find(function (item) { return item.placeId === bru.getVar("recallPlaceId"); });
+    expect(place).to.be.an("object");
+    expect(place.latitude).to.equal(bru.getVar("recallLatitude"));
+    expect(place.longitude).to.equal(bru.getVar("recallLongitude"));
+  });
+}
+

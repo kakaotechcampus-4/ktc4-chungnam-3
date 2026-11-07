@@ -1,0 +1,40 @@
+meta {
+  name: LIST-05 A 영상 1 저장 - 201
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/personal-saves
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {"url":"{{listUrl1}}"}
+}
+
+script:pre-request {
+  if (!bru.getVar("listSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: listSessionA가 없습니다."); }
+  if (!bru.getVar("listUrl1")) { throw new Error("컬렉션을 처음부터 실행하세요: listUrl1가 없습니다."); }
+}
+
+tests {
+  test("A의 서로 다른 개인 저장물", function () {
+    expect(res.status).to.equal(201);
+    expect(res.body.personalSaveId).to.match(/^[0-9a-f-]{36}$/i);
+    expect(res.body.contentId).to.match(/^[0-9a-f-]{36}$/i);
+    expect(Number.isFinite(Date.parse(res.body.savedAt))).to.equal(true);
+    const saved = bru.getVar("listSavesA");
+    expect(saved.map(function (row) { return row.personalSaveId; })).not.to.include(res.body.personalSaveId);
+    const row = { personalSaveId:res.body.personalSaveId, contentId:res.body.contentId, savedAt:res.body.savedAt, videoId:bru.getVar("listVideo1") };
+    saved.push(row);
+    bru.setVar("listSavesA", saved);
+    bru.setVar("listSaveA1", row.personalSaveId);
+  });
+}
+

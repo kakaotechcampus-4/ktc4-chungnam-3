@@ -1,0 +1,25 @@
+meta {
+  name: LIST-30 기준 저장물 삭제 후 기존 커서 사용 - 200
+  type: http
+  seq: 30
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves?size=2&cursor={{listCursorA}}
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("listSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: listSessionA가 없습니다."); }
+  if (!bru.getVar("listCursorA")) { throw new Error("컬렉션을 처음부터 실행하세요: listCursorA가 없습니다."); }
+}
+
+tests {
+  test("삭제한 기준 행 없이도 나머지 페이지 조회", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.items.map(function (item) { return item.personalSaveId; })).to.deep.equal([bru.getVar("listSaveA1")]);
+    expect(res.body.nextCursor).to.equal(null);
+  });
+}
+
