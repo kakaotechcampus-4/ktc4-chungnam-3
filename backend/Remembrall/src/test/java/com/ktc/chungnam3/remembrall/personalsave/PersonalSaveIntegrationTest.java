@@ -29,6 +29,7 @@ import com.ktc.chungnam3.remembrall.personalsave.dto.PersonalSaveResponse;
 import com.ktc.chungnam3.remembrall.personalsave.repository.PersonalSaveReadRepository;
 import com.ktc.chungnam3.remembrall.personalsave.service.PersonalSaveAnalysisService;
 import com.ktc.chungnam3.remembrall.personalsave.service.PersonalSaveService;
+import com.ktc.chungnam3.remembrall.personalsave.service.StaleAnalysisRecoveryScheduler;
 import com.ktc.chungnam3.remembrall.repository.ConfirmCandidateRepository;
 import com.ktc.chungnam3.remembrall.repository.ContentPlaceRepository;
 import com.ktc.chungnam3.remembrall.repository.ContentRepository;
@@ -132,6 +133,7 @@ class PersonalSaveIntegrationTest {
     @Autowired private ContentPersistenceService persistence;
     @Autowired private ContentRepository contents;
     @Autowired private PersonalSaveService saves;
+    @Autowired private PersonalSaveAnalysisService analysis;
     @Autowired private PlatformTransactionManager transactionManager;
     @Autowired private PersonalSaveProperties properties;
     @Autowired @Qualifier("personalSaveAnalysisExecutor") private ThreadPoolTaskExecutor executor;
@@ -513,6 +515,49 @@ class PersonalSaveIntegrationTest {
                 .isEqualTo("EXTRACTION_API_ERROR");
         assertThat(status(fresh)).isEqualTo("ANALYZING");
         assertThat(status(alreadyFailed)).isEqualTo("FAILED");
+    }
+
+    @Test
+    void staleRecoverySkipsSavesStillWaitingInTheQueueButFailsAbandonedOnes() throws Exception {
+        // 멘토 리뷰(2026-11-07): 분석 스레드가 바쁜 동안 대기열에서 5분 넘게 기다린 저장이 시작도 전에 FAILED가 됐다.
+        var started = new CountDownLatch(1);
+        var release = gate();
+        doAnswer(call -> {
+            started.countDown();
+            assertThat(release.await(20, TimeUnit.SECONDS)).isTrue();
+            persistence.applyOutcome(call.getArgument(0), success(List.of()));
+            return null;
+        }).when(pipeline).saveAndPersist(any(), any());
+        post("running", token);
+        assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+        var queued = saved(post("queued", token));
+        UUID abandoned = content("abandoned", "ANALYZING");
+        jdbc.update("UPDATE content SET analysis_started_at = ? WHERE id = ?", Timestamp.from(NOW), abandoned);
+        clock.now.set(NOW.plusSeconds(360));
+
+        var scheduler = new StaleAnalysisRecoveryScheduler(contents, analysis, properties, clock);
+        new TransactionTemplate(transactionManager).executeWithoutResult(transaction -> scheduler.failStaleAnalyses());
+
+        assertThat(status(queued.contentId())).isEqualTo("ANALYZING");
+        assertThat(status(abandoned)).isEqualTo("FAILED");
+        release.countDown();
+        await(() -> status(queued.contentId()).equals("SUCCESS"));
+    }
+
+    @Test
+    void representativePlaceIsTheOneThatAppearedFirstInTheVideo() {
+        // 멘토 리뷰(2026-11-07): 예전엔 ORDER BY p.id(무작위 UUID)라 영상 순서와 무관한 곳이 대표가 됐다.
+        // 영상 순서(c, a, b)를 저장 순서(verificationPlaceId 정렬: a, b, c)와 다르게 둔다.
+        UUID contentId = content("appearance", "ANALYZING");
+        savedRow(memberId, contentId, NOW, UUID.randomUUID());
+
+        persistence.applyOutcome(contentId, success(List.of(place("c"), place("a"), place("b"))));
+
+        assertThat(jdbc.queryForList("""
+                SELECT p.name FROM content_place cp JOIN place p ON p.id = cp.place_id
+                 WHERE cp.content_id = ? ORDER BY cp.appearance_order
+                """, String.class, contentId)).containsExactly("장소 c", "장소 a", "장소 b");
+        assertThat(saves.list(memberId, null, null).items().getFirst().representativePlaceName()).isEqualTo("장소 c");
     }
 
     @ParameterizedTest

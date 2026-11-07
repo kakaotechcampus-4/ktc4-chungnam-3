@@ -20,10 +20,11 @@ public interface ContentPlaceRepository extends JpaRepository<ContentPlace, UUID
                 content_id,
                 place_id,
                 description,
+                appearance_order,
                 created_at,
                 updated_at
             )
-            VALUES (:id, :contentId, :placeId, :description, :now, :now)
+            VALUES (:id, :contentId, :placeId, :description, CAST(:appearanceOrder AS INTEGER), :now, :now)
             ON CONFLICT (content_id, place_id) DO NOTHING
             """, nativeQuery = true)
     int insertIfAbsent(
@@ -31,8 +32,14 @@ public interface ContentPlaceRepository extends JpaRepository<ContentPlace, UUID
             @Param("contentId") UUID contentId,
             @Param("placeId") UUID placeId,
             @Param("description") String description,
+            @Param("appearanceOrder") Integer appearanceOrder,
             @Param("now") Instant now
     );
+
+    /** 영상 속 순서를 모를 때(되묻기로 나중에 확정된 장소 등) - appearance_order는 NULL. */
+    default int insertIfAbsent(UUID id, UUID contentId, UUID placeId, String description, Instant now) {
+        return insertIfAbsent(id, contentId, placeId, description, null, now);
+    }
 
     Optional<ContentPlace> findByContent_IdAndPlace_Id(UUID contentId, UUID placeId);
 
