@@ -4,6 +4,7 @@ import com.ktc.chungnam3.remembrall.domain.place.GeocodingProvider;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.IntStream;
 
@@ -710,6 +711,89 @@ class PlaceResolverTest {
         assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
         assertThat(resolved.resolvedPlace().geocodingProvider()).isEqualTo(GeocodingProvider.DATAPORTAL);
         assertThat(resolved.resolvedPlace().geocodingPlaceId()).isEqualTo("MA0001");
+    }
+
+    // --- "구 단위 지역 + 가게명" VWorld 기준점 (2026-11-08, 성수맛집 BEST10 실측) ---
+    // 반경검색 fake: 요청 좌표에서 100m 안에 있는 업소만 돌려준다(좌표 기준 동작을 실제처럼).
+    private static NearbyStoreLookup storesNear(List<DataportalStoreClient.StoreResult> all) {
+        return (lon, lat, radiusMeters) -> all.stream()
+                .filter(s -> Math.abs(s.lat() - lat) < 0.0009 && Math.abs(s.lon() - lon) < 0.0011)
+                .toList();
+    }
+
+    /** 검색어별로 정해진 VWorld 결과(여러 개)를 돌려주는 fake. findAnchor는 그중 1순위. */
+    private static FranchiseAnchorLookup vworldByQuery(Map<String, List<PlaceSearchClient.PlaceSearchResult>> byQuery) {
+        return new FranchiseAnchorLookup() {
+            @Override
+            public Optional<PlaceSearchClient.PlaceSearchResult> findAnchor(String query) {
+                return byQuery.getOrDefault(query, List.of()).stream().findFirst();
+            }
+
+            @Override
+            public List<PlaceSearchClient.PlaceSearchResult> findAnchors(String query, int limit) {
+                return byQuery.getOrDefault(query, List.of()).stream().limit(limit).toList();
+            }
+        };
+    }
+
+    private static final DataportalStoreClient.StoreResult TIGER = new DataportalStoreClient.StoreResult(
+            "MA-TIGER", "호랑이식탁", null, "음식", "서울특별시 성동구 성수이로 32-10", 37.5426, 127.0560);
+
+    @Test
+    void 가게명만으론_다른_지역이_1순위여도_지역을_붙인_VWorld_검색으로_기준점을_잡아_확정한다() {
+        // 실측: "호랑이식탁" 1순위는 경기 성남 → 지역 필터에 걸려 버려지고, 구청 기준점은 가게에서 3km+.
+        var resolver = new PlaceResolver(storesNear(List.of(TIGER)),
+                (name, branch, region) -> List.of(result("성동구, 서울특별시", 37.5635, 127.0365)),
+                vworldByQuery(Map.of(
+                        "호랑이식탁", List.of(result("호랑이식탁", 37.3670, 127.1080)),
+                        "서울특별시 성동구 호랑이식탁", List.of(result("호랑이식탁", 37.5426, 127.0560)))),
+                name -> List.of(), 1000);
+
+        PlaceResolver.Result resolved = resolver.resolve("p5", "호랑이식탁", null, "서울특별시 성동구", List.of());
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+        assertThat(resolved.resolvedPlace().geocodingPlaceId()).isEqualTo("MA-TIGER");
+    }
+
+    @Test
+    void 지역을_붙인_VWorld_결과_중_2순위에서만_가게가_맞아도_확정한다() {
+        // 실측: "서울특별시 성동구 서울맛집" 1순위(아차산로7길 29)는 실제 가게와 1,075m, 2순위가 1m.
+        var shop = new DataportalStoreClient.StoreResult("MA-SEOUL", "서울맛집", null, "음식",
+                "서울특별시 성동구 성덕정15길 6-9", 37.5383, 127.0540);
+        var resolver = new PlaceResolver(storesNear(List.of(shop)),
+                (name, branch, region) -> List.of(),
+                vworldByQuery(Map.of("서울특별시 성동구 서울맛집", List.of(
+                        result("서울맛집", 37.5450, 127.0620), result("서울맛집", 37.5383, 127.0540)))),
+                name -> List.of(), 1000);
+
+        PlaceResolver.Result resolved = resolver.resolve("p3", "서울맛집", null, "서울특별시 성동구", List.of());
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+        assertThat(resolved.resolvedPlace().address()).isEqualTo("서울특별시 성동구 성덕정15길 6-9");
+    }
+
+    @Test
+    void 지역이_시도뿐이면_지역을_붙인_VWorld_검색을_하지_않는다() {
+        var queried = new java.util.ArrayList<String>();
+        FranchiseAnchorLookup vworld = new FranchiseAnchorLookup() {
+            @Override
+            public Optional<PlaceSearchClient.PlaceSearchResult> findAnchor(String query) {
+                queried.add(query);
+                return Optional.empty();
+            }
+
+            @Override
+            public List<PlaceSearchClient.PlaceSearchResult> findAnchors(String query, int limit) {
+                queried.add(query);
+                return List.of();
+            }
+        };
+        var resolver = new PlaceResolver(storesNear(List.of()), (name, branch, region) -> List.of(), vworld,
+                name -> List.of(), 1000);
+
+        resolver.resolve("p1", "호랑이식탁", null, "서울", List.of());
+
+        assertThat(queried).containsExactly("호랑이식탁");
     }
 
     // 실측(2026-11-05) "스타벅스 강남역7번출구점" - 같은 기준점 주변 다른 스타벅스 하나를 같이 둔다.

@@ -127,6 +127,11 @@ public class PlaceResolver {
     // 재사용한 값이다.
     private static final int VWORLD_ANCHOR_RADIUS_METERS = 100;
 
+    // "구 단위 지역 + 가게명" VWorld 검색에서 기준점으로 써볼 상위 결과 수(2026-11-08). 실측상 정답이
+    // 2순위였던 경우("성동구 서울맛집" - 1순위는 1,075m 떨어진 동명 업소)가 있어 1개로는 부족하고,
+    // 기준점마다 공공상가정보 반경 100m 조회가 한 번씩 붙으므로 크게 늘리지 않는다.
+    private static final int REGION_ANCHOR_CANDIDATES = 3;
+
     // 지점명 텍스트로 못 좁혔을 때(개선③ 후속, 2026-09-30) 거리로 대신 좁힌다 - 가장 가까운 곳과
     // 그 다음으로 가까운 곳의 차이가 이 값보다 작으면 "확실히 더 가까운 곳"이 없다고 보고 되묻는다.
     private static final double DISTANCE_TIE_MARGIN_METERS = 30.0;
@@ -598,6 +603,27 @@ public class PlaceResolver {
      * ponytail: 둘 다 못 잡으면(VWorld 미등록 + regionHint 시·도뿐) 여기선 못 찾는다.
      */
     private Optional<Result> resolveViaRegionStores(String candidateId, String name, String regionHint) {
+        // 2026-11-08: VWorld를 "구 단위 지역 + 가게명"으로 먼저 검색해 상위 몇 개를 차례로 기준점으로 쓴다 -
+        // 가게명만으로 검색하면 1순위가 동명의 다른 지역 가게라(실측: 서울맛집→상주, 호랑이식탁→성남,
+        // 명국수→대구) 지역 필터에 걸려 버려지고, 구청 기준점(가게까지 3km+)으로 넘어가 못 찾았다.
+        // 반경은 그대로 100m - 넓히면 과매칭·호출량이 늘어서 기준점을 정확히 잡는 쪽으로 푼다.
+        Optional<String> regionDetail = extractAnchorQuery(regionHint);
+        if (regionDetail.isPresent()) {
+            List<PlaceSearchClient.PlaceSearchResult> regionAnchors;
+            try {
+                regionAnchors = franchiseAnchorLookup.findAnchors(regionDetail.get() + " " + name, REGION_ANCHOR_CANDIDATES);
+            } catch (RuntimeException e) {
+                regionAnchors = List.of();
+            }
+            for (PlaceSearchClient.PlaceSearchResult anchor : regionAnchors) {
+                Optional<Result> viaRegionAnchor =
+                        matchStoresAround(candidateId, name, regionHint, anchor, VWORLD_ANCHOR_RADIUS_METERS);
+                if (viaRegionAnchor.isPresent()) {
+                    return viaRegionAnchor;
+                }
+            }
+        }
+
         Optional<PlaceSearchClient.PlaceSearchResult> vworldAnchor;
         try {
             vworldAnchor = franchiseAnchorLookup.findAnchor(name);
