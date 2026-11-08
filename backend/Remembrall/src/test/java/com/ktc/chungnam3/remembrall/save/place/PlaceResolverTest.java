@@ -1,6 +1,7 @@
 package com.ktc.chungnam3.remembrall.save.place;
 
 import com.ktc.chungnam3.remembrall.domain.place.GeocodingProvider;
+import com.ktc.chungnam3.remembrall.save.dto.ResolvedPlaceDto;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -770,6 +771,35 @@ class PlaceResolverTest {
 
         assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
         assertThat(resolved.resolvedPlace().address()).isEqualTo("서울특별시 성동구 성덕정15길 6-9");
+    }
+
+    // PR #70 리뷰(doheelab-coder): VWorld 전국 검색 1순위가 같은 시·도의 다른 지점이면 그 지점으로 확정됐다.
+    private static final DataportalStoreClient.StoreResult STARBUCKS_HONGDAE = new DataportalStoreClient.StoreResult(
+            "MA-HD", "스타벅스", "홍대", "음식", "서울특별시 마포구 양화로 1", 37.5563, 126.9236);
+
+    private static PlaceResolver resolverWithHongdaeAsVWorldFirst() {
+        return new PlaceResolver(storesNear(List.of(STARBUCKS_HONGDAE)), (name, branch, region) -> List.of(),
+                vworldByQuery(Map.of("스타벅스", List.of(result("스타벅스 홍대", 37.5563, 126.9236)))),
+                name -> List.of(), 1000);
+    }
+
+    @Test
+    void VWorld로_찾은_가게_주소에_지역의_구동이_없으면_확정하지_않고_되묻는다() {
+        PlaceResolver.Result resolved = resolverWithHongdaeAsVWorldFirst()
+                .resolve("p1", "스타벅스", null, "서울 강남", List.of());
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.NEEDS_CONFIRMATION);
+        assertThat(resolved.confirmRequest().candidates()).extracting(ResolvedPlaceDto::address)
+                .containsExactly("서울특별시 마포구 양화로 1");
+    }
+
+    @Test
+    void 지역이_서울특별시처럼_정식_시도명이어도_구동으로만_확인한다() {
+        // "서울특별시"를 구·동 단어로 남기면 서울 모든 주소가 통과해 확인이 무력해진다.
+        PlaceResolver.Result resolved = resolverWithHongdaeAsVWorldFirst()
+                .resolve("p1", "스타벅스", null, "서울특별시 강남구", List.of());
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.NEEDS_CONFIRMATION);
     }
 
     @Test

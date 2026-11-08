@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -14,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -617,7 +619,7 @@ public class PlaceResolver {
             }
             for (PlaceSearchClient.PlaceSearchResult anchor : regionAnchors) {
                 Optional<Result> viaRegionAnchor =
-                        matchStoresAround(candidateId, name, regionHint, anchor, VWORLD_ANCHOR_RADIUS_METERS);
+                        matchStoresAround(candidateId, name, regionHint, anchor, VWORLD_ANCHOR_RADIUS_METERS, true);
                 if (viaRegionAnchor.isPresent()) {
                     return viaRegionAnchor;
                 }
@@ -632,16 +634,23 @@ public class PlaceResolver {
             vworldAnchor = Optional.empty();
         }
         Optional<Result> viaVWorld = vworldAnchor.flatMap(a ->
-                matchStoresAround(candidateId, name, regionHint, a, VWORLD_ANCHOR_RADIUS_METERS));
+                matchStoresAround(candidateId, name, regionHint, a, VWORLD_ANCHOR_RADIUS_METERS, true));
         if (viaVWorld.isPresent()) {
             return viaVWorld;
         }
         return findRegionAnchor(regionHint).flatMap(a ->
-                matchStoresAround(candidateId, name, regionHint, a, franchiseAnchorRadiusMeters));
+                matchStoresAround(candidateId, name, regionHint, a, franchiseAnchorRadiusMeters, false));
     }
 
+    /**
+     * @param requireDistrict VWorld로 잡은 기준점이면 true - VWorld는 전국 검색이라 같은 시·도의 다른 지점을
+     *                        1순위로 줄 수 있다(PR #70 리뷰, doheelab-coder: "스타벅스"/"서울 강남"이 홍대 지점으로
+     *                        확정됨). 찾은 가게 주소에 지역 단서의 구·동이 없으면 확정하지 않고 되묻는다.
+     *                        regionHint 자체로 잡은 기준점(구 중심)은 이미 그 지역이라 false.
+     */
     private Optional<Result> matchStoresAround(String candidateId, String name, String regionHint,
-                                               PlaceSearchClient.PlaceSearchResult anchor, int radiusMeters) {
+                                               PlaceSearchClient.PlaceSearchResult anchor, int radiusMeters,
+                                               boolean requireDistrict) {
         List<DataportalStoreClient.StoreResult> nearby;
         try {
             nearby = nearbyStores(name, anchor.lon(), anchor.lat(), radiusMeters);
@@ -655,7 +664,40 @@ public class PlaceResolver {
         if (matches.isEmpty() || matches.size() > MAX_CONFIRMATION_CANDIDATES) {
             return Optional.empty();
         }
+        if (requireDistrict && !inDistrict(regionHint, matches)) {
+            return Optional.of(confirmOnly(candidateId, matches));
+        }
         return Optional.of(buildResult(candidateId, name, null, matches));
+    }
+
+    /**
+     * 모든 가게 주소에 regionHint의 구·동 단어가 하나라도 들어있는지 본다. 시·도 단어는 뺀다 - Gemini는
+     * "서울특별시 성동구"처럼 정식 명칭을 자주 주는데, "서울특별시"가 남으면 서울 모든 주소가 통과해 확인이
+     * 무력해진다. 시·도 말고 남는 단어가 없으면(regionHint가 "서울"뿐) 확인할 수 없으니 통과 - 알려진 한계.
+     */
+    private boolean inDistrict(String regionHint, List<DataportalStoreClient.StoreResult> stores) {
+        if (regionHint == null) {
+            return true;
+        }
+        List<String> districtTokens = Arrays.stream(regionHint.trim().split("\\s+"))
+                .filter(token -> !isProvinceToken(token))
+                .toList();
+        if (districtTokens.isEmpty()) {
+            return true;
+        }
+        return stores.stream().allMatch(s -> districtTokens.stream().anyMatch(t -> containsIgnoreCase(s.roadAddress(), t)));
+    }
+
+    /** "서울"·"서울특별시"·"경기도"·"충청남도"·"전북특별자치도"처럼 시·도를 가리키는 단어인지. */
+    private static boolean isProvinceToken(String token) {
+        if (KoreanProvinces.ROMANIZED_ALIASES.containsKey(token)) {
+            return true;
+        }
+        if (KoreanProvinces.KOREAN_ALIASES.values().stream().anyMatch(names -> names.contains(token))) {
+            return true;
+        }
+        return KoreanProvinces.ROMANIZED_ALIASES.keySet().stream()
+                .anyMatch(key -> token.matches(Pattern.quote(key) + "(특별시|광역시|특별자치시|특별자치도|도)"));
     }
 
     /**
