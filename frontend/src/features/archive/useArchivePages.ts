@@ -3,6 +3,7 @@
 // 다시 읽을 때는 이미 읽은 개수만큼(20~100) 한 번에 읽어 통째로 바꾼다. 보이던 목록은 응답이 올 때까지 그대로 둔다.
 // 처음 읽기가 실패하면 failed, 다시 읽기 · 다음 페이지가 실패하면 목록을 그대로 둔다.
 // 늦게 온 응답이 새 결과를 덮지 않게 마지막 읽기만 반영한다. 다음 페이지는 그 사이 다시 읽었으면 버린다.
+// remove 는 지운 저장물을 목록에서 바로 빼고 다시 읽는다. 그 전에 시작한 읽기 · 다음 페이지 응답은 버려 지운 항목이 되살아나지 않는다.
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useRef, useState } from "react";
 import { AppState } from "react-native";
@@ -27,6 +28,7 @@ export type ArchivePages = {
     hasMore: boolean;
     loadMore(): void;
     reload(): void;
+    remove(personalSaveId: string): void;
 };
 
 export function useArchivePages(): ArchivePages {
@@ -85,6 +87,24 @@ export function useArchivePages(): ArchivePages {
             });
     }, []);
 
+    // 상태는 그대로 두고 항목만 뺀다. 없는 id 면 목록은 그대로고 다시 읽기만 한다.
+    // 다시 읽기(reload)가 readId 를 올려 그 전에 시작한 읽기 · 다음 페이지 응답을 버린다.
+    const remove = useCallback(
+        (personalSaveId: string) => {
+            const prev = current.current;
+            const items = prev.items.filter(
+                (item) => item.personalSaveId !== personalSaveId,
+            );
+            if (items.length !== prev.items.length) {
+                const next = { ...prev, items };
+                current.current = next;
+                setPages(next);
+            }
+            reload();
+        },
+        [reload],
+    );
+
     useFocusEffect(
         useCallback(() => {
             reload();
@@ -104,5 +124,6 @@ export function useArchivePages(): ArchivePages {
         hasMore: pages.nextCursor != null,
         loadMore,
         reload,
+        remove,
     };
 }

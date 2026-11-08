@@ -69,6 +69,10 @@ export const metrics = {
         labelGap: 6,
         badgeInset: 6,
     },
+    // 07c 기억 지우기 확인 시트 2266:1206. 지울 대상 줄의 썸네일 폭(높이는 9:16).
+    deleteSaveSheet: {
+        thumbWidth: 36,
+    },
     // 07b 전체 기억 빈 상태 2061:956. frames: 360 폭 절대좌표를 프레임 중심 기준으로 바꾼 값.
     archiveEmpty: {
         introPaddingTop: 40,

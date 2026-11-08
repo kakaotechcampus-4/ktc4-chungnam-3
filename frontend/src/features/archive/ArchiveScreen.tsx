@@ -5,7 +5,9 @@
 // 끝 근처(한 화면 이내)까지 내리면 다음 페이지를 읽는다. "모두 N개"(N 은 저장물 수)는 마지막 페이지까지 읽었을 때만 보인다.
 // 셀 이름이 장소명이라 "곳"이면 장소 수로 오해되어 단위는 "개"다(디자인 결정).
 // 미확정 셀은 저장 결과(02~05), ready 셀은 장소 상세(08)를 personalSaveId 로 연다.
+// 셀을 길게 누르면 지우기 확인 시트(07c)를 띄운다. 시트는 모든 분기에 그려 마지막 하나를 지워 07b 로 바뀌어도 닫힘까지 이어진다.
 import { useNavigation } from "@react-navigation/native";
+import { type ReactNode, useRef, useState } from "react";
 import {
     type NativeScrollEvent,
     type NativeSyntheticEvent,
@@ -16,11 +18,15 @@ import {
     View,
 } from "react-native";
 
+import { ApiError } from "../../shared/api/client";
+import { deletePersonalSave } from "../../shared/api/personalSaves";
+import type { ModalSheetStatus } from "../../shared/ui/ModalSheet";
 import ScreenHeader from "../../shared/ui/ScreenHeader";
 import { colors, spacing, typography } from "../../shared/ui/theme";
 import { type AlbumItem, toAlbumSections } from "./albumSections";
 import AlbumCell from "./components/AlbumCell";
 import ArchiveEmpty from "./components/ArchiveEmpty";
+import DeleteSaveSheet from "./components/DeleteSaveSheet";
 import { useArchivePages } from "./useArchivePages";
 
 const COLUMNS = 3;
@@ -44,22 +50,79 @@ function nearEnd({ nativeEvent }: NativeSyntheticEvent<NativeScrollEvent>) {
     return contentOffset.y + layoutMeasurement.height * 2 >= contentSize.height;
 }
 
+// 07c 지우기 확인 시트 상태. 지우는 중에 다시 눌러도 한 번만 보낸다.
+// 성공(204)과 404(이미 없음)는 지운 것으로 보고 시트 닫기와 목록에서 빼기(onDeleted)를 함께 한다.
+// 그 밖의 실패는 시트를 두고 오류 문구를 보인다. 다시 누르면 다시 보낸다. 대상은 시트가 다 닫힐 때 지운다.
+function useDeleteSheet(onDeleted: (personalSaveId: string) => void) {
+    const [visible, setVisible] = useState(false);
+    const [status, setStatus] = useState<ModalSheetStatus>("default");
+    const [target, setTarget] = useState<AlbumItem | null>(null);
+    const deleting = useRef(false);
+
+    const open = (item: AlbumItem) => {
+        setTarget(item);
+        setStatus("default");
+        setVisible(true);
+    };
+    const close = () => setVisible(false);
+    const onDismiss = () => {
+        setVisible(false);
+        setStatus("default");
+        setTarget(null);
+    };
+    const submit = async () => {
+        if (deleting.current || target == null) return;
+        const { personalSaveId } = target;
+        deleting.current = true;
+        setStatus("saving");
+        const deleted = await deletePersonalSave(personalSaveId).then(
+            () => true,
+            (error: unknown) =>
+                error instanceof ApiError && error.status === 404,
+        );
+        deleting.current = false;
+        if (!deleted) {
+            setStatus("error");
+            return;
+        }
+        setVisible(false);
+        onDeleted(personalSaveId);
+    };
+    return { visible, status, target, open, close, onDismiss, submit };
+}
+
 export default function ArchiveScreen() {
     const navigation = useNavigation();
-    const { status, items, hasMore, loadMore, reload } = useArchivePages();
+    const { status, items, hasMore, loadMore, reload, remove } =
+        useArchivePages();
+    const deleteSheet = useDeleteSheet(remove);
     const header = (
         <ScreenHeader
             title="기억"
             onSettingsPress={() => navigation.navigate("Settings")}
         />
     );
+    // 화면 뒤에 시트를 함께 그린다. 시트는 앱 루트 위에 떠서 화면 배치에 끼어들지 않는다.
+    const withSheet = (screen: ReactNode) => (
+        <>
+            {screen}
+            <DeleteSaveSheet
+                visible={deleteSheet.visible}
+                status={deleteSheet.status}
+                target={deleteSheet.target}
+                onConfirm={deleteSheet.submit}
+                onCancel={deleteSheet.close}
+                onDismiss={deleteSheet.onDismiss}
+            />
+        </>
+    );
 
     if (status === "loading") {
-        return <View style={styles.screen}>{header}</View>;
+        return withSheet(<View style={styles.screen}>{header}</View>);
     }
 
     if (status === "failed") {
-        return (
+        return withSheet(
             <View style={styles.screen}>
                 {header}
                 <Pressable
@@ -71,18 +134,18 @@ export default function ArchiveScreen() {
                         확인하지 못했어요. 눌러서 다시 불러와요
                     </Text>
                 </Pressable>
-            </View>
+            </View>,
         );
     }
 
     if (items.length === 0) {
-        return (
+        return withSheet(
             <View style={styles.screen}>
                 {header}
                 <ScrollView contentContainerStyle={styles.content}>
                     <ArchiveEmpty />
                 </ScrollView>
-            </View>
+            </View>,
         );
     }
 
@@ -96,7 +159,7 @@ export default function ArchiveScreen() {
               })
             : navigation.navigate("ContentDetail", { personalSaveId });
 
-    return (
+    return withSheet(
         <View style={styles.screen}>
             {header}
             <ScrollView
@@ -138,6 +201,9 @@ export default function ArchiveScreen() {
                                                     fade={item.fade}
                                                     status={item.status}
                                                     onPress={() => open(item)}
+                                                    onLongPress={() =>
+                                                        deleteSheet.open(item)
+                                                    }
                                                 />
                                             ) : (
                                                 <View
@@ -153,7 +219,7 @@ export default function ArchiveScreen() {
                     ))}
                 </View>
             </ScrollView>
-        </View>
+        </View>,
     );
 }
 
