@@ -168,7 +168,8 @@ class ConfirmAnswerServiceTest {
     }
 
     @Test
-    void 카카오가_장소를_못_찾으면_NOT_FOUND다() throws Exception {
+    void 카카오가_장소를_못_찾으면_다시_눌러도_소용없는_실패라_PLACE_NOT_VERIFIABLE이다() throws Exception {
+        // 실서버 재현(2026-11-08, 2002횟집): 예전엔 404(후보 없음)와 같은 코드라 앱이 "다시 눌러 주세요"만 반복했다.
         Saved saved = createMemberAndContent("video-5");
         insertPendingCandidate(saved.contentId(), "p1");
         ConfirmAnswerService service = serviceWithKakao((name, branch, lat, lon) -> Optional.empty());
@@ -176,8 +177,27 @@ class ConfirmAnswerServiceTest {
         assertThatThrownBy(() -> service.answer(saved.memberId(), saved.personalSaveId(), "p1", "p1-1"))
                 .isInstanceOf(ApiException.class)
                 .extracting(e -> ((ApiException) e).getErrorCode())
-                .isEqualTo(ErrorCode.NOT_FOUND);
+                .isEqualTo(ErrorCode.PLACE_NOT_VERIFIABLE);
         assertThat(confirmCandidateRepository.findPendingByContentId(saved.contentId())).hasSize(1);
+    }
+
+    @Test
+    void 분석_때_카카오로_미리_검증된_옵션은_카카오를_다시_부르지_않고_그_ID로_저장한다() throws Exception {
+        Saved saved = createMemberAndContent("video-8");
+        ConfirmRequestDto confirmRequest = new ConfirmRequestDto("어느 지점이 맞을까요?", List.of(
+                new ResolvedPlaceDto("p1-1", "2002횟집", null, "서울 성동구 성수이로 29", 37.5378, 127.0543,
+                        GeocodingProvider.DATAPORTAL, "MA-2002", "kakao-preverified")));
+        confirmCandidateRepository.upsert(UUID.randomUUID(), saved.contentId(), "p1", "설명",
+                objectMapper.writeValueAsString(confirmRequest), NOW);
+        ConfirmAnswerService service = serviceWithKakao((name, branch, lat, lon) -> {
+            throw new AssertionError("미리 검증된 옵션인데 카카오를 다시 불렀다");
+        });
+
+        service.answer(saved.memberId(), saved.personalSaveId(), "p1", "p1-1");
+
+        assertThat(placeRepository.findByVerificationProviderAndVerificationPlaceId(
+                com.ktc.chungnam3.remembrall.domain.place.VerificationProvider.KAKAO, "kakao-preverified")).isPresent();
+        assertThat(confirmCandidateRepository.findPendingByContentId(saved.contentId())).isEmpty();
     }
 
     @Test

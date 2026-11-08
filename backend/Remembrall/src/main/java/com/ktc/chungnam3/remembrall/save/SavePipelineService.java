@@ -13,6 +13,7 @@ import com.ktc.chungnam3.remembrall.extraction.type.ExtractionFailureCode;
 import com.ktc.chungnam3.remembrall.extraction.type.ExtractionStatus;
 import com.ktc.chungnam3.remembrall.repository.ConfirmCandidateRepository;
 import com.ktc.chungnam3.remembrall.save.analysis.VideoContentAnalyzer;
+import com.ktc.chungnam3.remembrall.save.dto.ConfirmRequestDto;
 import com.ktc.chungnam3.remembrall.save.dto.PlaceOutcomeDto;
 import com.ktc.chungnam3.remembrall.save.dto.ResolvedPlaceDto;
 import com.ktc.chungnam3.remembrall.save.dto.SavePipelineRequestDto;
@@ -27,9 +28,12 @@ import org.springframework.stereotype.Component;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -310,9 +314,62 @@ public class SavePipelineService {
             case RESOLVED -> verifyWithKakao(candidate.candidateId(), result.resolvedPlace());
             case NO_PLACE -> new PlaceOutcomeDto(
                     candidate.candidateId(), PlaceOutcomeDto.Decision.NO_PLACE, null, null);
-            case NEEDS_CONFIRMATION -> new PlaceOutcomeDto(
-                    candidate.candidateId(), PlaceOutcomeDto.Decision.NEEDS_CONFIRMATION, null, result.confirmRequest());
+            case NEEDS_CONFIRMATION -> preverifyConfirmation(candidate.candidateId(), result.confirmRequest());
         };
+    }
+
+    /**
+     * 되묻기 후보를 보여주기 전에 카카오로 미리 검증한다(2026-11-08) - 예전엔 저장 버튼을 누를 때에야
+     * 검증해서, 통과 못 할 후보(LocationIQ의 틀린 좌표 등, 실측: 2002횟집)를 보여주고 매번 404가 났다.
+     * 장소 저장엔 카카오 ID가 필수라 검증 못 하는 후보는 원래 저장할 수 없다 - 미리 걸러도 잃는 장소는 없다.
+     * <ul>
+     *   <li>ID 찾음 → 옵션에 붙인다(저장 시 재호출 없이 그대로 씀). 결과 없음 → 뺀다.
+     *   호출 예외 → 빼지 않고 ID 없이 둔다(일시 장애로 정상 후보를 잃지 않게, 저장 시 다시 검증).</li>
+     *   <li>같은 카카오 ID 옵션은 하나만 남긴다(공공상가정보가 한 매장을 도로명 2개로 가진 경우).</li>
+     *   <li>남은 게 없으면 NO_PLACE. 원래 2개 이상이던 옵션이 합쳐져 검증된 1개만 남으면 애초에 모호하지
+     *   않았던 것이니 RESOLVED. 원래 1개짜리 되묻기는 카카오가 통과해도 유지 - 카카오 검증은 "그 좌표에
+     *   그 이름이 있다"일 뿐 "영상 속 그 가게"를 보장하지 않는다.</li>
+     * </ul>
+     */
+    private PlaceOutcomeDto preverifyConfirmation(String candidateId, ConfirmRequestDto confirmRequest) {
+        List<ResolvedPlaceDto> kept = new ArrayList<>();
+        Set<String> seenKakaoIds = new HashSet<>();
+        boolean anyUnverified = false;
+        boolean anyDropped = false;
+        for (ResolvedPlaceDto option : confirmRequest.candidates()) {
+            Optional<String> kakaoId;
+            try {
+                kakaoId = kakaoPlaceLookup.findPlaceId(option.name(), option.branchName(), option.lat(), option.lng());
+            } catch (RuntimeException e) {
+                log.warn("되묻기 후보 카카오 사전검증 실패(유지) candidateId={}: {}", option.candidateId(), e.getMessage());
+                kept.add(option);
+                anyUnverified = true;
+                continue;
+            }
+            if (kakaoId.isEmpty()) {
+                anyDropped = true;
+            } else if (seenKakaoIds.add(kakaoId.get())) {
+                kept.add(withKakaoId(option, option.candidateId(), kakaoId.get()));
+            }
+        }
+
+        if (kept.isEmpty()) {
+            return new PlaceOutcomeDto(candidateId, PlaceOutcomeDto.Decision.NO_PLACE, null, null);
+        }
+        // 확정은 "옵션들이 전부 같은 카카오 장소였다"일 때만 - 하나가 카카오 미등록으로 빠져서 1개가 남은 건
+        // 빠진 쪽이 영상 속 가게였을 수 있으니 여전히 묻는다.
+        if (confirmRequest.candidates().size() > 1 && kept.size() == 1 && !anyUnverified && !anyDropped) {
+            ResolvedPlaceDto only = kept.get(0);
+            return new PlaceOutcomeDto(candidateId, PlaceOutcomeDto.Decision.RESOLVED,
+                    withKakaoId(only, candidateId, only.verificationPlaceId()), null);
+        }
+        return new PlaceOutcomeDto(candidateId, PlaceOutcomeDto.Decision.NEEDS_CONFIRMATION, null,
+                new ConfirmRequestDto(confirmRequest.question(), kept));
+    }
+
+    private static ResolvedPlaceDto withKakaoId(ResolvedPlaceDto p, String candidateId, String kakaoId) {
+        return new ResolvedPlaceDto(candidateId, p.name(), p.branchName(), p.address(), p.lat(), p.lng(),
+                p.geocodingProvider(), p.geocodingPlaceId(), kakaoId);
     }
 
     /**
