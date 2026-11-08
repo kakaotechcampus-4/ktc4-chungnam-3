@@ -879,11 +879,14 @@ public class PlaceResolver {
      * {@link #containsIgnoreCase}에 {@link #BRAND_NAME_ALIASES}를 더해 브랜드명을 확인한다 - "CU"처럼
      * 공공상가정보 등록 표기(한글 음차)가 후보 이름(로마자)과 글자 자체가 안 겹치는 브랜드 전용.
      */
+    // 브랜드 비교는 지점명 비교(containsIgnoreCase, 공백 무시)와 달리 PlaceNameMatcher 규칙을 쓴다(PR #70 리뷰,
+    // doheelab-coder) - 공백만 지우면 지점명 없이 "공차"를 찾을 때 근처 "성공 차돌박이"까지 후보가 돼 확정될
+    // 가게가 되묻기로 바뀌었다. 띄어쓰기만 다른 브랜드("돼지곰탕 하우"/"돼지곰탕하우")는 계속 맞는다.
     private boolean matchesBrand(String bizesNm, String brandName) {
-        if (containsIgnoreCase(bizesNm, brandName)) {
+        if (PlaceNameMatcher.matches(bizesNm, brandName)) {
             return true;
         }
         String alias = BRAND_NAME_ALIASES.get(brandName);
-        return alias != null && containsIgnoreCase(bizesNm, alias);
+        return alias != null && PlaceNameMatcher.matches(bizesNm, alias);
     }
 }

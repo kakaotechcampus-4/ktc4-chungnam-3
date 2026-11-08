@@ -108,26 +108,6 @@ public class KakaoPlaceClient implements KakaoPlaceLookup {
      * Place는 카카오 ID마다 하나라 두 가게가 한 Place로 합쳐진다(되돌리려면 DB 수정 필요).
      */
     static boolean nameMatches(String placeName, String name) {
-        if (placeName == null) {
-            return false;
-        }
-        if (placeName.toLowerCase().contains(name.toLowerCase())) {
-            return true;
-        }
-        String[] words = placeName.toLowerCase().trim().split("\\s+");
-        String joined = String.join("", words);
-        String target = normalize(name);
-        int offset = 0;
-        for (String word : words) {
-            if (joined.startsWith(target, offset)) {
-                return true;
-            }
-            offset += word.length();
-        }
-        return false;
-    }
-
-    private static String normalize(String s) {
-        return s.toLowerCase().replaceAll("\\s+", "");
+        return PlaceNameMatcher.matches(placeName, name);
     }
 }
