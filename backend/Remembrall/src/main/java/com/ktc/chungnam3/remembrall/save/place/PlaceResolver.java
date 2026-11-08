@@ -470,6 +470,7 @@ public class PlaceResolver {
         try {
             anchor = franchiseAnchorLookup.findAnchor(query);
         } catch (RuntimeException e) {
+            log.warn("VWorld 기준점 검색 실패 query={}: {}", query, e.getMessage());
             return Optional.empty();
         }
         if (anchor.isEmpty()) {
@@ -572,6 +573,7 @@ public class PlaceResolver {
         try {
             anchorCandidates = placeLookup.search(anchorQuery.get(), null, regionHint);
         } catch (RuntimeException e) {
+            log.warn("LocationIQ 기준점 검색 실패 query={}: {}", anchorQuery.get(), e.getMessage());
             return Optional.empty();
         }
 
@@ -600,6 +602,7 @@ public class PlaceResolver {
         try {
             vworldAnchor = franchiseAnchorLookup.findAnchor(name);
         } catch (RuntimeException e) {
+            log.warn("VWorld 상호명 기준점 검색 실패 name={}: {}", name, e.getMessage());
             vworldAnchor = Optional.empty();
         }
         Optional<Result> viaVWorld = vworldAnchor.flatMap(a ->
@@ -642,6 +645,7 @@ public class PlaceResolver {
         try {
             candidates = generalPlaceLookup.search(name);
         } catch (RuntimeException e) {
+            log.warn("TourAPI 검색 실패 name={}: {}", name, e.getMessage());
             return Optional.empty();
         }
         if (candidates.isEmpty()) {
