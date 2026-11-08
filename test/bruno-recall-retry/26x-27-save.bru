@@ -1,0 +1,29 @@
+meta {
+  name: SETUP 독립 시나리오 27 save
+  type: http
+  seq: 34
+}
+
+post {
+  url: {{baseUrl}}/api/personal-saves
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{qaTokenA}}
+}
+
+body:json {
+  {"url":"https://www.youtube.com/shorts/BrunoSeed00"}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("저장 접수",function(){expect(res.status).to.equal(201); expect(res.body.personalSaveId).to.be.a("string");bru.setVar("qaSaveA0",res.body.personalSaveId);bru.setVar("qaContentA0",res.body.contentId);bru.setVar("qaDeadline",Date.now()+20000);});
+}

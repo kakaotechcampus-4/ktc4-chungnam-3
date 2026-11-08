@@ -1,0 +1,29 @@
+meta {
+  name: SETUP 독립 시나리오 17 consent
+  type: http
+  seq: 20
+}
+
+put {
+  url: {{baseUrl}}/api/me/consents/LOCATION_BASED_SERVICE
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{qaTokenA}}
+}
+
+body:json {
+  {"agreed":true,"termsVersion":"v1"}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("현재 약관 동의",function(){expect(res.status).to.equal(200); expect(res.body.agreed).to.equal(true);expect(res.body.termsVersion).to.equal("v1");});
+}
