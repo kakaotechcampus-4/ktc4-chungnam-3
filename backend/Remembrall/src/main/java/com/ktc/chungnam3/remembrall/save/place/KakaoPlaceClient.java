@@ -111,7 +111,7 @@ public class KakaoPlaceClient implements KakaoPlaceLookup {
         if (placeName == null) {
             return false;
         }
-        if (placeName.contains(name)) {
+        if (placeName.toLowerCase().contains(name.toLowerCase())) {
             return true;
         }
         String[] words = placeName.toLowerCase().trim().split("\\s+");
