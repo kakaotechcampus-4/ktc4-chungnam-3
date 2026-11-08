@@ -2,8 +2,9 @@
 
 ## 실행 시점과 검사
 
-`Backend CI`는 `develop` 대상 PR 생성·수정 시에만 실행한다.
-`develop`에서 `main`으로 보내는 멘토 리뷰 PR과 머지 후 push에는 실행하지 않는다.
+`Backend CI`는 `develop` 대상 PR 생성·수정 및 `develop` push 시 실행한다.
+`develop`에서 `main`으로 보내는 멘토 리뷰 PR 자체에는 실행하지 않는다.
+main에 머지된 뒤에는 release workflow가 같은 커밋의 기본 CI를 재사용하여 배포할 JAR를 검증한다.
 경로 필터를 두지 않아 문서만 수정한 PR에도 같은 검사 결과가 남는다.
 
 | 검사 이름 | 하는 일 |
@@ -11,10 +12,14 @@
 | Backend build | Java 21과 저장소의 Gradle Wrapper로 테스트 코드 컴파일·실행 JAR 생성 |
 | Backend JUnit | 기존 `test` 태스크 전체 실행. `live` 태그는 기존 설정대로 제외 |
 | Bruno API regression | 빌드한 JAR와 임시 PostgreSQL/pgvector로 `test/bruno`의 기본 회귀 폴더 실행 |
+| Bruno seeded regression | 테스트 전용 백엔드·합성 데이터·외부 연동 대역으로 새 컬렉션 4개를 두 번 실행 |
+| Backend delivery tools | 외부 gate 보호/관찰 테스트와 네트워크 차단 컨테이너의 모의 배포·롤백 검사 |
 
 빌드와 JUnit은 별도 작업이다. JUnit 실패 시에도 빌드가 성공했다면 Bruno 결과를 확인할 수 있다.
-세 검사 모두 성공해야 전체 CI가 성공한다. 실패를 무시하거나 테스트를 임의로 제외하지 않는다.
-이 워크플로는 배포하지 않으며 우분투 서버, PC의 SSH 터널, 팀 DB를 사용하지 않는다.
+다섯 검사 모두 성공해야 전체 CI가 성공한다. 실패를 무시하거나 테스트를 임의로 제외하지 않는다.
+이 워크플로 자체는 배포하지 않으며 우분투 서버, PC의 SSH 터널, 팀 DB를 사용하지 않는다.
+별도 `Backend release`가 main push 시 CI를 재사용하고 실제 연동 gate 이후 배포를 연결한다.
+등록할 키, 서버 최초 준비와 활성화 조건은 `.github/deploy/README.md`를 참고한다.
 
 ## 인증 파일과 외부 연동
 
@@ -22,6 +27,10 @@
 채팅·임베딩 클라이언트는 API 키 방식으로 초기화해 GCP ADC 파일이 필요하지 않게 한다.
 FCM 인증 파일은 사용하지 않으며 꺼내기 에이전트는 기존 stub 모드로 실행한다.
 초기 CI에 GitHub Secrets를 등록할 필요는 없다.
+
+합성 데이터 컬렉션의 구성·대역 경계·실행법은 `test/harness/README.md`를 참고한다.
+운영 JAR에 테스트 제어 API를 넣지 않고 `src/test`의 별도 진입점을 사용한다.
+새 CI 구성의 실제 GitHub 통과 여부는 해당 PR에서 별도로 확인해야 한다.
 
 기본 Bruno 컬렉션은 유효한 영상 분석 요청을 보내지 않는다.
 실제 분석용 `test/bruno/07-save-confirm-flow`, `test/bruno-live`, 저장·분석 데이터가 필요한 `test/bruno-geofence`, Gradle `liveTest`,
@@ -78,5 +87,5 @@ bash .github/ci/run-bruno.sh
 현재 로컬에만 추가된 테스트 파일을 커밋하지 않으면 GitHub에서는 그 테스트를 실행할 수 없다.
 
 검사와 기존 실패 원인 해결을 확인한 후 저장소 관리자가 `develop` ruleset/브랜치 보호에
-`Backend build`, `Backend JUnit`, `Bruno API regression`을 필수 검사로 등록한다.
+`Backend build`, `Backend JUnit`, `Bruno API regression`, `Bruno seeded regression`, `Backend delivery tools`를 필수 검사로 등록한다.
 워크플로 추가만으로 머지 차단 규칙이 자동 설정되지는 않는다.

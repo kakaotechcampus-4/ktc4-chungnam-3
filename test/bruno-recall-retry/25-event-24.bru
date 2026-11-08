@@ -1,0 +1,29 @@
+meta {
+  name: PUSH 토큰 없는 B 이벤트
+  type: http
+  seq: 30
+}
+
+post {
+  url: {{baseUrl}}/api/location-events
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{qaTokenB}}
+}
+
+body:json {
+  {"placeId":"{{qaPlace}}","triggerEventId":"{{qaEventnoToken}}","eventType":"DWELL","eventOccurredAt":"{{qaEventAt}}","location":{"latitude":36.37,"longitude":127.38,"accuracyMeters":10,"locatedAt":"{{qaEventAt}}"}}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+bru.setVar("qaEventnoToken",require("uuid").v4());bru.setVar("qaEventAt",new Date().toISOString());
+}
+
+tests {
+test("접수만 확인",function(){expect(res.status).to.equal(202); });
+}

@@ -761,6 +761,35 @@ class PlaceResolverTest {
     }
 
     @Test
+    void 짧은_브랜드는_공백을_지워야_맞는_단어_중간_업소를_후보로_넣지_않는다() {
+        // PR #70 리뷰(doheelab-coder): 공백만 지우면 "성공 차돌박이"가 "공차"로 맞아, 확정될 공차가 되묻기 2곳이 됐다.
+        var anchor = result("성수동, 성동구, 서울특별시", 37.544, 127.055);
+        var gongcha = new DataportalStoreClient.StoreResult("MA-GC", "공차", "성수역점", "음식",
+                "서울특별시 성동구 아차산로 100", 37.544, 127.055);
+        var chadol = new DataportalStoreClient.StoreResult("MA-CD", "성공 차돌박이", null, "음식",
+                "서울특별시 성동구 아차산로 102", 37.544, 127.055);
+        var resolver = resolverForAnchor(List.of(anchor), List.of(gongcha, chadol));
+
+        PlaceResolver.Result resolved = resolver.resolve("p1", "공차", null, "서울 성수동", List.of());
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+        assertThat(resolved.resolvedPlace().geocodingPlaceId()).isEqualTo("MA-GC");
+    }
+
+    @Test
+    void 띄어쓰기만_다른_브랜드는_계속_같은_가게로_본다() {
+        var anchor = result("성수동, 성동구, 서울특별시", 37.544, 127.055);
+        var hau = new DataportalStoreClient.StoreResult("MA-HAU", "돼지곰탕하우", null, "음식",
+                "서울특별시 성동구 성수이로 62", 37.544, 127.055);
+        var resolver = resolverForAnchor(List.of(anchor), List.of(hau));
+
+        PlaceResolver.Result resolved = resolver.resolve("p1", "돼지곰탕 하우", null, "서울 성수동", List.of());
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+        assertThat(resolved.resolvedPlace().geocodingPlaceId()).isEqualTo("MA-HAU");
+    }
+
+    @Test
     void 지점명없는_가게가_기준점_주변_공공데이터에_없으면_기존_LocationIQ_흐름으로_폴백한다() {
         var anchor = result("중리동, 대덕구, 대전광역시", 36.360, 127.421);
         var resolver = resolverForAnchor(List.of(anchor), List.of(store("전혀다른가게")));

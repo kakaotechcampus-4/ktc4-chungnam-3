@@ -1,0 +1,28 @@
+meta {
+  name: EXT LLM 응답 계약과 알림 생성
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{observerUrl}}/executions/{{extEvent}}?installationId={{extInstallation}}&placeId={{extPlace}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{observerSecret}}
+}
+
+script:pre-request {
+if(!bru.getVar("extToken")) throw new Error("외부 연동 Runner를 처음부터 실행하세요.");
+
+}
+
+script:post-response {
+const r=res.body?.executions?.[0];if(r?.result==="NO_ACTION")bru.runner.setNextRequest("EXT 저장 정리");else if(r?.notifications?.length===1)bru.setVar("extNotification",r.notifications[0].notificationId);else bru.runner.setNextRequest("EXT 저장 정리");
+}
+
+tests {
+test("HTTP 200 및 단계 결과",function(){expect(res.status).to.equal(200);expect(res.body.executions).to.have.lengthOf(1);const r=res.body.executions[0];expect(r.status).to.equal("COMPLETED");expect(r.failureCode).to.equal(null);expect(r.agentVersion).to.match(/^llm\|/);expect(r.successfulModelCalls).to.be.at.least(1);expect(["PROPOSE","NO_ACTION"]).to.include(r.result);if(r.result==="NO_ACTION"){expect(r.notifications).to.deep.equal([]);}else{expect(r.notifications).to.have.lengthOf(1);expect(r.notifications[0].status).to.equal("FAILED");expect(r.notifications[0].failureCode).to.equal("NO_FCM_TOKEN");expect(r.proposalPayload.items).to.be.an("array").and.not.empty;r.proposalPayload.items.forEach(i=>{expect(i.contentId).to.equal(bru.getVar("extContent"));if(i.placeId)expect(bru.getVar("extPlaces").map(p=>p.placeId)).to.include(i.placeId);});}});
+}

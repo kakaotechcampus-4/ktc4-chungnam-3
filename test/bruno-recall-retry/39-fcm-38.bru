@@ -1,0 +1,29 @@
+meta {
+  name: PUSH 토큰 준비 UNREGISTERED
+  type: http
+  seq: 56
+}
+
+put {
+  url: {{baseUrl}}/api/devices/fcm-token
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{qaTokenA}}
+}
+
+body:json {
+  {"fcmToken":"qa-push-{{qaInstallA}}"}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("합성 토큰 등록",function(){expect(res.status).to.equal(204); });
+}

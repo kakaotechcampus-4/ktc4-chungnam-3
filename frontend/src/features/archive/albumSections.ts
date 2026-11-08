@@ -6,12 +6,13 @@
 // 대표 장소명이 없으면 영상 제목(따옴표 없음). 미확정(분석 중 · 실패 · 확인 필요 · 장소 없음)은 “제목”.
 // 제목이 없으면 failed 는 "불러오지 못한 영상"(흐름 메모 2106:781), 그 밖은 "제목 없는 영상". 실패 종류로 가르지 않는다(05 가 설명한다).
 // 배지는 분석 중 · 실패 · 확인 필요 · 장소 없음, ready 는 없다. 미확정은 저장 결과(02~05), ready 는 장소 상세(08)로 연다.
+// savedAgo 는 지우기 확인 시트(07c)의 "{저장 시점} 저장"에 쓴다. 바램과 같은 now 로 정한다.
 import type { SaveState } from "../../domain/saveState";
 import { toSaveStateFromItem } from "../../shared/api/mappers/personalSaveMapper";
 import type { PersonalSaveItemResponse } from "../../shared/api/personalSaves";
 import { youtubeThumbnailUrl } from "../../shared/external-links/youtubeLinks";
 import type { BadgeStatus } from "../../shared/ui/Badge";
-import { fadeFor } from "../../shared/ui/savedAt";
+import { fadeFor, savedAgo } from "../../shared/ui/savedAt";
 import type { ThumbFade } from "../../shared/ui/Thumb";
 
 export type AlbumItem = {
@@ -22,6 +23,7 @@ export type AlbumItem = {
     fade: ThumbFade;
     status?: BadgeStatus;
     opens: "result" | "detail";
+    savedAgo: string;
 };
 
 export type AlbumSection = {
@@ -64,6 +66,7 @@ export function toAlbumSections(
             fade,
             status: BADGE[state.kind],
             opens: state.kind === "ready" ? "detail" : "result",
+            savedAgo: savedAgo(savedAt, now),
         };
         // 최신 저장순이라 같은 섹션은 이어서 온다.
         const last = sections[sections.length - 1];

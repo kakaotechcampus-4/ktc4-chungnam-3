@@ -3,6 +3,9 @@ name: Backend CI
 on:
   pull_request:
     branches: [develop]
+  push:
+    branches: [develop]
+  workflow_call:
 
 permissions:
   contents: read
@@ -12,6 +15,47 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  delivery-tools:
+    name: Backend delivery tools
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check external runner and scoped observation
+        run: node --test test/external/run.test.mjs
+      - name: Check cutover and rollback with mocked commands only
+        run: docker run --rm --network none --entrypoint bash -v "$PWD:/workspace:ro" pgvector/pgvector:pg16 /workspace/.github/deploy/test.sh
+
+  seeded-bruno:
+    name: Bruno seeded regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install pinned Bruno CLI
+        run: npm install --global @usebruno/cli@4.3.0
+      - name: Run isolated seeded collections twice
+        run: bash test/harness/run.sh
+      - name: Upload seeded regression reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bruno-seeded-${{ github.sha }}
+          path: test/harness/reports/
+          if-no-files-found: warn
+          retention-days: 7
+
   build:
     name: Backend build
     runs-on: ubuntu-24.04

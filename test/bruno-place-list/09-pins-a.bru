@@ -1,0 +1,24 @@
+meta {
+  name: PLACES A 출처와 공통 장소
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves/places
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{qaTokenA}}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("저장물·장소 쌍 3개와 최신 저장 우선",function(){expect(res.status).to.equal(200); expect(res.body).to.be.an("array");res.body.forEach(p=>{expect(p.placeId).to.match(/^[0-9a-f-]{36}$/i);expect(p.name).to.be.a("string");expect(p.address).to.be.a("string");expect(p.latitude).to.be.a("number").within(-90,90);expect(p.longitude).to.be.a("number").within(-180,180);expect(Number.isFinite(Date.parse(p.savedAt))).to.equal(true);});expect(res.body).to.have.lengthOf(3);expect(new Set(res.body.map(p=>p.placeId)).size).to.equal(2);expect(res.body.filter(p=>p.placeId===bru.getVar("qaPlace"))).to.have.lengthOf(2);expect(res.body.filter(p=>p.personalSaveId===bru.getVar("qaSaveA1"))).to.have.lengthOf(2);expect(res.body[0].personalSaveId).to.equal(bru.getVar("qaSaveA1"));expect(res.body.filter(p=>p.videoId==="BrunoSeed00")[0].personalSaveId).to.equal(bru.getVar("qaSaveA0"));bru.setVar("qaPins",res.body);});
+}

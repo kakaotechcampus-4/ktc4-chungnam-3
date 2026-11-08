@@ -83,6 +83,14 @@ tasks.register('liveTest', Test) {
 	}
 }
 
+// Test-only entry point. These classes and controls are never packaged in bootJar.
+tasks.register('brunoHarness', JavaExec) {
+	dependsOn testClasses
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = 'com.ktc.chungnam3.remembrall.bruno.BrunoHarness'
+	maxHeapSize = '768m'
+}
+
 tasks.register('recallEval', JavaExec) {
 	dependsOn testClasses
 	classpath = sourceSets.test.runtimeClasspath

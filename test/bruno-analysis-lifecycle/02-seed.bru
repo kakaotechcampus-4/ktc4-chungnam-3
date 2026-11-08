@@ -1,0 +1,29 @@
+meta {
+  name: SETUP 합성 콘텐츠·장소
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/__bruno/control
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  X-Bruno-Control: {{controlToken}}
+}
+
+body:json {
+  {"action":"seed"}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("SETUP 합성 콘텐츠·장소",function(){expect(res.status).to.equal(200); bru.setVar("qaSeed",res.body);bru.setVar("qaPlace",res.body.placeIds[0]);});
+}

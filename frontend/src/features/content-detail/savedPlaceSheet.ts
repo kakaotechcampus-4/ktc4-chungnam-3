@@ -2,6 +2,8 @@
 // 응답에 없는 값은 08b 빈 필드 규칙대로 비운다: 도보 시간 없음(화면이 지금 위치로 채운다), 메모는 장소 설명 → 영상 요약 → 숨김,
 // 태그는 카테고리 1개 → 숨김, 주소가 없으면 주소를 비운다(주소 · 도보 시간이 모두 없으면 시트가 메타 줄을 숨긴다).
 // 원본 영상 줄 둘째 줄은 채널명이 없어 "{영상 제목} · YouTube Shorts", 제목이 없으면 "YouTube Shorts".
+// 바램은 저장 시각대로(fadeFor)다. 근처에서 연 08(nearby: 알림 · 근처 탭 "지금" 카드)이면 원래 색(recent)으로 그리고
+// (썸네일 · 장소 핀), 썸네일이 저장 시각대로의 바램에서 풀리도록 restoreFrom 을 둔다(이미 recent 면 두지 않는다).
 import type {
     PersonalSaveDetailResponse,
     PersonalSavePlaceResponse,
@@ -31,11 +33,13 @@ export function pickPlace(
 export function toSavedPlaceSheet(
     detail: PersonalSaveDetailResponse,
     now: Date,
-    placeId?: string,
+    options: { placeId?: string; nearby?: boolean } = {},
 ): SavedPlaceSheet | null {
-    const place = pickPlace(detail, placeId);
+    const place = pickPlace(detail, options.placeId);
     if (place == null) return null;
     const savedAt = new Date(detail.savedAt);
+    const savedFade = fadeFor(savedAt, now);
+    const restored = options.nearby === true;
     const category = present(detail.category);
     const title = present(detail.title);
     return {
@@ -43,7 +47,8 @@ export function toSavedPlaceSheet(
         place: place.name,
         address: present(place.address),
         thumbUri: youtubeThumbnailUrl(detail.videoId),
-        fade: fadeFor(savedAt, now),
+        fade: restored ? "recent" : savedFade,
+        restoreFrom: restored && savedFade !== "recent" ? savedFade : undefined,
         note: present(place.description) ?? present(detail.summary),
         tags: category == null ? undefined : [category],
         sourceMeta:

@@ -1,0 +1,33 @@
+meta {
+  name: ANALYSIS 멈춤 시작 확인
+  type: http
+  seq: 57
+}
+
+post {
+  url: {{baseUrl}}/__bruno/control
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  X-Bruno-Control: {{controlToken}}
+}
+
+body:json {
+  {"action":"observe","videoId":"BrunoStale0"}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+script:post-response {
+if(res.status===200&&res.body.analysisCalls===0&&Date.now()<bru.getVar("qaDeadline")){await bru.sleep(200);bru.runner.setNextRequest("ANALYSIS 멈춤 시작 확인");}
+}
+
+tests {
+test("ANALYSIS 멈춤 시작 확인",function(){expect(res.status).to.equal(200); expect(res.body.analysisCalls).to.equal(1);});
+}

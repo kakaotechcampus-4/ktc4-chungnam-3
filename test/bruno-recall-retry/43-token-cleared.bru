@@ -1,0 +1,29 @@
+meta {
+  name: PUSH 무효 토큰 제거
+  type: http
+  seq: 60
+}
+
+post {
+  url: {{baseUrl}}/__bruno/control
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  X-Bruno-Control: {{controlToken}}
+}
+
+body:json {
+  {"action":"observe","installationId":"{{qaInstallA}}"}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("PUSH 무효 토큰 제거",function(){expect(res.status).to.equal(200); expect(res.body.devices[0].fcm_token).to.equal(null);});
+}

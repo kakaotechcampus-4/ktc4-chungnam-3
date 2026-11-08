@@ -1,0 +1,28 @@
+meta {
+  name: SETUP B 로그인
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/auth/guest
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {"installationId":"{{qaInstallB}}"}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("세션 발급",function(){expect(res.status).to.equal(200); expect(res.body.sessionToken).to.be.a("string").and.not.empty;bru.setVar("qaTokenB",res.body.sessionToken);});
+}

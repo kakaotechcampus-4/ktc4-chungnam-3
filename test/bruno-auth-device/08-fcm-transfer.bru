@@ -1,0 +1,29 @@
+meta {
+  name: DEVICE 다른 기기로 토큰 이전
+  type: http
+  seq: 8
+}
+
+put {
+  url: {{baseUrl}}/api/devices/fcm-token
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{qaTokenB}}
+}
+
+body:json {
+  {"fcmToken":"qa-fcm-new-{{qaInstallA}}"}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("토큰 등록이 새 기기로 이전됨",function(){expect(res.status).to.equal(204);});
+}

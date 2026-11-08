@@ -1,0 +1,29 @@
+meta {
+  name: DEVICE 새 기기에 토큰 저장
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/__bruno/control
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  X-Bruno-Control: {{controlToken}}
+}
+
+body:json {
+  {"action":"observe","installationId":"{{qaInstallB}}"}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("새 기기에만 동일 토큰이 저장됨",function(){expect(res.status).to.equal(200); expect(res.body.devices[0].fcm_token).to.equal("qa-fcm-new-"+bru.getVar("qaInstallA"));});
+}

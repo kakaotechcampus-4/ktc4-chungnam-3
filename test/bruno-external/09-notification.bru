@@ -1,0 +1,24 @@
+meta {
+  name: EXT 생성 알림 조회
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/notifications/{{extNotification}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{extToken}}
+}
+
+script:pre-request {
+if(!bru.getVar("extToken")) throw new Error("외부 연동 Runner를 처음부터 실행하세요.");
+
+}
+
+tests {
+test("HTTP 200 및 단계 결과",function(){expect(res.status).to.equal(200);expect(res.body.notificationId).to.equal(bru.getVar("extNotification"));expect(res.body.title).to.be.a("string").and.not.empty;expect(res.body.sentAt).to.equal(null);});
+}
