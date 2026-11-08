@@ -8,6 +8,7 @@ import com.ktc.chungnam3.remembrall.recall.config.RecallToolProperties;
 import com.ktc.chungnam3.remembrall.recall.evaluation.FakeWeatherClient;
 import com.ktc.chungnam3.remembrall.recall.tool.RecallToolResults.*;
 import com.ktc.chungnam3.remembrall.recall.weather.WeatherClient;
+import com.ktc.chungnam3.remembrall.repository.RecentProposalRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -60,7 +61,8 @@ import static org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTest
 })
 @AutoConfigureTestDatabase(replace = NONE)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-@Import({RecallToolRepository.class, RecallToolService.class, RecallToolIntegrationTest.PropertiesConfiguration.class})
+@Import({RecallToolRepository.class, RecallToolService.class, RecentProposalRepository.class,
+        RecallToolIntegrationTest.PropertiesConfiguration.class})
 class RecallToolIntegrationTest {
     private static final Instant SAVED_AT = Instant.parse("2026-10-01T00:00:00Z");
     private static final Instant NOW = Instant.parse("2026-10-10T09:00:00Z");
@@ -142,6 +144,23 @@ class RecallToolIntegrationTest {
         var excludeContents = tools.searchCandidates(scope, "카페", null, SearchSource.ALL,
                 Set.of(seenContent, nextContent), Set.of());
         assertThat(excludeContents.places()).extracting(PlaceCandidate::placeId).containsExactly(publicPlace);
+    }
+
+    @Test
+    void recentlySentPlacesAndContentsAreExcludedFromSearch() {
+        UUID sentPlace = place(37.001, 127);
+        savedContent(memberId, sentPlace, vector(1, 0));
+        UUID otherPlace = place(37.002, 127);
+        UUID otherContent = savedContent(memberId, otherPlace, vector(0.8, 0.6));
+        UUID sentNoPlace = savedContent(memberId, null, vector(1, 0));
+        UUID otherNoPlace = savedContent(memberId, null, vector(0.8, 0.6));
+        notification(memberId, sentPlace, otherContent, "SENT", NOW.minusSeconds(3600), false);
+        contentNotification(memberId, sentNoPlace, NOW.minusSeconds(3600));
+
+        var result = tools.searchCandidates(scope, "카페", null);
+
+        assertThat(result.places()).extracting(PlaceCandidate::placeId).containsExactly(otherPlace);
+        assertThat(result.contents()).extracting(ContentCandidate::contentId).containsExactly(otherNoPlace);
     }
 
     @Test
@@ -295,6 +314,19 @@ class RecallToolIntegrationTest {
         jdbc.update("INSERT INTO notification(id,execution_id,member_id,title,body,status,sent_at,opened_at,failure_code) VALUES(?,?,?,'title','body',?,?,?,?)",
                 UUID.randomUUID(), execution, member, status, status.equals("SENT") ? Timestamp.from(sentAt) : null,
                 opened ? Timestamp.from(sentAt) : null, status.equals("FAILED") ? "PUSH_FAILED" : null);
+    }
+
+    private void contentNotification(UUID member, UUID content, Instant sentAt) {
+        jdbc.update("INSERT INTO trigger(id, member_id, place_id) VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
+                UUID.randomUUID(), member, scope.triggerPlaceId());
+        UUID trigger = jdbc.queryForObject("SELECT id FROM trigger WHERE member_id = ? AND place_id = ?", UUID.class,
+                member, scope.triggerPlaceId());
+        UUID execution = UUID.randomUUID();
+        String payload = "{\"items\":[{\"contentId\":\"" + content + "\",\"placeId\":null,\"source\":\"PERSONAL\"}]}";
+        jdbc.update("INSERT INTO recall_execution(id,trigger_id,trigger_event_id,status,result,proposal_type,proposal_payload,agent_version,event_occurred_at) VALUES(?,?,?,'COMPLETED','PROPOSE','CONTENT',CAST(? AS jsonb),'test',?)",
+                execution, trigger, UUID.randomUUID(), payload, Timestamp.from(sentAt));
+        jdbc.update("INSERT INTO notification(id,execution_id,member_id,title,body,status,sent_at) VALUES(?,?,?,'title','body','SENT',?)",
+                UUID.randomUUID(), execution, member, Timestamp.from(sentAt));
     }
 
     private UUID member() {

@@ -815,7 +815,8 @@ class NotificationIntegrationTest {
                 """, String.class)).containsExactly("id", "execution_id", "member_id", "title", "body", "status",
                 "provider_message_id", "failure_code", "sent_at", "opened_at", "created_at", "updated_at");
         assertThat(jdbc.queryForList("SELECT indexname FROM pg_indexes WHERE tablename = 'notification'", String.class))
-                .containsExactlyInAnyOrder("notification_pkey", "uk_notification_execution");
+                .containsExactlyInAnyOrder("notification_pkey", "uk_notification_execution",
+                        "idx_notification_member_sent_at");
         jdbc.update("DELETE FROM recall_execution WHERE id = ?", notifications.findById(id).orElseThrow().getExecutionId());
         assertThat(notifications.existsById(id)).isFalse();
         UUID executionId = pending();

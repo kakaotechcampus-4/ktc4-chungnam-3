@@ -44,6 +44,7 @@ import com.ktc.chungnam3.remembrall.repository.NotificationRepository;
 import com.ktc.chungnam3.remembrall.repository.PublicCandidateRepository;
 import com.ktc.chungnam3.remembrall.repository.RecallCandidateRepository;
 import com.ktc.chungnam3.remembrall.repository.RecallExecutionRepository;
+import com.ktc.chungnam3.remembrall.repository.RecentProposalRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
@@ -469,7 +470,8 @@ class RecallTraceIntegrationTest {
     @Import({LocationEventService.class, RecallExecutionService.class, RecallAgentInputService.class,
             ProposalValidator.class, WalkingTimeCalculator.class, RecallCandidateRepository.class,
             PublicCandidateRepository.class, ContentPersistenceService.class, MemberConsentService.class,
-            ConsentConfiguration.class, NotificationDeliveryService.class, RecallTraceConfiguration.class})
+            ConsentConfiguration.class, NotificationDeliveryService.class, RecallTraceConfiguration.class,
+            RecentProposalRepository.class})
     static class TestApplication {
         @Bean
         Clock clock() {

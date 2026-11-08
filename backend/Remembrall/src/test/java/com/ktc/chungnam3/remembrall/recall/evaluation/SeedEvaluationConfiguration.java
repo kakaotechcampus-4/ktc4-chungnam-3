@@ -18,6 +18,7 @@ import com.ktc.chungnam3.remembrall.recall.tool.RecallToolRepository;
 import com.ktc.chungnam3.remembrall.repository.MemberRepository;
 import com.ktc.chungnam3.remembrall.repository.PublicCandidateRepository;
 import com.ktc.chungnam3.remembrall.repository.RecallCandidateRepository;
+import com.ktc.chungnam3.remembrall.repository.RecentProposalRepository;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.persistence.autoconfigure.EntityScan;
@@ -42,7 +43,8 @@ import java.time.Clock;
         MemberConsentService.class, ConsentConfiguration.class, RecallAgentInputService.class,
         RecallCandidateRepository.class, PublicCandidateRepository.class, ProposalValidator.class,
         WalkingTimeCalculator.class, SeedEvaluationSeeder.class, SeedEvaluationRunner.class,
-        RecallTraceConfiguration.class, RecallToolRepository.class, RecallToolService.class, RecallToolBinding.class})
+        RecallTraceConfiguration.class, RecallToolRepository.class, RecallToolService.class, RecallToolBinding.class,
+        RecentProposalRepository.class})
 public class SeedEvaluationConfiguration {
     @Bean
     @ServiceConnection

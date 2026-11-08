@@ -3,8 +3,10 @@ package com.ktc.chungnam3.remembrall.recall;
 import com.ktc.chungnam3.remembrall.recall.agent.ProposalSource;
 import com.ktc.chungnam3.remembrall.recall.agent.RecallAgentInput;
 import com.ktc.chungnam3.remembrall.recall.config.RecallCandidateProperties;
+import com.ktc.chungnam3.remembrall.recall.config.RecallToolProperties;
 import com.ktc.chungnam3.remembrall.recall.service.RecallAgentInputService;
 import com.ktc.chungnam3.remembrall.repository.RecallCandidateRepository;
+import com.ktc.chungnam3.remembrall.repository.RecentProposalRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -15,6 +17,7 @@ import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
@@ -27,10 +30,12 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 import tools.jackson.databind.ObjectMapper;
 
+import java.time.Clock;
 import java.time.DayOfWeek;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -51,7 +56,7 @@ import static org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTest
 })
 @AutoConfigureTestDatabase(replace = NONE)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-@Import({RecallCandidateRepository.class, RecallAgentInputService.class,
+@Import({RecallCandidateRepository.class, RecallAgentInputService.class, RecentProposalRepository.class,
         RecallAgentInputIntegrationTest.PropertiesConfiguration.class})
 class RecallAgentInputIntegrationTest {
 
@@ -112,6 +117,19 @@ class RecallAgentInputIntegrationTest {
                 contentId, saveId, "Title " + contentId, "가😀나다라", "FOOD", SAVED_AT, "Description " + contentId));
         assertThat(input.situation()).isEqualTo(new RecallAgentInput.Situation(
                 LocalDateTime.of(2026, 10, 9, 1, 30), DayOfWeek.FRIDAY));
+    }
+
+    @Test
+    void recentlySentPlaceIsLeftOutOfNearbyPersonalBeforeLimit() {
+        UUID sent = place(37.001, 127.0);
+        UUID kept = place(37.002, 127.0);
+        UUID sentContent = savedAt(memberId, sent);
+        savedAt(memberId, kept);
+        sentProposal(sent, sentContent, EVENT_TIME.minusSeconds(3600));
+
+        var places = inputs.prepare(executionId).nearbyPersonalCandidates();
+
+        assertThat(places).extracting(RecallAgentInput.PersonalPlace::placeId).containsExactly(kept);
     }
 
     @Test
@@ -409,6 +427,23 @@ class RecallAgentInputIntegrationTest {
                 UUID.randomUUID(), contentId, placeId, "Description " + contentId);
     }
 
+    private void sentProposal(UUID placeId, UUID contentId, Instant sentAt) {
+        UUID triggerId = jdbc.queryForObject("SELECT id FROM trigger WHERE member_id = ? AND place_id = ?",
+                UUID.class, memberId, originPlaceId);
+        UUID sentExecution = UUID.randomUUID();
+        String payload = "{\"items\":[{\"contentId\":\"" + contentId + "\",\"placeId\":\"" + placeId
+                + "\",\"source\":\"PERSONAL\"}]}";
+        jdbc.update("""
+                INSERT INTO recall_execution (id, trigger_id, trigger_event_id, status, result, proposal_type,
+                                              proposal_payload, agent_version, event_occurred_at)
+                VALUES (?, ?, ?, 'COMPLETED', 'PROPOSE', 'PLACE', CAST(? AS jsonb), 'test', ?)
+                """, sentExecution, triggerId, UUID.randomUUID(), payload, Timestamp.from(sentAt));
+        jdbc.update("""
+                INSERT INTO notification (id, execution_id, member_id, title, body, status, sent_at)
+                VALUES (?, ?, ?, 'title', 'body', 'SENT', ?)
+                """, UUID.randomUUID(), sentExecution, memberId, Timestamp.from(sentAt));
+    }
+
     private UUID savedAt(UUID memberId, UUID placeId) {
         UUID id = content("SUCCESS", "AVAILABLE", null);
         save(memberId, id);
@@ -429,6 +464,11 @@ class RecallAgentInputIntegrationTest {
     }
 
     @TestConfiguration(proxyBeanMethods = false)
-    @EnableConfigurationProperties(RecallCandidateProperties.class)
-    static class PropertiesConfiguration {}
+    @EnableConfigurationProperties({RecallCandidateProperties.class, RecallToolProperties.class})
+    static class PropertiesConfiguration {
+        @Bean
+        Clock clock() {
+            return Clock.fixed(EVENT_TIME, ZoneOffset.UTC);
+        }
+    }
 }

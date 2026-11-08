@@ -9,6 +9,7 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Repository
@@ -46,7 +47,8 @@ public class RecallCandidateRepository {
     }
 
     public List<PersonalPlaceRow> findNearbyPersonal(UUID memberId, UUID originPlaceId, double latitude,
-                                                    double longitude, double radiusMeters, int limit) {
+                                                    double longitude, double radiusMeters, int limit,
+                                                    Set<UUID> excludedPlaceIds) {
         return jdbc.query("""
                 WITH distances AS (
                     SELECT p.id AS place_id, p.name,
@@ -55,7 +57,7 @@ public class RecallCandidateRepository {
                                + cos(radians(:latitude)) * cos(radians(p.latitude))
                                * power(sin(radians(p.longitude - :longitude) / 2), 2)
                            )))) AS distance_meters
-                    FROM place p WHERE p.id <> :originPlaceId
+                    FROM place p WHERE p.id <> :originPlaceId AND p.id NOT IN (:excludedPlaceIds)
                 ), eligible AS (
                     SELECT d.*, c.id AS content_id, ps.id AS personal_save_id,
                            c.title, c.summary, c.category, ps.saved_at, cp.description
@@ -71,13 +73,15 @@ public class RecallCandidateRepository {
                 )
                 SELECT e.* FROM eligible e JOIN selected_places s ON s.place_id = e.place_id
                 ORDER BY e.distance_meters, e.place_id, e.saved_at, e.content_id
-                """, nearbyParameters(memberId, originPlaceId, latitude, longitude, radiusMeters, limit),
+                """, nearbyParameters(memberId, originPlaceId, latitude, longitude, radiusMeters, limit,
+                        excludedPlaceIds),
                 (rs, index) -> new PersonalPlaceRow(uuid(rs, "place_id"), rs.getString("name"),
                         rs.getDouble("distance_meters"), personalContent(rs)));
     }
 
     public List<PublicPlaceRow> findNearbyPublic(UUID memberId, double latitude,
-                                                double longitude, double radiusMeters, int limit) {
+                                                double longitude, double radiusMeters, int limit,
+                                                Set<UUID> excludedPlaceIds) {
         return jdbc.query("""
                 WITH distances AS (
                     SELECT p.id AS place_id, p.name,
@@ -86,7 +90,7 @@ public class RecallCandidateRepository {
                                + cos(radians(:latitude)) * cos(radians(p.latitude))
                                * power(sin(radians(p.longitude - :longitude) / 2), 2)
                            )))) AS distance_meters
-                    FROM place p
+                    FROM place p WHERE p.id NOT IN (:excludedPlaceIds)
                 ), eligible AS (
                     SELECT d.*, c.id AS content_id, c.title, c.summary, c.category, cp.description
                     FROM distances d
@@ -107,13 +111,13 @@ public class RecallCandidateRepository {
                 ORDER BY e.distance_meters, e.place_id, e.content_id
                 """.formatted(PublicCandidateRepository.ACTIVE_CONTRIBUTION_EXISTS),
                 Map.of("memberId", memberId, "latitude", latitude, "longitude", longitude,
-                        "radiusMeters", radiusMeters, "limit", limit),
+                        "radiusMeters", radiusMeters, "limit", limit, "excludedPlaceIds", nonEmpty(excludedPlaceIds)),
                 (rs, index) -> new PublicPlaceRow(uuid(rs, "place_id"), rs.getString("name"),
                         rs.getDouble("distance_meters"), uuid(rs, "content_id"), rs.getString("title"),
                         rs.getString("summary"), rs.getString("category"), rs.getString("description")));
     }
 
-    public List<SemanticRow> findSemantic(UUID memberId, UUID originPlaceId, int limit) {
+    public List<SemanticRow> findSemantic(UUID memberId, UUID originPlaceId, int limit, Set<UUID> excludedContentIds) {
         return jdbc.query("""
                 WITH origins AS (
                     SELECT c.id, c.embedding FROM content c
@@ -131,20 +135,28 @@ public class RecallCandidateRepository {
                   AND c.analysis_status <> 'FAILED' AND c.source_status <> 'UNAVAILABLE'
                   AND NOT EXISTS (SELECT 1 FROM content_place cp WHERE cp.content_id = c.id)
                   AND NOT EXISTS (SELECT 1 FROM origins o WHERE o.id = c.id)
+                  AND c.id NOT IN (:excludedContentIds)
                   AND EXISTS (SELECT 1 FROM origins)
                   AND (own.id IS NOT NULL OR %s)
                 ORDER BY cosine_distance, c.id LIMIT :limit
                 """.formatted(PublicCandidateRepository.ACTIVE_CONTRIBUTION_EXISTS),
-                Map.of("memberId", memberId, "originPlaceId", originPlaceId, "limit", limit),
+                Map.of("memberId", memberId, "originPlaceId", originPlaceId, "limit", limit,
+                        "excludedContentIds", nonEmpty(excludedContentIds)),
                 (rs, index) -> new SemanticRow(uuid(rs, "content_id"), uuid(rs, "personal_save_id"),
                         rs.getString("title"), rs.getString("summary"), rs.getString("category"),
                         instant(rs, "saved_at")));
     }
 
     private Map<String, Object> nearbyParameters(UUID memberId, UUID originPlaceId, double latitude,
-                                                  double longitude, double radiusMeters, int limit) {
+                                                  double longitude, double radiusMeters, int limit,
+                                                  Set<UUID> excludedPlaceIds) {
         return Map.of("memberId", memberId, "originPlaceId", originPlaceId, "latitude", latitude,
-                "longitude", longitude, "radiusMeters", radiusMeters, "limit", limit);
+                "longitude", longitude, "radiusMeters", radiusMeters, "limit", limit,
+                "excludedPlaceIds", nonEmpty(excludedPlaceIds));
+    }
+
+    private Set<UUID> nonEmpty(Set<UUID> ids) {
+        return ids.isEmpty() ? Set.of(new UUID(0, 0)) : ids;
     }
 
     private PersonalContentRow personalContent(ResultSet rs) throws SQLException {

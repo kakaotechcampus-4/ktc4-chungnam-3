@@ -469,6 +469,32 @@ class LocationEventIntegrationTest {
     }
 
     @Test
+    void recentlySentPlaceIsSkippedBeforeExecutionAndDoesNotConsumeMemberCooldown() throws Exception {
+        Fixture other = anotherTriggerFor(fixture);
+        sentProposal(other, other.placeId(), NOW.minus(Duration.ofDays(1)));
+
+        assertAccepted(post(other, body(other.placeId(), UUID.randomUUID(), NOW, "ENTER", null)));
+
+        assertThat(executionRepository.count()).isOne();
+        verifyNoInteractions(agent);
+
+        assertAccepted(post(fixture, body(fixture.placeId(), UUID.randomUUID(), NOW, "ENTER", null)));
+
+        assertThat(executionRepository.count()).isEqualTo(2);
+        verify(agent, times(1)).execute(any(), any());
+    }
+
+    @Test
+    void placeSentBeforeRecentProposalWindowCanWakeAgentAgain() throws Exception {
+        sentProposal(fixture, fixture.placeId(), NOW.minus(Duration.ofDays(8)));
+
+        assertAccepted(post(fixture, body(fixture.placeId(), UUID.randomUUID(), NOW, "ENTER", null)));
+
+        assertThat(executionRepository.count()).isEqualTo(2);
+        verify(agent, times(1)).execute(any(), any());
+    }
+
+    @Test
     void simultaneousSameEventForDifferentTriggersCreatesExecutionForEach() throws Exception {
         Fixture other = createFixture(fixture.placeId());
         UUID eventId = UUID.randomUUID();
@@ -723,6 +749,22 @@ class LocationEventIntegrationTest {
         assertAccepted(post(fixture, body(fixture.placeId(), eventId, NOW, "ENTER", null)));
         assertThat(executionRepository.findById(id).orElseThrow().getRetryCount()).isZero();
         verify(agent, times(0)).execute(any(), any());
+    }
+
+    private void sentProposal(Fixture owner, UUID placeId, Instant sentAt) {
+        UUID executionId = UUID.randomUUID();
+        String payload = "{\"items\":[{\"contentId\":\"" + UUID.randomUUID() + "\",\"placeId\":\"" + placeId
+                + "\",\"source\":\"PERSONAL\"}]}";
+        jdbcTemplate.update("""
+                INSERT INTO recall_execution (id, trigger_id, trigger_event_id, status, result, proposal_type,
+                                              proposal_payload, agent_version, event_occurred_at, created_at)
+                VALUES (?, ?, ?, 'COMPLETED', 'PROPOSE', 'PLACE', CAST(? AS jsonb), 'test', ?, ?)
+                """, executionId, owner.triggerId(), UUID.randomUUID(), payload,
+                java.sql.Timestamp.from(sentAt), java.sql.Timestamp.from(sentAt));
+        jdbcTemplate.update("""
+                INSERT INTO notification (id, execution_id, member_id, title, body, status, sent_at)
+                VALUES (?, ?, ?, 'title', 'body', 'SENT', ?)
+                """, UUID.randomUUID(), executionId, owner.memberId(), java.sql.Timestamp.from(sentAt));
     }
 
     private Fixture anotherTriggerFor(Fixture member) {

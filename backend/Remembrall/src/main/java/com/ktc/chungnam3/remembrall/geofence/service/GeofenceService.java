@@ -6,6 +6,7 @@ import com.ktc.chungnam3.remembrall.geofence.config.GeofenceProperties;
 import com.ktc.chungnam3.remembrall.geofence.dto.GeofenceQuery;
 import com.ktc.chungnam3.remembrall.geofence.dto.GeofenceResponse;
 import com.ktc.chungnam3.remembrall.repository.MemberConsentRepository;
+import com.ktc.chungnam3.remembrall.repository.RecentProposalRepository;
 import com.ktc.chungnam3.remembrall.repository.TriggerRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,11 +20,14 @@ public class GeofenceService {
     private final TriggerRepository triggers;
     private final MemberConsentRepository consents;
     private final GeofenceProperties properties;
+    private final RecentProposalRepository recentProposals;
 
-    public GeofenceService(TriggerRepository triggers, MemberConsentRepository consents, GeofenceProperties properties) {
+    public GeofenceService(TriggerRepository triggers, MemberConsentRepository consents, GeofenceProperties properties,
+                           RecentProposalRepository recentProposals) {
         this.triggers = triggers;
         this.consents = consents;
         this.properties = properties;
+        this.recentProposals = recentProposals;
     }
 
     @Transactional(readOnly = true)
@@ -33,7 +37,9 @@ public class GeofenceService {
         }
 
         int limit = (query.platform() == GeofenceQuery.Platform.IOS ? properties.iosLimit() : properties.androidLimit()) - 1;
+        var recentPlaceIds = recentProposals.findRecent(memberId).placeIds();
         List<NearbyPlace> selected = triggers.findEligibleGeofencePlaces(memberId).stream()
+                .filter(place -> !recentPlaceIds.contains(place.getPlaceId()))
                 .map(place -> new NearbyPlace(place.getPlaceId(), place.getLatitude(), place.getLongitude(),
                         GeoDistance.meters(query.latitude(), query.longitude(), place.getLatitude(), place.getLongitude())))
                 .sorted(Comparator.comparingDouble(NearbyPlace::distanceMeters)

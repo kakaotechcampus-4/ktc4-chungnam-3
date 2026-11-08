@@ -12,6 +12,7 @@ import com.ktc.chungnam3.remembrall.repository.ContentRepository;
 import com.ktc.chungnam3.remembrall.repository.PersonalSaveRepository;
 import com.ktc.chungnam3.remembrall.repository.PlaceRepository;
 import com.ktc.chungnam3.remembrall.repository.PublicCandidateRepository;
+import com.ktc.chungnam3.remembrall.repository.RecentProposalRepository;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -28,11 +29,12 @@ public class ProposalValidator {
     private final PublicCandidateRepository publicCandidates;
     private final WalkingTimeCalculator walking;
     private final RecallProperties properties;
+    private final RecentProposalRepository recentProposals;
 
     public ProposalValidator(ContentRepository contents, PlaceRepository places,
                              ContentPlaceRepository links, PersonalSaveRepository saves,
                              PublicCandidateRepository publicCandidates, WalkingTimeCalculator walking,
-                             RecallProperties properties) {
+                             RecallProperties properties, RecentProposalRepository recentProposals) {
         this.contents = contents;
         this.places = places;
         this.links = links;
@@ -40,6 +42,7 @@ public class ProposalValidator {
         this.publicCandidates = publicCandidates;
         this.walking = walking;
         this.properties = properties;
+        this.recentProposals = recentProposals;
     }
 
     public boolean valid(UUID memberId, UUID triggerPlaceId, RecallAgentResult result) {
@@ -52,6 +55,7 @@ public class ProposalValidator {
         if (result.proposalType() == ProposalType.COURSE ? items.size() < 2 : items.size() != 1) {
             return false;
         }
+        var recent = recentProposals.findRecent(memberId);
         var coursePlaceIds = new HashSet<UUID>();
         var coursePlaces = new ArrayList<Place>();
         for (var item : items) {
@@ -69,11 +73,11 @@ public class ProposalValidator {
                 return false;
             }
             if (result.proposalType() == ProposalType.CONTENT) {
-                if (item.placeId() != null) {
+                if (item.placeId() != null || recent.contentIds().contains(item.contentId())) {
                     return false;
                 }
             } else {
-                if (item.placeId() == null) {
+                if (item.placeId() == null || recent.placeIds().contains(item.placeId())) {
                     return false;
                 }
                 var place = places.findById(item.placeId()).orElse(null);
