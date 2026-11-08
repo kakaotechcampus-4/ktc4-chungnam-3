@@ -1,0 +1,35 @@
+meta {
+  name: GEO-SETUP-02 회원 B 로그인 - 200
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/auth/guest
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "installationId": "{{geoInstallationB}}"
+  }
+}
+
+script:pre-request {
+  if (!bru.getVar("geoSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: geoSessionA가 없습니다."); }
+  bru.setVar("geoInstallationB", require("uuid").v4());
+}
+
+tests {
+  test("게스트 세션 발급", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.sessionToken).to.be.a("string").and.not.empty;
+    expect(Date.parse(res.body.sessionExpiresAt)).to.be.above(Date.now());
+    bru.setVar("geoSessionB", res.body.sessionToken);
+  });
+}

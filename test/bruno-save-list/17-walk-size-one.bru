@@ -1,0 +1,57 @@
+meta {
+  name: LIST-WALK size 1 전체 순회 - 200
+  type: http
+  seq: 17
+}
+
+get {
+  url: {{listWalkUrl}}
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("listSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: listSessionA가 없습니다."); }
+  if (!bru.getVar("listSavesA")) { throw new Error("컬렉션을 처음부터 실행하세요: listSavesA가 없습니다."); }
+  const cursor = bru.getVar("listWalkCursor");
+  bru.setVar("listWalkUrl", bru.getEnvVar("baseUrl").replace(/\/$/, "") + "/api/personal-saves?size=1" + (cursor ? "&cursor=" + encodeURIComponent(cursor) : ""));
+}
+
+script:post-response {
+  if (res.status === 200 && Array.isArray(res.body.items)) {
+    const visits = bru.getVar("listWalkVisits") + 1;
+    bru.setVar("listWalkVisits", visits);
+    bru.setVar("listWalkIds", bru.getVar("listWalkIds").concat(res.body.items.map(function (item) { return item.personalSaveId; })));
+    bru.setVar("listWalkDone", res.body.nextCursor === null);
+    bru.setVar("listWalkCursor", res.body.nextCursor);
+    if (res.body.nextCursor !== null && visits < 3) { bru.runner.setNextRequest("LIST-WALK size 1 전체 순회 - 200"); }
+  }
+}
+
+tests {
+  test("한 건씩 순회하며 중복과 무한 커서 방지", function () {
+    expect(res.status).to.equal(200);
+    const saved = bru.getVar("listSavesA");
+    expect(res.body.items).to.be.an("array");
+    res.body.items.forEach(function (item) {
+      const source = saved.find(function (row) { return row.personalSaveId === item.personalSaveId; });
+      expect(source, "다른 회원 또는 생성하지 않은 저장물이 섞임").to.be.an("object");
+      expect(item.contentId).to.equal(source.contentId);
+      expect(item.videoId).to.equal(source.videoId);
+      expect(["PENDING","ANALYZING","SUCCESS","PARTIAL","FAILED"]).to.include(item.analysisStatus);
+      expect(item.title === null || typeof item.title === "string").to.equal(true);
+      expect(item.summary === null || typeof item.summary === "string").to.equal(true);
+      if (typeof item.summary === "string") { expect(Array.from(item.summary).length).to.be.at.most(Number(bru.getEnvVar("maxSummaryLength"))); }
+      expect(Number.isInteger(item.placeCount)).to.equal(true);
+      expect(item.placeCount).to.be.at.least(0);
+      expect(Number.isFinite(Date.parse(item.savedAt))).to.equal(true);
+      expect(Math.abs(Date.parse(item.savedAt) - Date.parse(source.savedAt))).to.be.at.most(1);
+    });
+    expect(res.body.items).to.have.lengthOf(1);
+    const visited = bru.getVar("listWalkIds");
+    expect(new Set(visited).size).to.equal(visited.length);
+    if (bru.getVar("listWalkVisits") >= 3) { expect(res.body.nextCursor).to.equal(null); }
+    else { expect(res.body.nextCursor).to.be.a("string").and.not.empty; }
+  });
+}
+

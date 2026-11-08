@@ -1,0 +1,35 @@
+meta {
+  name: POL-DELETE-12 실제 영상 저장 - 201
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/api/personal-saves
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {"url":"{{shortsUrl}}"}
+}
+
+script:pre-request {
+  if (!bru.getVar("policySession")) { throw new Error("이 폴더를 처음부터 실행하세요: policySession가 없습니다."); }
+}
+
+tests {
+  test("새 개인 저장물", function () {
+    expect(res.status).to.equal(201);
+    expect(res.body.personalSaveId).to.match(/^[0-9a-f-]{36}$/i);
+    expect(res.body.contentId).to.match(/^[0-9a-f-]{36}$/i);
+    bru.setVar("policySaveId", res.body.personalSaveId);
+    bru.setVar("policyContentId", res.body.contentId);
+    bru.setVar("policyAnalysisDeadline", Date.now() + Number(bru.getEnvVar("analysisTimeoutMs")));
+  });
+}
+

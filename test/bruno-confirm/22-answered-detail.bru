@@ -1,0 +1,26 @@
+meta {
+  name: CONFIRM-ANSWER 후보 해소 및 장소 반영 - 200
+  type: http
+  seq: 22
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves/{{confirmSaveA}}
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+if (!bru.getVar("confirmSessionA") || !bru.getVar("confirmSaveA")) { throw new Error("컬렉션을 처음부터 실행하세요."); }
+}
+
+tests {
+test("대상 후보만 해소되고 선택/거절 결과가 반영됨",function(){ expect(res.status).to.equal(200); const normalized = function (body) { const copy = JSON.parse(JSON.stringify(body)); copy.places.sort((a,b)=>a.placeId.localeCompare(b.placeId)); copy.confirmCandidates.sort((a,b)=>a.candidateId.localeCompare(b.candidateId)); return copy; };
+const before=bru.getVar("confirmBefore"), candidate=bru.getVar("confirmCandidate");
+expect(res.body.confirmCandidates).to.deep.equal(before.confirmCandidates.filter(c=>c.candidateId!==candidate));
+expect(res.body.places).to.be.an("array");
+for(const p of before.places) expect(res.body.places.find(x=>x.placeId===p.placeId)).to.deep.equal(p);
+if(bru.getVar("confirmMode")==="reject") expect(normalized(res.body).places).to.deep.equal(before.places);
+else { const o=bru.getVar("confirmOption"); const matches=res.body.places.filter(p=>p.name===o.name&&p.address===o.address&&Math.abs(p.latitude-o.lat)<0.0000001&&Math.abs(p.longitude-o.lng)<0.0000001); expect(matches,"선택한 이름·주소·좌표의 장소가 반영되지 않음").to.have.lengthOf(1); bru.setVar("confirmPlace",matches[0]); expect(res.body.places.length).to.be.at.least(before.places.length); expect(res.body.places.length).to.be.at.most(before.places.length+1); }
+bru.setVar("confirmAfter",normalized(res.body)); });
+}

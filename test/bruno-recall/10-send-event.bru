@@ -1,0 +1,36 @@
+meta {
+  name: RECALL-02 실제 장소 이벤트 접수 - 202
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/api/location-events
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {"placeId":"{{recallPlaceId}}","triggerEventId":"{{recallEventId}}","eventType":"DWELL","eventOccurredAt":"{{recallEventAt}}","location":{"latitude":{{recallLatitude}},"longitude":{{recallLongitude}},"accuracyMeters":10,"locatedAt":"{{recallEventAt}}"}}
+}
+
+script:pre-request {
+  if (!bru.getVar("recallSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: recallSessionA가 없습니다."); }
+  if (!bru.getVar("recallPlaceId")) { throw new Error("컬렉션을 처음부터 실행하세요: recallPlaceId가 없습니다."); }
+  if (!bru.getVar("recallEventId")) { throw new Error("컬렉션을 처음부터 실행하세요: recallEventId가 없습니다."); }
+  bru.setVar("recallEventAt", new Date().toISOString());
+}
+
+script:post-response {
+  bru.setVar("recallObservationDeadline", Date.now() + Number(bru.getEnvVar("observationTimeoutMs")));
+  if (res.status !== 202) { bru.runner.setNextRequest("RECALL-CLEANUP-01 저장 삭제 - 204"); }
+}
+
+tests {
+  test("HTTP 접수만 확인 - 실행 성공은 다음 DB 검사", function () { expect(res.status).to.equal(202); });
+}
+

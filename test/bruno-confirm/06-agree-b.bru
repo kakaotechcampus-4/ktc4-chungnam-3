@@ -1,0 +1,24 @@
+meta {
+  name: CONFIRM-SETUP B 위치 동의 - 200
+  type: http
+  seq: 6
+}
+
+put {
+  url: {{baseUrl}}/api/me/consents/LOCATION_BASED_SERVICE
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{confirmSessionB}}
+}
+
+body:json {
+  {"agreed":true,"termsVersion":"{{confirmTermsB}}"}
+}
+
+tests {
+test("위치 동의", function () { expect(res.status).to.equal(200); expect(res.body.agreed).to.equal(true); });
+}

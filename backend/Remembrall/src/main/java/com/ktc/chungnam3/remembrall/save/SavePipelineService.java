@@ -41,7 +41,9 @@ import java.util.stream.Collectors;
  * 이 파이프라인이 채울 방법이 없어 막혀 있었는데(Place.md 스키마 충돌), 2026-10-10 Place.md 담당자
  * 합의로 geocoding_provider에 DATAPORTAL이 추가되고 카카오 장소 검증까지 이 클래스에 연결되면서
  * 해소됐다 - {@link #saveAndPersist}로 {@code ContentAnalysisResultService.applyOutcome}까지 실제
- * 호출한다. REST 진입점은 {@code SavePipelineController}.
+ * 호출한다. REST 진입점은 personal-saves 담당의 {@code PersonalSaveController}/
+ * {@code PersonalSaveAnalysisService}(2026-10-16 역할 분담 합의, 전용 {@code SavePipelineController}는
+ * 폐기됨).
  * <p>
  * <b>카카오 장소 검증</b>: {@link PlaceResolver}가 확정(RESOLVED)한 좌표라도, Place.md 설계상
  * "같은 장소인지" 판단은 카카오 장소 ID가 기준이라 {@link KakaoPlaceLookup}으로 그 ID를 한 번 더
@@ -156,7 +158,7 @@ public class SavePipelineService {
      * 거치는 이유: 이 서비스가 임베딩 생성까지 포함한 진짜 저장 진입점인데, 지금까지 프로덕션 어디에서도
      * 호출되지 않고 있었다(멘토 피드백 "모듈끼리 연결이 안 됨"의 실제 사례, 2026-10-11 발견·수정).
      * contentId는 {@code ContentPersistenceService.saveAndClaim}이 먼저 만들어둔 값을 그대로 받는다
-     * ({@code SavePipelineController}에서 호출). {@link #save}와 분석을 두 번 돌리지 않도록 같은
+     * ({@code PersonalSaveAnalysisService}에서 호출). {@link #save}와 분석을 두 번 돌리지 않도록 같은
      * {@link Analyzed}를 응답 투영({@link #toResultDto})에도 재사용한다.
      */
     public SavePipelineResultDto saveAndPersist(UUID contentId, SavePipelineRequestDto request) {

@@ -28,6 +28,14 @@ content:
 youtube:
   api:
     key: ${youtube.api.key:}
+  # 다른 외부 클라이언트(LocationIQ 등)와 동일 패턴으로 타임아웃 명시(2026-11-02 추가 - 이전엔 무제한)
+  connect-timeout-ms: 2000
+  read-timeout-ms: 3000
+
+# Gemini 영상 분석(VideoContentAnalyzer) 호출 타임아웃(2026-11-02 추가 - 이전엔 무제한, GoogleGenAiClientConfig
+# 참고). 영상 분석은 응답이 수십 초 걸릴 수 있어 다른 외부 호출보다 넉넉하게 잡았다.
+gemini:
+  chat-timeout-ms: 60000
 
 kakao:
   app-id: ${kakao.app-id:}
@@ -52,6 +60,7 @@ personal-save:
   analysis-queue-capacity: 100
 
 recall:
+  max-event-retries: ${RECALL_MAX_EVENT_RETRIES:1}
   trace:
     max-detail-bytes: 65536
     max-error-length: 1000
@@ -94,6 +103,7 @@ recall:
     max-cache-entries: 512
 
 notification:
+  android-channel-id: ${NOTIFICATION_ANDROID_CHANNEL_ID:nearby}
   max-title-length: 120
   max-body-length: 200
   fcm-credentials-path: ${FCM_CREDENTIALS_PATH:}

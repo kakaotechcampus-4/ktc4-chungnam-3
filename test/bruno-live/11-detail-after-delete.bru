@@ -1,0 +1,24 @@
+meta {
+  name: LIVE-SAVE-09 삭제 후 상세 없음 - 404
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves/{{livePersonalSaveId}}
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("liveSessionTokenA")) { throw new Error("컬렉션을 처음부터 실행하세요: liveSessionTokenA가 없습니다."); }
+  if (!bru.getVar("livePersonalSaveId")) { throw new Error("컬렉션을 처음부터 실행하세요: livePersonalSaveId가 없습니다."); }
+}
+
+tests {
+  test("HTTP 404 및 NOT_FOUND", function () {
+    expect(res.status).to.equal(404);
+    expect(res.body.code).to.equal("NOT_FOUND");
+    expect(res.body.message).to.be.a("string").and.not.empty;
+  });
+}

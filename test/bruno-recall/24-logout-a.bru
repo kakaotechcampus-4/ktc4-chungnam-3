@@ -1,0 +1,20 @@
+meta {
+  name: RECALL-CLEANUP-02 회원 A 로그아웃 - 204
+  type: http
+  seq: 24
+}
+
+post {
+  url: {{baseUrl}}/api/auth/logout
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("recallSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: recallSessionA가 없습니다."); }
+}
+
+tests {
+  test("HTTP 204", function () { expect(res.status).to.equal(204); });
+}
+

@@ -1,0 +1,22 @@
+meta {
+  name: POL-DELETE CLEANUP 저장 삭제 - 204
+  type: http
+  seq: 18
+}
+
+delete {
+  url: {{baseUrl}}/api/personal-saves/{{policySaveId}}
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("policySession")) { throw new Error("이 폴더를 처음부터 실행하세요: policySession가 없습니다."); }
+  if (!bru.getVar("policySaveId")) { throw new Error("이 폴더를 처음부터 실행하세요: policySaveId가 없습니다."); }
+}
+
+tests {
+  test("HTTP 204", function () { expect(res.status).to.equal(204); });
+  if (res.status === 204) { bru.deleteVar("policySaveId"); }
+}
+

@@ -1,0 +1,26 @@
+meta {
+  name: RECALL-SETUP-03 위치 약관 버전 - 200
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/me/consents
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("recallSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: recallSessionA가 없습니다."); }
+}
+
+tests {
+  test("현재 위치 약관 버전 확인", function () {
+    expect(res.status).to.equal(200);
+    const consent = res.body.find(function (item) { return item.consentType === "LOCATION_BASED_SERVICE"; });
+    expect(consent).to.be.an("object");
+    expect(consent.currentTermsVersion).to.be.a("string").and.not.empty;
+    bru.setVar("recallTerms", consent.currentTermsVersion);
+  });
+}
+

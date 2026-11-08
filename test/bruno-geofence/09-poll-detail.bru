@@ -1,0 +1,37 @@
+meta {
+  name: GEO-SETUP-06 분석 완료 대기 - 200
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves/{{geoSaveId}}
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("geoSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: geoSessionA가 없습니다."); }
+  if (!bru.getVar("geoSaveId")) { throw new Error("컬렉션을 처음부터 실행하세요: geoSaveId가 없습니다."); }
+  if (!bru.getVar("geoDeadline")) { throw new Error("컬렉션을 처음부터 실행하세요: geoDeadline가 없습니다."); }
+}
+
+script:post-response {
+  bru.setVar("geoPollContinue", false);
+  if (res.status === 200 && ["PENDING","ANALYZING"].includes(res.body.analysisStatus) && Date.now() < bru.getVar("geoDeadline")) {
+    bru.setVar("geoPollContinue", true);
+    await bru.sleep(Math.min(Number(bru.getEnvVar("pollIntervalMs")), Math.max(0, bru.getVar("geoDeadline") - Date.now())));
+    bru.runner.setNextRequest("GEO-SETUP-06 분석 완료 대기 - 200");
+  }
+}
+
+tests {
+  test("상세 조회와 상태 확인", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.personalSaveId).to.equal(bru.getVar("geoSaveId"));
+    expect(["PENDING","ANALYZING","SUCCESS","PARTIAL","FAILED"]).to.include(res.body.analysisStatus);
+  });
+  if (!bru.getVar("geoPollContinue")) {
+    test("제한 시간 안에 분석 종료", function () { expect(["SUCCESS","PARTIAL","FAILED"]).to.include(res.body.analysisStatus); });
+  }
+}

@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -40,6 +41,11 @@ public class PersonalSaveController {
     public PersonalSaveResponse.Page list(@AuthenticationPrincipal AuthenticatedMember member,
                                            @Valid @ModelAttribute PersonalSaveRequest.Query query) {
         return saves.list(member.memberId(), query.size(), query.cursor());
+    }
+
+    @GetMapping("/places")
+    public List<PersonalSaveResponse.PlacePin> places(@AuthenticationPrincipal AuthenticatedMember member) {
+        return saves.places(member.memberId());
     }
 
     @GetMapping("/{personalSaveId}")

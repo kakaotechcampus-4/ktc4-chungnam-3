@@ -13,9 +13,8 @@
         "android": {
             "package": "com.remembrall.app",
             "adaptiveIcon": {
-                "backgroundColor": "#E6F4FE",
+                "backgroundColor": "#6B4E7A",
                 "foregroundImage": "./assets/images/android-icon-foreground.png",
-                "backgroundImage": "./assets/images/android-icon-background.png",
                 "monochromeImage": "./assets/images/android-icon-monochrome.png"
             },
             "predictiveBackGestureEnabled": false
@@ -28,9 +27,9 @@
             [
                 "expo-splash-screen",
                 {
-                    "backgroundColor": "#208AEF",
-                    "image": "./assets/images/splash-icon.png",
-                    "imageWidth": 76
+                    "backgroundColor": "#6B4E7A",
+                    "image": "./assets/images/splash-glyph.png",
+                    "imageWidth": 96
                 }
             ],
             [
@@ -38,6 +37,21 @@
                 {
                     "isAndroidBackgroundLocationEnabled": true,
                     "isAndroidForegroundServiceEnabled": false
+                }
+            ],
+            [
+                "expo-share-intent",
+                {
+                    "disableIOS": true,
+                    "androidIntentFilters": ["text/plain"]
+                }
+            ],
+            [
+                "expo-notifications",
+                {
+                    "icon": "./assets/images/notification-icon.png",
+                    "color": "#6B4E7A",
+                    "defaultChannel": "nearby"
                 }
             ]
         ],

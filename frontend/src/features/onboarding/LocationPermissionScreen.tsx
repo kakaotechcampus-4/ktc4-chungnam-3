@@ -3,12 +3,17 @@
 // 허용하기는 앱 사용 중 위치를 요청한다. 허용(이번만 포함) → 00e, 거절 → 00f.
 // 위치 정보 이용 동의(00d-c 2202:843): 동의하지 않았으면 허용하기가 먼저 동의 시트를 띄운다.
 // "동의하고 계속"으로 동의를 기록한 뒤에 권한을 요청한다. 동의 기록은 권한 결과와 무관하다.
+// 예전 약관 동의(outdated)도 동의하지 않은 것과 같이 시트를 띄우고, 제목만 약관이 바뀌었다고 알린다.
+// 동의할 때는 미리 읽은 서버 현재 약관 버전을 보낸다. 미리 읽기가 실패했으면 저장 함수가 다시 읽는다.
 import { StackActions, useNavigation } from "@react-navigation/native";
 import { useEffect, useRef, useState } from "react";
 
 import type { ConsentState } from "../../domain/consent";
 import { fetchConsents, setLocationConsent } from "../../shared/api/consents";
-import { toConsentState } from "../../shared/api/mappers/consentMapper";
+import {
+    toConsentState,
+    toCurrentTermsVersion,
+} from "../../shared/api/mappers/consentMapper";
 import { requestForegroundLocation } from "../../shared/permissions/location";
 import Button from "../../shared/ui/Button";
 import LocationConsentSheet, {
@@ -26,9 +31,12 @@ export default function LocationPermissionScreen() {
     // 요청 중에는 다시 누르지 못하게 한다.
     const pending = useRef(false);
     const saving = useRef(false);
-    // 위치 동의 상태. 화면이 열릴 때 미리 읽는다. 아직 못 읽었으면 null(시트를 띄운다).
+    // 위치 동의 상태와 서버 현재 약관 버전. 화면이 열릴 때 미리 읽는다. 아직 못 읽었으면 null(시트를 띄운다).
     const consent = useRef<ConsentState | null>(null);
+    const termsVersion = useRef<string | null>(null);
     const [sheetVisible, setSheetVisible] = useState(false);
+    // 시트를 열 때의 값. 닫히는 동안 제목이 바뀌지 않게 유지한다.
+    const [termsChanged, setTermsChanged] = useState(false);
     const [sheetStatus, setSheetStatus] =
         useState<LocationConsentSheetStatus>("default");
 
@@ -37,6 +45,10 @@ export default function LocationPermissionScreen() {
         fetchConsents()
             .then((consents) => {
                 consent.current = toConsentState(
+                    consents,
+                    "LOCATION_BASED_SERVICE",
+                );
+                termsVersion.current = toCurrentTermsVersion(
                     consents,
                     "LOCATION_BASED_SERVICE",
                 );
@@ -65,6 +77,7 @@ export default function LocationPermissionScreen() {
             requestPermission();
             return;
         }
+        setTermsChanged(consent.current === "outdated");
         setSheetStatus("default");
         setSheetVisible(true);
     };
@@ -75,7 +88,7 @@ export default function LocationPermissionScreen() {
         saving.current = true;
         setSheetStatus("saving");
         try {
-            await setLocationConsent(true);
+            await setLocationConsent(true, termsVersion.current);
         } catch {
             setSheetStatus("error");
             return;
@@ -135,6 +148,7 @@ export default function LocationPermissionScreen() {
                 onAgree={agree}
                 onLater={later}
                 onDismiss={closeSheet}
+                termsChanged={termsChanged}
             />
         </>
     );

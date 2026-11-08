@@ -1,0 +1,45 @@
+meta {
+  name: EVT-INPUT 경도 상한 초과 - 400
+  type: http
+  seq: 18
+}
+
+post {
+  url: {{baseUrl}}/api/location-events
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "placeId": "{{evtPlaceId}}",
+    "triggerEventId": "{{evtEventId}}",
+    "eventType": "ENTER",
+    "eventOccurredAt": "{{evtNow}}",
+    "location": {
+      "latitude": 37.5,
+      "longitude": 181,
+      "accuracyMeters": 0,
+      "locatedAt": "{{evtNow}}"
+    }
+  }
+}
+
+script:pre-request {
+  if (!bru.getVar("sessionToken")) { throw new Error("먼저 02-auth-session의 게스트 로그인을 실행하세요. 컬렉션 전체 실행을 권장합니다."); }
+  bru.setVar("evtPlaceId", require("uuid").v4());
+  bru.setVar("evtEventId", require("uuid").v4());
+  bru.setVar("evtNow", new Date().toISOString());
+}
+
+tests {
+  test("HTTP 400 및 INVALID_REQUEST", function () {
+    expect(res.status).to.equal(400);
+    expect(res.body.code).to.equal("INVALID_REQUEST");
+    expect(res.body.message).to.be.a("string").and.not.empty;
+  });
+}

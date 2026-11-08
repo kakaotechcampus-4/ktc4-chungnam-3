@@ -1,0 +1,25 @@
+meta {
+  name: RECALL-08 접근 거절 후 열람 이력 없음 - 200
+  type: http
+  seq: 16
+}
+
+get {
+  url: {{baseUrl}}/api/notifications/{{recallNotificationId}}
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("recallNotificationId")) { throw new Error("컬렉션을 처음부터 실행하세요: recallNotificationId가 없습니다."); }
+  if (!bru.getVar("recallSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: recallSessionA가 없습니다."); }
+}
+
+tests {
+  test("본인 알림의 미열람 상태 유지", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.notificationId).to.equal(bru.getVar("recallNotificationId"));
+    expect(res.body.openedAt).to.equal(null);
+  });
+}
+

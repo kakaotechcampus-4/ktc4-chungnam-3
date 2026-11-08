@@ -1,0 +1,23 @@
+meta {
+  name: RECALL-05 세션 없이 알림 상세 - 401
+  type: http
+  seq: 13
+}
+
+get {
+  url: {{baseUrl}}/api/notifications/{{recallNotificationId}}
+  body: none
+  auth: none
+}
+
+script:pre-request {
+  if (!bru.getVar("recallNotificationId")) { throw new Error("컬렉션을 처음부터 실행하세요: recallNotificationId가 없습니다."); }
+}
+
+tests {
+  test("알림 인증 차단", function () {
+    expect(res.status).to.equal(401);
+    expect(res.body.code).to.equal("INVALID_SESSION");
+  });
+}
+

@@ -1,0 +1,23 @@
+meta {
+  name: SAVE-BASIC-05 세션 없는 삭제 요청 - 401
+  type: http
+  seq: 13
+}
+
+delete {
+  url: {{baseUrl}}/api/personal-saves/{{missingPersonalSaveId}}
+  body: none
+  auth: none
+}
+
+script:pre-request {
+  if (!bru.getVar("missingPersonalSaveId")) { throw new Error("07-personal-save-basic의 01번 요청부터 실행하세요."); }
+}
+
+tests {
+  test("HTTP 401 및 INVALID_SESSION", function () {
+    expect(res.status).to.equal(401);
+    expect(res.body.code).to.equal("INVALID_SESSION");
+    expect(res.body.message).to.be.a("string").and.not.empty;
+  });
+}

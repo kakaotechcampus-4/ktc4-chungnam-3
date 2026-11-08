@@ -1,0 +1,21 @@
+meta {
+  name: LIST-29 커서 기준인 가운데 저장물 삭제 - 204
+  type: http
+  seq: 29
+}
+
+delete {
+  url: {{baseUrl}}/api/personal-saves/{{listSaveA2}}
+  body: none
+  auth: inherit
+}
+
+script:pre-request {
+  if (!bru.getVar("listSessionA")) { throw new Error("컬렉션을 처음부터 실행하세요: listSessionA가 없습니다."); }
+  if (!bru.getVar("listSaveA2")) { throw new Error("컬렉션을 처음부터 실행하세요: listSaveA2가 없습니다."); }
+}
+
+tests {
+  test("HTTP 204", function () { expect(res.status).to.equal(204); });
+}
+

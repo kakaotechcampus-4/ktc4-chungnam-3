@@ -81,7 +81,7 @@ class ProposalValidatorTest {
     }
 
     private ProposalValidator validator(double maximum) {
-        var properties = new RecallProperties(Duration.ofMinutes(30), Duration.ofHours(2), maximum);
+        var properties = new RecallProperties(Duration.ofMinutes(30), Duration.ofHours(2), maximum, 1);
         return new ProposalValidator(contents, places, links, saves, publicCandidates, walking, properties);
     }
 
