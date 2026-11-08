@@ -1,0 +1,29 @@
+meta {
+  name: EXT 실제 LLM 이벤트
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/location-events
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{extToken}}
+}
+
+body:json {
+  {"placeId":"{{extPlace}}","triggerEventId":"{{extEvent}}","eventType":"DWELL","eventOccurredAt":"{{extAt}}","location":{"latitude":{{extLatitude}},"longitude":{{extLongitude}},"accuracyMeters":10,"locatedAt":"{{extAt}}"}}
+}
+
+script:pre-request {
+if(!bru.getVar("extToken")) throw new Error("외부 연동 Runner를 처음부터 실행하세요.");
+if(!bru.getVar("extPlace"))throw new Error("확정 장소가 없습니다.");bru.setVar("extEvent",require("uuid").v4());bru.setVar("extAt",new Date().toISOString());
+}
+
+tests {
+test("HTTP 202 및 단계 결과",function(){expect(res.status).to.equal(202);});
+}

@@ -1,0 +1,24 @@
+meta {
+  name: DELETE api-error
+  type: http
+  seq: 12
+}
+
+delete {
+  url: {{baseUrl}}/api/personal-saves/{{qaSaveapi-error}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{qaTokenA}}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("개인 저장 삭제",function(){expect(res.status).to.equal(204); });
+}

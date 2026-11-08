@@ -1,0 +1,29 @@
+meta {
+  name: PUSH 발송 오류 저장 FCM_SEND_ERROR
+  type: http
+  seq: 52
+}
+
+post {
+  url: {{baseUrl}}/__bruno/control
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  X-Bruno-Control: {{controlToken}}
+}
+
+body:json {
+  {"action":"observe","installationId":"{{qaInstallA}}"}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("PUSH 발송 오류 저장 FCM_SEND_ERROR",function(){expect(res.status).to.equal(200); const e=res.body.executions.filter(e=>e.trigger_event_id===bru.getVar("qaEventFCM_SEND_ERROR"));expect(e).to.have.lengthOf(1);expect(e[0].status).to.equal("COMPLETED");expect(e[0].retry_count).to.equal(0);const notifications=res.body.notifications.filter(x=>x.execution_id===e[0].id);expect(notifications).to.have.lengthOf(1);expect(notifications[0].status).to.equal("FAILED");expect(notifications[0].failure_code).to.equal("FCM_SEND_ERROR");});
+}

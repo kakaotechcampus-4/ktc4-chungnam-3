@@ -1,0 +1,9 @@
+# Root-owned, mode 600: /etc/remembrall/deploy.conf
+DEPLOY_ROOT=/home/ubuntu/apps/remembrall-deploy
+APP_CONFIG=/home/ubuntu/apps/ktc4-chungnam-3/backend/Remembrall/secrets.properties
+FCM_CONFIG=/home/ubuntu/apps/ktc4-chungnam-3/backend/Remembrall/firebase.json
+PUBLIC_HEALTH_URL=https://remembrall-api.duckdns.org/actuator/health
+DB_CONTAINER=remembrall-db
+DB_USER=remembrall
+DB_NAME=remembrall
+RECALL_MODEL=team-verified-model

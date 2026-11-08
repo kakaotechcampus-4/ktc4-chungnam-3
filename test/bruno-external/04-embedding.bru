@@ -1,0 +1,30 @@
+meta {
+  name: EXT 실제 임베딩과 장소 저장
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{observerUrl}}/content/{{extContent}}?installationId={{extInstallation}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{observerSecret}}
+}
+
+script:pre-request {
+if(!bru.getVar("extToken")) throw new Error("외부 연동 Runner를 처음부터 실행하세요.");
+
+}
+
+script:post-response {
+  if(res.status!==200 || !res.body.hasEmbedding || res.body.dimensions!==768 || !res.body.verifiedPlaces) bru.runner.setNextRequest("EXT 저장 정리");
+}
+
+tests {
+let stepPassed=false;
+test("HTTP 200 및 단계 결과",function(){expect(res.status).to.equal(200);expect(res.body.contentId).to.equal(bru.getVar("extContent"));expect(res.body.hasEmbedding).to.equal(true);expect(res.body.dimensions).to.equal(768);expect(res.body.model).to.be.a("string").and.not.empty;expect(res.body.places).to.be.at.least(1);expect(res.body.verifiedPlaces).to.equal(res.body.places);stepPassed=true;});
+if(!stepPassed)bru.runner.setNextRequest("EXT 저장 정리");
+}

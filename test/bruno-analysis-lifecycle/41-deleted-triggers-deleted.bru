@@ -1,0 +1,29 @@
+meta {
+  name: ANALYSIS 삭제 회원 트리거 없음 deleted
+  type: http
+  seq: 41
+}
+
+post {
+  url: {{baseUrl}}/__bruno/control
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  X-Bruno-Control: {{controlToken}}
+}
+
+body:json {
+  {"action":"observe","installationId":"{{qaInstallA}}"}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("ANALYSIS 삭제 회원 트리거 없음 deleted",function(){expect(res.status).to.equal(200); expect(res.body.triggerCount).to.equal(0);});
+}

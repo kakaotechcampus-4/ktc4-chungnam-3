@@ -1,0 +1,29 @@
+meta {
+  name: ANALYSIS 진행 중 중복 없음 deleted
+  type: http
+  seq: 36
+}
+
+post {
+  url: {{baseUrl}}/__bruno/control
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  X-Bruno-Control: {{controlToken}}
+}
+
+body:json {
+  {"action":"observe","videoId":"BrunoDelay0"}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("ANALYSIS 진행 중 중복 없음 deleted",function(){expect(res.status).to.equal(200); expect(res.body.analysisCalls).to.equal(1);expect(res.body.savedCount).to.equal(1);});
+}

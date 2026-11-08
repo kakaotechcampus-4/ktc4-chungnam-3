@@ -1,0 +1,29 @@
+meta {
+  name: ANALYSIS 호출·저장 중복 없음
+  type: http
+  seq: 30
+}
+
+post {
+  url: {{baseUrl}}/__bruno/control
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  X-Bruno-Control: {{controlToken}}
+}
+
+body:json {
+  {"action":"observe","videoId":"BrunoRetry0"}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("ANALYSIS 호출·저장 중복 없음",function(){expect(res.status).to.equal(200); expect(res.body.analysisCalls).to.equal(2);expect(res.body.savedCount).to.equal(1);});
+}

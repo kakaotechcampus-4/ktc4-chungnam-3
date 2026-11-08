@@ -1,0 +1,24 @@
+meta {
+  name: PLACES 중복 저장 후 목록 유지
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves/places
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{qaTokenA}}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("반복 저장으로 핀 중복 없음",function(){expect(res.status).to.equal(200); expect(bru.getVar("qaSaveA1Repeat")).to.equal(bru.getVar("qaSaveA1"));expect(res.body).to.deep.equal(bru.getVar("qaPins"));});
+}

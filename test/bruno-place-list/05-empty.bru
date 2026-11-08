@@ -1,0 +1,24 @@
+meta {
+  name: PLACES 신규 회원 빈 목록
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves/places
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{qaTokenA}}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("빈 목록",function(){expect(res.status).to.equal(200); expect(res.body).to.deep.equal([]);});
+}

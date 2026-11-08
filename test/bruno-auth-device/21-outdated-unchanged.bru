@@ -1,0 +1,24 @@
+meta {
+  name: CONSENT 잘못된 버전 후 이력 유지
+  type: http
+  seq: 21
+}
+
+get {
+  url: {{baseUrl}}/api/me/consents
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{qaTokenA}}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("잘못된 버전이 기록을 바꾸지 않음",function(){expect(res.status).to.equal(200); expect(res.body.find(c=>c.consentType==="LOCATION_BASED_SERVICE")).to.deep.equal(bru.getVar("qaConsentBefore"));});
+}

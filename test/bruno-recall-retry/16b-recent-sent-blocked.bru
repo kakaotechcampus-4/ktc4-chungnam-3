@@ -1,0 +1,29 @@
+meta {
+  name: DEDUP 최근 발송 장소 재실행 차단
+  type: http
+  seq: 18
+}
+
+post {
+  url: {{baseUrl}}/__bruno/control
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  X-Bruno-Control: {{controlToken}}
+}
+
+body:json {
+  {"action":"observe","installationId":"{{qaInstallA}}"}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("DEDUP 최근 발송 장소 재실행 차단",function(){expect(res.status).to.equal(200);expect(res.body.executions.filter(e=>e.trigger_event_id===bru.getVar("qaEventRecentSent"))).to.have.lengthOf(0);expect(res.body.executions).to.have.lengthOf(1);expect(res.body.notifications).to.have.lengthOf(1);expect(res.body.notifications[0].status).to.equal("SENT");expect(res.body.pushCalls).to.equal(1);expect(res.body.agentCalls).to.equal(bru.getVar("qaBaselineCalls"));});
+}
