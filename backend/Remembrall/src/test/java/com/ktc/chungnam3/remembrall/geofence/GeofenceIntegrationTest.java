@@ -24,9 +24,11 @@ import com.ktc.chungnam3.remembrall.geofence.dto.GeofenceQuery.Platform;
 import com.ktc.chungnam3.remembrall.geofence.dto.GeofenceResponse;
 import com.ktc.chungnam3.remembrall.geofence.dto.GeofenceResponse.PlaceGeofence;
 import com.ktc.chungnam3.remembrall.geofence.service.GeofenceService;
+import com.ktc.chungnam3.remembrall.recall.config.RecallToolProperties;
 import com.ktc.chungnam3.remembrall.repository.DeviceRepository;
 import com.ktc.chungnam3.remembrall.repository.MemberConsentRepository;
 import com.ktc.chungnam3.remembrall.repository.MemberRepository;
+import com.ktc.chungnam3.remembrall.repository.RecentProposalRepository;
 import com.ktc.chungnam3.remembrall.repository.TriggerRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,6 +38,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.persistence.autoconfigure.EntityScan;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestComponent;
@@ -159,6 +162,17 @@ class GeofenceIntegrationTest {
         assertThat(first.places()).extracting(PlaceGeofence::placeId).containsExactly(own);
         assertThat(second.places()).isEqualTo(first.places());
         assertThat(first.places().getFirst().geofenceId()).isEqualTo("place:" + own);
+    }
+
+    @Test
+    void placesSentWithinRecentProposalWindowAreLeftOut() throws Exception {
+        UUID recent = eligiblePlace(memberId, LATITUDE + 0.001, LONGITUDE);
+        UUID expired = eligiblePlace(memberId, LATITUDE + 0.002, LONGITUDE);
+        UUID untouched = eligiblePlace(memberId, LATITUDE + 0.003, LONGITUDE);
+        sentProposal(memberId, recent, NOW.minus(Duration.ofDays(1)));
+        sentProposal(memberId, expired, NOW.minus(Duration.ofDays(8)));
+
+        assertThat(list(Platform.IOS).places()).extracting(PlaceGeofence::placeId).containsExactly(expired, untouched);
     }
 
     @Test
@@ -390,6 +404,23 @@ class GeofenceIntegrationTest {
         return id;
     }
 
+    private void sentProposal(UUID owner, UUID placeId, Instant sentAt) {
+        UUID triggerId = jdbc.queryForObject("SELECT id FROM trigger WHERE member_id = ? AND place_id = ?",
+                UUID.class, owner, placeId);
+        UUID executionId = UUID.randomUUID();
+        String payload = "{\"items\":[{\"contentId\":\"" + UUID.randomUUID() + "\",\"placeId\":\"" + placeId
+                + "\",\"source\":\"PERSONAL\"}]}";
+        jdbc.update("""
+                INSERT INTO recall_execution (id, trigger_id, trigger_event_id, status, result, proposal_type,
+                                              proposal_payload, agent_version, event_occurred_at, created_at)
+                VALUES (?, ?, ?, 'COMPLETED', 'PROPOSE', 'PLACE', CAST(? AS jsonb), 'test', ?, ?)
+                """, executionId, triggerId, UUID.randomUUID(), payload, Timestamp.from(sentAt), Timestamp.from(sentAt));
+        jdbc.update("""
+                INSERT INTO notification (id, execution_id, member_id, title, body, status, sent_at)
+                VALUES (?, ?, ?, 'title', 'body', 'SENT', ?)
+                """, UUID.randomUUID(), executionId, owner, Timestamp.from(sentAt));
+    }
+
     private void trigger(UUID owner, UUID placeId) {
         jdbc.update("INSERT INTO trigger (id, member_id, place_id) VALUES (?, ?, ?)", UUID.randomUUID(), owner, placeId);
     }
@@ -404,7 +435,8 @@ class GeofenceIntegrationTest {
             classes = {MemberRepository.class, DeviceRepository.class, MemberConsentRepository.class, TriggerRepository.class}))
     @Import({SecurityConfig.class, SessionAuthenticationFilter.class, ApiAuthenticationEntryPoint.class,
             SessionTokenHasher.class, GlobalExceptionHandler.class, GeofenceConfiguration.class,
-            GeofenceController.class, GeofenceService.class})
+            GeofenceController.class, GeofenceService.class, RecentProposalRepository.class})
+    @EnableConfigurationProperties(RecallToolProperties.class)
     static class GeofenceTestApplication {
         @Bean
         Clock geofenceTestClock() {

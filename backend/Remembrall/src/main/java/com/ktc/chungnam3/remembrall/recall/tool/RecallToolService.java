@@ -7,6 +7,7 @@ import com.ktc.chungnam3.remembrall.recall.tool.RecallToolRepository.ContentRow;
 import com.ktc.chungnam3.remembrall.recall.tool.RecallToolRepository.SearchPlaceRow;
 import com.ktc.chungnam3.remembrall.recall.tool.RecallToolResults.*;
 import com.ktc.chungnam3.remembrall.recall.weather.WeatherClient;
+import com.ktc.chungnam3.remembrall.repository.RecentProposalRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
@@ -19,6 +20,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -37,10 +39,12 @@ public class RecallToolService {
     private final WeatherClient weather;
     private final Clock clock;
     private final TransactionTemplate reads;
+    private final RecentProposalRepository recentProposals;
 
     public RecallToolService(EmbeddingClient embeddings, RecallToolRepository repository,
                              RecallCandidateProperties candidates, RecallToolProperties properties,
-                             PlatformTransactionManager transactionManager, WeatherClient weather, Clock clock) {
+                             PlatformTransactionManager transactionManager, WeatherClient weather, Clock clock,
+                             RecentProposalRepository recentProposals) {
         this.embeddings = embeddings;
         this.repository = repository;
         this.candidates = candidates;
@@ -50,6 +54,7 @@ public class RecallToolService {
         this.reads = new TransactionTemplate(transactionManager);
         this.reads.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.reads.setReadOnly(true);
+        this.recentProposals = recentProposals;
     }
 
     public SearchResult searchCandidates(RecallToolScope scope, String condition, Double radiusMeters) {
@@ -74,8 +79,9 @@ public class RecallToolService {
         }
         try {
             return reads.execute(status -> {
+                var recent = recentProposals.findRecent(scope.memberId());
                 var rows = repository.searchPlaces(scope, vector, radius, properties.searchPlaceLimit(),
-                        source == null ? SearchSource.ALL : source, seenContents, seenPlaces);
+                        source == null ? SearchSource.ALL : source, seenContents, union(seenPlaces, recent.placeIds()));
                 var placesById = new LinkedHashMap<UUID, SearchPlaceRow>();
                 var contentsByPlace = new LinkedHashMap<UUID, List<ContentCandidate>>();
                 rows.forEach(row -> {
@@ -85,7 +91,8 @@ public class RecallToolService {
                 var places = placesById.values().stream().map(row -> new PlaceCandidate(row.placeId(), row.name(),
                         row.distanceMeters(), List.copyOf(contentsByPlace.get(row.placeId())))).toList();
                 var contents = repository.searchContents(scope.memberId(), vector, properties.searchContentLimit(),
-                        source == null ? SearchSource.ALL : source, seenContents).stream().map(this::candidate).toList();
+                        source == null ? SearchSource.ALL : source, union(seenContents, recent.contentIds()))
+                        .stream().map(this::candidate).toList();
                 return new SearchResult(places, contents, null);
             });
         } catch (DataAccessException exception) {
@@ -145,6 +152,13 @@ public class RecallToolService {
             forecast = WeatherClient.Weather.unavailable(now);
         }
         return new VisitConditionsResult(stored.places(), forecast, stored.errors(), stored.error());
+    }
+
+    private static Set<UUID> union(Set<UUID> seen, Set<UUID> recent) {
+        if (recent.isEmpty()) return seen;
+        var merged = new HashSet<>(seen);
+        merged.addAll(recent);
+        return merged;
     }
 
     private String validateIds(RecallToolScope scope, List<UUID> ids) {
