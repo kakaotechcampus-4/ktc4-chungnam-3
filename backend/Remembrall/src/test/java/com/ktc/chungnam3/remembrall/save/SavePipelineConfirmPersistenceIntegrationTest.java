@@ -111,7 +111,8 @@ class SavePipelineConfirmPersistenceIntegrationTest {
 
         SavePipelineService savePipelineService = new SavePipelineService(
                 videoAnalyzer, placeLookup, placeResolver,
-                (name, branch, lat, lon) -> Optional.of("kakao-place-id"),
+                // 좌표마다 다른 카카오 ID - 같은 ID를 주면 되묻기 사전검증이 경복궁·경복궁역을 한 장소로 합쳐 확정해버린다.
+                (name, branch, lat, lon) -> Optional.of("kakao-" + lat + "," + lon),
                 contentAnalysisResultService, confirmCandidateRepository,
                 new ObjectMapper(), Clock.fixed(NOW, ZoneOffset.UTC));
 

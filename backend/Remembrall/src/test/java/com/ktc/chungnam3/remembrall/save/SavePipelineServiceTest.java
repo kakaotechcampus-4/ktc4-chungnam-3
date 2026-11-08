@@ -56,9 +56,12 @@ class SavePipelineServiceTest {
                 1000);
     }
 
-    /** 대부분의 테스트는 카카오 검증 자체가 관심사가 아니므로, 항상 ID를 찾은 것으로 고정한다. */
+    /**
+     * 대부분의 테스트는 카카오 검증 자체가 관심사가 아니므로, 항상 ID를 찾은 것으로 고정한다. 좌표마다 다른
+     * ID를 준다 - 되묻기 사전검증이 같은 카카오 ID 옵션을 합치므로, 같은 ID를 주면 서로 다른 장소가 합쳐진다.
+     */
     private static KakaoPlaceLookup kakaoAlwaysFound() {
-        return (name, branch, lat, lon) -> Optional.of("kakao-test-id");
+        return (name, branch, lat, lon) -> Optional.of("kakao-" + lat + "," + lon);
     }
 
     @Test
@@ -199,6 +202,87 @@ class SavePipelineServiceTest {
 
         assertThat(resolved.places().get(0).decision()).isEqualTo(PlaceOutcomeDto.Decision.NEEDS_CONFIRMATION);
         assertThat(resolved.places().get(0).confirmRequest()).isNotNull();
+    }
+
+    // --- 되묻기 후보 카카오 사전검증(2026-11-08, 2002횟집 저장 실패 실서버 재현) ---
+    // "경복궁" 검색결과 2건(서로 600m+ 떨어져 중복 병합 안 됨) → 기존 판정은 NEEDS_CONFIRMATION 2옵션.
+    private static final PlaceLookup TWO_OPTIONS = lookupOf(java.util.Map.of(
+            "경복궁", List.of(result("경복궁, 서울", 37.57, 126.97), result("경복궁역, 서울", 37.58, 126.98))));
+    private static final VideoAnalyzer ONE_CANDIDATE = url -> extraction(List.of(candidate("p1", "경복궁", null, null)));
+
+    @Test
+    void 되묻기_옵션중_카카오가_못찾는_옵션은_빼고_찾은_옵션엔_ID를_붙인다() {
+        KakaoPlaceLookup kakao = (name, branch, lat, lon) -> lat == 37.57 ? Optional.of("k-a") : Optional.empty();
+        SavePipelineService service = new SavePipelineService(ONE_CANDIDATE, TWO_OPTIONS, realResolver(), kakao);
+
+        PlaceOutcomeDto outcome = service.save(new SavePipelineRequestDto("https://youtu.be/x")).places().get(0);
+
+        // 하나가 빠져서 1개가 남은 것(같은 장소로 합쳐진 게 아님)은 빠진 쪽이 정답이었을 수 있어 확정하지 않는다.
+        assertThat(outcome.decision()).isEqualTo(PlaceOutcomeDto.Decision.NEEDS_CONFIRMATION);
+        assertThat(outcome.confirmRequest().candidates()).extracting(ResolvedPlaceDto::verificationPlaceId)
+                .containsExactly("k-a");
+    }
+
+    @Test
+    void 확정된_되묻기의_candidateId는_옵션_id가_아니라_원래_후보_id다() {
+        KakaoPlaceLookup kakao = (name, branch, lat, lon) -> Optional.of("same-kakao-id");
+        SavePipelineService service = new SavePipelineService(ONE_CANDIDATE, TWO_OPTIONS, realResolver(), kakao);
+
+        PlaceOutcomeDto outcome = service.save(new SavePipelineRequestDto("https://youtu.be/x")).places().get(0);
+
+        assertThat(outcome.resolvedPlace().candidateId()).isEqualTo("p1");
+    }
+
+    @Test
+    void 되묻기_옵션이_모두_같은_카카오_장소면_하나로_합쳐_바로_확정한다() {
+        KakaoPlaceLookup kakao = (name, branch, lat, lon) -> Optional.of("same-kakao-id");
+        SavePipelineService service = new SavePipelineService(ONE_CANDIDATE, TWO_OPTIONS, realResolver(), kakao);
+
+        PlaceOutcomeDto outcome = service.save(new SavePipelineRequestDto("https://youtu.be/x")).places().get(0);
+
+        assertThat(outcome.decision()).isEqualTo(PlaceOutcomeDto.Decision.RESOLVED);
+        assertThat(outcome.resolvedPlace().verificationPlaceId()).isEqualTo("same-kakao-id");
+    }
+
+    @Test
+    void 되묻기_옵션을_카카오가_하나도_못찾으면_저장할_수_없으니_NO_PLACE다() {
+        KakaoPlaceLookup kakao = (name, branch, lat, lon) -> Optional.empty();
+        SavePipelineService service = new SavePipelineService(ONE_CANDIDATE, TWO_OPTIONS, realResolver(), kakao);
+
+        PlaceOutcomeDto outcome = service.save(new SavePipelineRequestDto("https://youtu.be/x")).places().get(0);
+
+        assertThat(outcome.decision()).isEqualTo(PlaceOutcomeDto.Decision.NO_PLACE);
+    }
+
+    @Test
+    void 카카오_호출이_실패한_옵션은_빼지_않고_ID_없이_남겨_되묻는다() {
+        KakaoPlaceLookup kakao = (name, branch, lat, lon) -> {
+            if (lat == 37.57) {
+                throw new IllegalStateException("카카오 일시 장애");
+            }
+            return Optional.of("k-b");
+        };
+        SavePipelineService service = new SavePipelineService(ONE_CANDIDATE, TWO_OPTIONS, realResolver(), kakao);
+
+        PlaceOutcomeDto outcome = service.save(new SavePipelineRequestDto("https://youtu.be/x")).places().get(0);
+
+        assertThat(outcome.decision()).isEqualTo(PlaceOutcomeDto.Decision.NEEDS_CONFIRMATION);
+        assertThat(outcome.confirmRequest().candidates()).extracting(ResolvedPlaceDto::verificationPlaceId)
+                .containsExactly(null, "k-b");
+    }
+
+    @Test
+    void 원래_1개짜리_되묻기는_카카오가_찾아도_확정하지_않고_ID만_붙여_되묻는다() {
+        // 지점명 불일치로 생긴 1옵션 되묻기 - 카카오 검증은 "그 좌표에 그 이름이 있다"일 뿐 영상 속 지점을 보장 안 함.
+        VideoAnalyzer analyzer = url -> extraction(List.of(candidate("p1", "성심당", "본점", null)));
+        PlaceLookup lookup = lookupOf(java.util.Map.of("성심당", List.of(result("성심당 역전점, 대전", 36.33, 127.43))));
+        SavePipelineService service = new SavePipelineService(analyzer, lookup, realResolver(), kakaoAlwaysFound());
+
+        PlaceOutcomeDto outcome = service.save(new SavePipelineRequestDto("https://youtu.be/x")).places().get(0);
+
+        assertThat(outcome.decision()).isEqualTo(PlaceOutcomeDto.Decision.NEEDS_CONFIRMATION);
+        assertThat(outcome.confirmRequest().candidates()).hasSize(1);
+        assertThat(outcome.confirmRequest().candidates().get(0).verificationPlaceId()).isNotNull();
     }
 
     @Test

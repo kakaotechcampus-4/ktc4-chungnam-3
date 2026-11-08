@@ -92,8 +92,22 @@ public class KakaoPlaceClient implements KakaoPlaceLookup {
         }
 
         return response.documents().stream()
-                .filter(doc -> doc.placeName() != null && doc.placeName().contains(name))
+                .filter(doc -> nameMatches(doc.placeName(), name))
                 .findFirst()
                 .map(Document::id);
+    }
+
+    /**
+     * 카카오 장소명에 찾던 이름이 들어있는지 본다(2026-11-08) - 카카오는 "오일내 둔산시청점"처럼 띄어
+     * 쓰고 공공상가정보는 "오일내둔산"처럼 붙여 써서, 위치가 정확해도 이름 비교에서 떨어져 되묻기 답변이
+     * 매번 404가 났다(실서버 재현).
+     * <p>
+     * 원래 글자 그대로 들어있으면 기존처럼 통과(단어 중간이어도 - "원조할매순대국"의 "할매순대국").
+     * 공백을 지워야만 맞을 때는 찾는 이름이 어떤 단어의 첫머리에서 시작해야 통과한다(PR 리뷰,
+     * doheelab-coder) - 공백만 지우면 "성공 차돌박이"가 "공차"로 맞아 엉뚱한 가게에 카카오 ID가 붙고,
+     * Place는 카카오 ID마다 하나라 두 가게가 한 Place로 합쳐진다(되돌리려면 DB 수정 필요).
+     */
+    static boolean nameMatches(String placeName, String name) {
+        return PlaceNameMatcher.matches(placeName, name);
     }
 }
