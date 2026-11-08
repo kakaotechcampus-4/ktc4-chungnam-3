@@ -152,7 +152,7 @@ frontend/
         │   └── secureStore.ts    안전한 저장소(expo-secure-store) 지연 로더. 세션 · 설치 id
         ├── geo/
         │   └── distanceMeters.ts  두 좌표 거리(m). 서버 GeoDistance 와 같은 haversine
-        ├── external-links/   지도 딥링크 (단순 URL 빌더)
+        ├── external-links/   외부 링크. 카카오맵 도보 길찾기 URL(mapLinks) · 열기(openMapRoute, 앱 → 모바일웹) · YouTube 주소(youtubeLinks) · 웹 페이지 열기(openExternalUrl)
         │   ├── youtubeLinks.ts  YouTube Shorts 주소 · 썸네일 주소(hqdefault). 공유 파서와 화면들이 같이 쓴다
         │   └── openExternalUrl.ts  웹 페이지(약관) 열기. expo-web-browser 지연 로드, 실패하면 Linking
         └── ui/               두 개 이상 feature 가 쓰는 공통 컴포넌트
@@ -246,7 +246,10 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   로그인 · 온보딩을 마쳐 signedIn 이 되면 연다(종료 상태에서 누른 알림으로 로그인 전 화면이 뜬 경우). 위치 동의는 조건이 아니다. 시연 도구의 "알림 열기"도 같은 opener 를 부른다(중복 거르기는 거치지 않아 다시 누르면 다시 연다).
 - 02c 에서 저장하면 SaveResult 모달 하나만 닫아 흐름을 끝낸다. 뒤로 가기는 02c → 02 로 간다.
 - 08 "이 장소가 아니에요"는 SaveResult 모달에 PlaceSearch 하나만 올린 바꾸기 모드(placeId)다. 바꾸기 · 뒤로 가기 모두 모달을 닫고 08 로 돌아간다. 딥링크는 없다.
-- 08 "길 안내 시작"은 동작하지 않는다. 백엔드 협의 이슈 대기.
+- 08 "길 안내 시작"은 카카오맵 도보 길찾기를 연다(`openWalkingRoute`, SDK · API 키 · 서버 변경 없음). 세 경로(저장물 · 알림 · 개발용 딥링크) 모두 같다.
+  앱 스킴 `kakaomap://route?sp={위도},{경도}&ep={위도},{경도}&by=foot` 을 먼저 열고, 실패하면 모바일웹 스킴 `http://m.map.kakao.com/scheme/route?…`(같은 파라미터)을 연다.
+  둘 다 실패하면 경고만 남긴다. ep 는 08 에 그린 장소 좌표, sp 는 지금 위치(`useDeviceLocation` 이 located 일 때)이고 모르면 sp 를 빼고 바로 연다.
+  좌표는 서버 값 그대로(반올림 · 인코딩 없음), 이동수단은 foot 고정이다. `canOpenURL` 은 쓰지 않는다(Android 11+ 는 `<queries>` 선언이 필요해진다).
 - 하단 바의 선택 표시는 `bg/subtle` pill 이다. 브랜드 색을 쓰지 않는다.
 - 없는 저장 결과 id · 장소 id 로 들어오면 NotFound(12)를 보여준다. "기억 목록으로" → 기억 탭.
 - 기억 탭(07 · 07b)은 저장물 목록 API(`fetchPersonalSaves`)를 읽는다. 첫 페이지 20개, 끝 근처(한 화면 이내)까지 내리면 `nextCursor` 로 다음 페이지를 붙인다.

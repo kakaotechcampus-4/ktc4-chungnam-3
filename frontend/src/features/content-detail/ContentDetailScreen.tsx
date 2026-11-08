@@ -10,6 +10,7 @@
 // notificationId 로 열면(알림) 알림 상세를 읽고 열람 처리를 한 번 보낸 뒤(기다리지 않고 실패는 무시), 첫 항목의 저장물 08 로 바꾼다.
 // 404 · 항목 없음 · 내 저장물이 아닌 항목(PUBLIC)은 12, 그 밖의 읽기 실패는 다시 불러오기.
 // 읽는 동안은 바탕과 뒤로가기만, 읽기 실패는 그 위에 다시 불러오기 문구를 보인다.
+// "길 안내 시작"은 카카오맵 도보 길찾기를 연다. 도착은 그린 장소 좌표, 출발은 지금 위치(모르면 빼고 연다, 기다리지 않는다).
 import BottomSheet, {
     type BottomSheetFooterProps,
     BottomSheetScrollView,
@@ -43,6 +44,7 @@ import { openNotification } from "../../shared/api/notifications";
 import { useNotificationDetail } from "../../shared/api/useNotificationDetail";
 import { usePersonalSaveDetail } from "../../shared/api/usePersonalSaveDetail";
 import { openExternalUrl } from "../../shared/external-links/openExternalUrl";
+import { openWalkingRoute } from "../../shared/external-links/openMapRoute";
 import { youtubeShortsUrl } from "../../shared/external-links/youtubeLinks";
 import { distanceMeters } from "../../shared/geo/distanceMeters";
 import { useDeviceLocation } from "../../shared/permissions/useDeviceLocation";
@@ -376,6 +378,7 @@ function ContentDetailView({
         <DetailFooter
             {...props}
             bottomInset={insets.bottom}
+            onStartRoute={() => void openWalkingRoute(coordinate, current)}
             onNotThisPlace={onReplace}
         />
     );
