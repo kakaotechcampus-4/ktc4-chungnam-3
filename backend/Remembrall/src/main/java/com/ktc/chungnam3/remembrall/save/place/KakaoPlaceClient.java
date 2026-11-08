@@ -92,8 +92,21 @@ public class KakaoPlaceClient implements KakaoPlaceLookup {
         }
 
         return response.documents().stream()
-                .filter(doc -> doc.placeName() != null && doc.placeName().contains(name))
+                .filter(doc -> nameMatches(doc.placeName(), name))
                 .findFirst()
                 .map(Document::id);
+    }
+
+    /**
+     * 카카오 장소명에 찾던 이름이 들어있는지 공백·대소문자를 무시하고 본다(2026-11-08) - 카카오는
+     * "오일내 둔산시청점"처럼 띄어 쓰고 공공상가정보는 "오일내둔산"처럼 붙여 써서, 위치가 정확해도
+     * 이름 비교에서 떨어져 되묻기 답변이 매번 404가 났다(실서버 재현).
+     */
+    static boolean nameMatches(String placeName, String name) {
+        return placeName != null && normalize(placeName).contains(normalize(name));
+    }
+
+    private static String normalize(String s) {
+        return s.toLowerCase().replaceAll("\\s+", "");
     }
 }
