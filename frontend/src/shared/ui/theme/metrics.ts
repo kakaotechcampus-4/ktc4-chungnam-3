@@ -21,6 +21,8 @@ export const metrics = {
         playSize: 12,
         playOffsetLeft: 4.5,
         playOffsetTop: 4,
+        // 근처에서 연 08 썸네일이 저장 시각대로의 바램에서 원래 색으로 풀리는 시간. 구현값이다.
+        restoreDurationMs: 600,
     },
     // C/Badge 2054:150.
     badge: {

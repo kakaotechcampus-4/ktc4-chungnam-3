@@ -56,10 +56,15 @@ export default function ProposalScreen() {
         location.status === "located" ? location.coordinate : undefined;
     const area = useAreaName(current);
 
-    const openDetail = (item: { personalSaveId: string; placeId: string }) =>
+    // "지금" 카드로 연 08 은 근처에서 연 것(nearby)이라 원래 색으로 그린다.
+    const openDetail = (
+        item: { personalSaveId: string; placeId: string },
+        nearby = false,
+    ) =>
         navigation.navigate("ContentDetail", {
             personalSaveId: item.personalSaveId,
             placeId: item.placeId,
+            ...(nearby && { nearby: true as const }),
         });
     const openSettings = () => navigation.navigate("Settings");
     // 06 "{장소} 기억 보기". 지도 탭이 그 장소를 가운데에 두고 핀을 고른다.
@@ -257,7 +262,7 @@ export default function ProposalScreen() {
                         summary={now.summary}
                         thumbUri={now.thumbUri}
                         fade={now.fade}
-                        onPress={() => openDetail(now)}
+                        onPress={() => openDetail(now, true)}
                         launchTarget
                     />
                     {groups.map((group) => (
