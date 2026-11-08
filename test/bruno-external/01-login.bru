@@ -1,0 +1,27 @@
+meta {
+  name: EXT 회원 로그인
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/auth/guest
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {"installationId":"{{extInstallation}}"}
+}
+
+script:pre-request {
+Object.keys(bru.getAllVars()).filter(k=>k.startsWith("ext")).forEach(k=>bru.deleteVar(k));bru.setVar("extInstallation",require("uuid").v4());
+}
+
+tests {
+test("HTTP 200 및 단계 결과",function(){expect(res.status).to.equal(200);expect(res.body.sessionToken).to.be.a("string").and.not.empty;bru.setVar("extToken",res.body.sessionToken);});
+}

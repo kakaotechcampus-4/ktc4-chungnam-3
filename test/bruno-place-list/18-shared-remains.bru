@@ -1,0 +1,24 @@
+meta {
+  name: PLACES 다른 저장물의 참조 유지
+  type: http
+  seq: 18
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves/places
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{qaTokenA}}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("고유 장소 제거·공통 장소 유지",function(){expect(res.status).to.equal(200); expect(res.body).to.have.lengthOf(1);expect(res.body[0].personalSaveId).to.equal(bru.getVar("qaSaveA0"));expect(res.body[0].placeId).to.equal(bru.getVar("qaPlace"));});
+}

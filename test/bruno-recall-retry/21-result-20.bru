@@ -1,0 +1,29 @@
+meta {
+  name: RETRY 최대 재시도 기록
+  type: http
+  seq: 21
+}
+
+post {
+  url: {{baseUrl}}/__bruno/control
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  X-Bruno-Control: {{controlToken}}
+}
+
+body:json {
+  {"action":"observe","installationId":"{{qaInstallA}}"}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("RETRY 최대 재시도 기록",function(){expect(res.status).to.equal(200); const e=res.body.executions.filter(e=>e.trigger_event_id===bru.getVar("qaEventlimit"));expect(e).to.have.lengthOf(1);expect(e[0].status).to.equal("FAILED");expect(e[0].retry_count).to.equal(1);const notifications=res.body.notifications.filter(x=>x.execution_id===e[0].id);expect(notifications).to.have.lengthOf(0);bru.setVar("qaBaselineCalls",res.body.agentCalls);});
+}

@@ -1,0 +1,30 @@
+meta {
+  name: EXT 실제 분석 완료
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves/{{extSave}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{extToken}}
+}
+
+script:pre-request {
+if(!bru.getVar("extToken")) throw new Error("외부 연동 Runner를 처음부터 실행하세요.");
+if(!bru.getVar("extSave"))throw new Error("저장 접수가 실패했습니다.");
+}
+
+script:post-response {
+const pending=res.status===200&&["PENDING","ANALYZING"].includes(res.body.analysisStatus);bru.setVar("extWaiting",pending&&Date.now()<bru.getVar("extDeadline"));if(bru.getVar("extWaiting")){await bru.sleep(2000);bru.runner.setNextRequest("EXT 실제 분석 완료");}else if(res.status!==200||res.body.analysisStatus!=="SUCCESS"||!res.body.places?.length){bru.runner.setNextRequest("EXT 저장 정리");}
+}
+
+tests {
+let stepPassed=false;
+test("HTTP 200 및 단계 결과",function(){expect(res.status).to.equal(200);if(!bru.getVar("extWaiting")){expect(res.body.analysisStatus).to.equal("SUCCESS");expect(res.body.title).to.be.a("string").and.not.empty;expect(res.body.summary).to.be.a("string").and.not.empty;expect(res.body.places).to.be.an("array").and.not.empty;res.body.places.forEach(p=>{expect(p.latitude).to.be.a("number").within(-90,90);expect(p.longitude).to.be.a("number").within(-180,180);});bru.setVar("extPlaces",res.body.places);bru.setVar("extPlace",res.body.places[0].placeId);bru.setVar("extLatitude",res.body.places[0].latitude);bru.setVar("extLongitude",res.body.places[0].longitude);}stepPassed=true;});
+if(!stepPassed && !bru.getVar("extWaiting"))bru.runner.setNextRequest("EXT 저장 정리");
+}

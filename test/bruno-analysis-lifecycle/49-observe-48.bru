@@ -1,0 +1,33 @@
+meta {
+  name: ANALYSIS 완료 관찰 shared
+  type: http
+  seq: 49
+}
+
+post {
+  url: {{baseUrl}}/__bruno/control
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  X-Bruno-Control: {{controlToken}}
+}
+
+body:json {
+  {"action":"observe","videoId":"BrunoDelay1"}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+if(!bru.getVar("qaObserveDeadline"))bru.setVar("qaObserveDeadline",Date.now()+15000);
+}
+
+script:post-response {
+const busy=res.status===200 && res.body.activeAnalyses>0;bru.setVar("qaPolling",busy&&Date.now()<bru.getVar("qaObserveDeadline"));if(bru.getVar("qaPolling")){await bru.sleep(200);bru.runner.setNextRequest("ANALYSIS 완료 관찰 shared");}else bru.deleteVar("qaObserveDeadline");
+}
+
+tests {
+test("ANALYSIS 완료 관찰 shared",function(){expect(res.status).to.equal(200); if(!bru.getVar("qaPolling")){expect(res.body.activeAnalyses).to.equal(0);expect(res.body.savedCount).to.equal(1);}});
+}

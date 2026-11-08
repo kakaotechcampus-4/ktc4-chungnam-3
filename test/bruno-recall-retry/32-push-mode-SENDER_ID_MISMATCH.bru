@@ -1,0 +1,29 @@
+meta {
+  name: PUSH 오류 준비 SENDER_ID_MISMATCH
+  type: http
+  seq: 32
+}
+
+post {
+  url: {{baseUrl}}/__bruno/control
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  X-Bruno-Control: {{controlToken}}
+}
+
+body:json {
+  {"action":"configure","pushMode":"SENDER_ID_MISMATCH"}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("PUSH 오류 준비 SENDER_ID_MISMATCH",function(){expect(res.status).to.equal(200); });
+}

@@ -1,0 +1,24 @@
+meta {
+  name: CLEANUP B 로그아웃
+  type: http
+  seq: 47
+}
+
+post {
+  url: {{baseUrl}}/api/auth/logout
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{qaTokenB}}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("세션 정리",function(){expect(res.status).to.equal(204); });
+}

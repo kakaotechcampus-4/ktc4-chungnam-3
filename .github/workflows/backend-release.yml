@@ -1,0 +1,103 @@
+name: Backend release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: Deploy after CI and real external integration checks
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# Never interrupt an in-progress traffic switch for a newer push.
+concurrency:
+  group: backend-release-main
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/backend-ci.yml
+
+  external:
+    name: Real external API gate
+    needs: ci
+    runs-on: ubuntu-24.04
+    environment: external-api
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-jar-${{ github.sha }}
+          path: release
+      - run: npm install --global @usebruno/cli@4.3.0
+      - name: Check real analysis, embedding and LLM on an empty disposable DB
+        env:
+          EXTERNAL_YOUTUBE_API_KEY: ${{ secrets.EXTERNAL_YOUTUBE_API_KEY }}
+          EXTERNAL_GEMINI_API_KEY: ${{ secrets.EXTERNAL_GEMINI_API_KEY }}
+          EXTERNAL_LOCATIONIQ_API_KEY: ${{ secrets.EXTERNAL_LOCATIONIQ_API_KEY }}
+          EXTERNAL_KAKAO_API_KEY: ${{ secrets.EXTERNAL_KAKAO_API_KEY }}
+          EXTERNAL_DATAPORTAL_API_KEY: ${{ secrets.EXTERNAL_DATAPORTAL_API_KEY }}
+          EXTERNAL_VWORLD_API_KEY: ${{ secrets.EXTERNAL_VWORLD_API_KEY }}
+          EXTERNAL_KMA_API_KEY: ${{ secrets.EXTERNAL_KMA_API_KEY }}
+          EXTERNAL_RECALL_MODEL: ${{ vars.EXTERNAL_RECALL_MODEL }}
+          EXTERNAL_SHORTS_URL: ${{ vars.EXTERNAL_SHORTS_URL }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: node test/external/run.mjs --jar release/Remembrall-0.0.1-SNAPSHOT.jar
+      - name: Record checksum of the exact validated JAR
+        run: |
+          cp test/external/reports/result.json release/EXTERNAL_RESULT.json
+          cd release
+          sha256sum Remembrall-0.0.1-SNAPSHOT.jar > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: validated-backend-${{ github.sha }}
+          path: release/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload sanitized external test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: external-results-${{ github.sha }}
+          path: test/external/reports/
+          if-no-files-found: warn
+          retention-days: 7
+
+  deploy:
+    name: Deploy validated backend
+    needs: external
+    if: vars.BACKEND_DEPLOY_ENABLED == 'true' && (github.event_name == 'push' || inputs.deploy)
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: validated-backend-${{ github.sha }}
+          path: release
+      - name: Transfer and deploy the same validated JAR
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_ROOT: ${{ vars.DEPLOY_ROOT }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: bash .github/deploy/publish.sh

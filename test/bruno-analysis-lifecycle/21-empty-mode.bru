@@ -1,0 +1,29 @@
+meta {
+  name: ANALYSIS 장소 없음 준비
+  type: http
+  seq: 21
+}
+
+post {
+  url: {{baseUrl}}/__bruno/control
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  X-Bruno-Control: {{controlToken}}
+}
+
+body:json {
+  {"action":"configure","videoId":"BrunoEmpty0","mode":"empty"}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("ANALYSIS 장소 없음 준비",function(){expect(res.status).to.equal(200); });
+}
