@@ -90,7 +90,7 @@ frontend/
     ├── features/             화면
     │   ├── onboarding/       첫 실행 흐름. 소개 · 로그인 · 권한(알림 · 위치 2단계) · 첫 저장 안내(00a~00f)
     │   │   └── components/
-    │   ├── archive/          기억 탭. 시간순 앨범. 저장물 목록 API(useArchivePages) · 섹션 · 바램 · 이름(albumSections)
+    │   ├── archive/          기억 탭. 시간순 앨범. 저장물 목록 API(useArchivePages) · 섹션 · 바램 · 이름(albumSections) · 지우기 확인 시트(07c DeleteSaveSheet)
     │   │   └── components/
     │   ├── proposal/         근처 탭(01 · 06 · 06b). 지금 위치 근처의 내 장소(nearbyView: 반경 · 묶음 · 06b 게이트 · 버튼 동작)
     │   │   └── components/
@@ -172,7 +172,7 @@ frontend/
 - 두 개 이상의 feature 에서 쓰면 `shared/ui/`, 한 feature 에서만 쓰면 `features/*/components/`.
 - `app/navigation` 이 하단 바로 쓰는 BottomNav 는 `shared/ui/` 에 둔다.
 - 온보딩 전용: OnboardingLayout(제목 · 본문 · 버튼 영역 틀), PhotoStack(00a · 00b 일러스트), SocialLoginButton(00b, Provider 변형), LoginError(00b-err), NotificationPreview(00c), PermissionStep(00d · 00e), GuideRow(00f). 모두 `features/onboarding/components/`.
-- 두 feature 이상이 쓰는 것: ScreenHeader(근처 · 기억 헤더), Chip(근처 · 지도 필터. 카테고리가 응답에 없어 지금은 두 화면 모두 숨겼다), PhotoMarker · PinLabel · CurrentLocation(지도 탭 · 08 지도), SheetHandle(08 · 10b 시트), NotFound(저장 결과 · 장소 상세), LocationConsentSheet(00d · 06b · 설정 11 의 위치 정보 이용 동의 시트), ModalSheet(확인 시트 틀 · 버튼 묶음. 바깥 닫힘 · 저장 중 차단. 앱 루트 BottomSheetModalProvider 위에 뜬다. 동의 시트 · 11d 거두기 시트가 쓴다).
+- 두 feature 이상이 쓰는 것: ScreenHeader(근처 · 기억 헤더), Chip(근처 · 지도 필터. 카테고리가 응답에 없어 지금은 두 화면 모두 숨겼다), PhotoMarker · PinLabel · CurrentLocation(지도 탭 · 08 지도), SheetHandle(08 · 10b 시트), NotFound(저장 결과 · 장소 상세), LocationConsentSheet(00d · 06b · 설정 11 의 위치 정보 이용 동의 시트), ModalSheet(확인 시트 틀 · 버튼 묶음. 바깥 닫힘 · 저장 중 차단. 앱 루트 BottomSheetModalProvider 위에 뜬다. 동의 시트 · 11d 거두기 시트 · 07c 지우기 시트가 쓴다).
 - PhotoMarker(핀)와 PinLabel(이름표)은 별도 마커다. Android 는 마커 뷰를 그 크기의 비트맵으로 찍으므로 핀 비트맵 크기는 선택과 무관하게 고정한다(그림자 있는 핀은 그림자 여백 포함). 다시 찍기는 `redraw()` 로 요청하고 화면에 다시 포커스가 오면 다시 찍는다. `tracksViewChanges` 는 자식 스타일 변화를 다시 찍는다는 보장이 없다.
 - 지도 자식(마커)은 화면이 숨겨진 동안 추가 · 제거 · 재배치되지 않게 한다. react-native-maps(Android)는 지도가 화면에서 떨어지면 마커 목록을 비웠다가 다시 붙을 때 복원하므로, 그 사이의 구조 변경이 어긋난다. 그래서 마커 zIndex 는 바꾸지 않고(Fabric 이 재배치한다), 이름표는 지도마다 하나를 계속 두고 opacity 로 숨긴다.
 - 지도 스타일은 Figma 색 토큰으로 만든 값이라 `shared/ui/theme/mapStyle.ts` 에 둔다.
@@ -267,6 +267,13 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   (백엔드에 "처음 추출된 장소"로 바꿔 달라고 요청함. 앱에서 맞추지 않는다).
   확인 필요 셀은 저장 결과로 연다(02 · 02b).
 - 기억 탭에서 미확정 셀은 `SaveResult > Result { personalSaveId }`, ready 셀은 `ContentDetail { personalSaveId }` 로 연다.
+- 기억 탭 셀을 길게 누르면(기본 delayLongPress, 상태와 상관없이 모든 셀) 07c 지우기 확인 시트(`DeleteSaveSheet`, 2266:1206)를 띄운다. 짧게 누르기는 위와 같다.
+  셀에는 접근성 동작 "지우기"(`longpress`)가 붙는다. 시트는 11d 와 같은 틀(`ModalSheet`)에 지울 대상 줄(썸네일 · 셀과 같은 이름 · "{savedAgo} 저장")을 보인다.
+  "지우기" → `deletePersonalSave`(`DELETE /api/personal-saves/{personalSaveId}`). 204 와 404(이미 없음)는 지운 것으로 보고 시트를 닫으면서
+  `useArchivePages.remove` 로 목록에서 바로 빼고 다시 읽는다("모두 N개"도 바로 줄고, 마지막 하나면 07b). 그 전에 시작한 읽기 · 다음 페이지 응답은 버려 지운 항목이 되살아나지 않는다.
+  그 밖의 실패는 시트를 두고 "지우지 못했어요. 연결을 확인하고 다시 눌러주세요."를 보이고, 다시 누르면 다시 보낸다. 지우는 중에는 바깥 닫힘 · 두 버튼을 막는다.
+  시트는 기억 탭의 모든 분기에 그려 07b 로 바뀌어도 닫힘 애니메이션이 끝난다. 서버가 쓰지 않게 된 장소의 트리거를 지우므로 앱은 지오펜스를 따로 다시 등록하지 않는다
+  (다음 앞으로 올 때 재등록에서 빠진다). 지운 저장물의 알림은 12, 근처 · 지도 탭은 포커스마다 다시 읽는다. 목 모드는 `mockDeletePersonalSave` 가 같은 흐름을 탄다.
   지도 · 근처도 `ContentDetail { personalSaveId, placeId }`(저장물 08)로 연다. `ContentDetail { placeId }`(장소 목)는 개발용 딥링크(`detail/{placeId}`)만 쓴다.
 - 저장 결과(03 · 04 · 05)는 저장물 상세 API(`usePersonalSaveDetail` → `toSaveState`)를 읽는다. 포커스될 때 · 포커스된 동안 앱이 앞으로 올 때 읽고,
   분석 중이면 5초마다 다시 읽다가 끝나면 멈춘다. analyzing → 03, needsConfirmation → 02 · 02b, noPlace → 04, failed → 05,
