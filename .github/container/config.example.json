@@ -1,0 +1,16 @@
+{
+  "enabled": false,
+  "image": "ghcr.io/kakaotechcampus-4/remembrall-backend",
+  "source": "https://github.com/kakaotechcampus-4/ktc4-chungnam-3",
+  "model": "gemini-3.6-flash",
+  "app_config": "/home/ubuntu/apps/ktc4-chungnam-3/backend/Remembrall/secrets.properties",
+  "fcm_config": "/home/ubuntu/apps/ktc4-chungnam-3/backend/Remembrall/firebase.json",
+  "uid": 1001,
+  "gid": 1001,
+  "db_container": "remembrall-db",
+  "db_name": "remembrall",
+  "db_user": "remembrall",
+  "db_network": "remembrall-backend",
+  "legacy_unit": "remembrall",
+  "public_health_url": "https://remembrall-api.duckdns.org/actuator/health"
+}
