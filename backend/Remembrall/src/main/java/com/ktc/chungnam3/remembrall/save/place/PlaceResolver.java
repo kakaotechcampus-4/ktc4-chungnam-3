@@ -134,6 +134,9 @@ public class PlaceResolver {
     // 기준점마다 공공상가정보 반경 100m 조회가 한 번씩 붙으므로 크게 늘리지 않는다.
     private static final int REGION_ANCHOR_CANDIDATES = 3;
 
+    // Gemini 후보 category 중 가게류 - VideoContentAnalyzer 프롬프트의 값 목록(카페/맛집/관광지/술집/쇼핑/기타)과 맞춘다.
+    private static final Set<String> STORE_CATEGORIES = Set.of("카페", "맛집", "술집", "쇼핑");
+
     // 지점명 텍스트로 못 좁혔을 때(개선③ 후속, 2026-09-30) 거리로 대신 좁힌다 - 가장 가까운 곳과
     // 그 다음으로 가까운 곳의 차이가 이 값보다 작으면 "확실히 더 가까운 곳"이 없다고 보고 되묻는다.
     private static final double DISTANCE_TIE_MARGIN_METERS = 30.0;
@@ -188,7 +191,19 @@ public class PlaceResolver {
     public record Result(Decision decision, ResolvedPlaceDto resolvedPlace, ConfirmRequestDto confirmRequest) {
     }
 
+    /** category를 모르는 호출부(기존 테스트 등)용 - TourAPI를 지금처럼 먼저 본다. */
     public Result resolve(String candidateId, String name, String branchName, String regionHint,
+                           List<PlaceSearchClient.PlaceSearchResult> searchResults) {
+        return resolve(candidateId, name, branchName, regionHint, null, searchResults);
+    }
+
+    /**
+     * @param category Gemini가 후보마다 준 업종(카페/맛집/관광지/술집/쇼핑/기타). 가게류({@link #STORE_CATEGORIES})면
+     *                 TourAPI를 건너뛴다(PR #70 리뷰, doheelab-coder) - TourAPI는 관광지(contentTypeId=12)만 검색하므로
+     *                 가게 후보가 거기서 맞았다면 그 가게가 아니다(한식당 "경복궁"이 궁궐로 확정됐다). Gemini가 관광지를
+     *                 가게류로 잘못 분류해도 다음 경로(공공상가정보·LocationIQ)로 넘어갈 뿐 사라지지 않는다.
+     */
+    public Result resolve(String candidateId, String name, String branchName, String regionHint, String category,
                            List<PlaceSearchClient.PlaceSearchResult> searchResults) {
         if (branchName != null && !branchName.isBlank()) {
             Optional<Result> viaAnchor = resolveViaAnchor(candidateId, name, branchName, regionHint);
@@ -196,9 +211,11 @@ public class PlaceResolver {
                 return viaAnchor.get();
             }
         } else {
-            Optional<Result> viaTourApi = resolveViaTourApi(candidateId, name, regionHint);
-            if (viaTourApi.isPresent()) {
-                return viaTourApi.get();
+            if (category == null || !STORE_CATEGORIES.contains(category)) {
+                Optional<Result> viaTourApi = resolveViaTourApi(candidateId, name, regionHint);
+                if (viaTourApi.isPresent()) {
+                    return viaTourApi.get();
+                }
             }
             Optional<Result> viaRegionStores = resolveViaRegionStores(candidateId, name, regionHint);
             if (viaRegionStores.isPresent()) {

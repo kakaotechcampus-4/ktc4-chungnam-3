@@ -615,6 +615,26 @@ class PlaceResolverTest {
     }
 
     @Test
+    void 가게류_category면_TourAPI의_같은_이름_관광지로_확정하지_않는다() {
+        // PR #70 리뷰(doheelab-coder): 한식당 "경복궁"(맛집)이 TourAPI 궁궐로 확정됐다 - TourAPI는 관광지만 검색한다.
+        var resolver = resolverForTourApi(List.of(tourApiItem("경복궁", "서울특별시 종로구 사직로 161")));
+
+        PlaceResolver.Result resolved = resolver.resolve("p1", "경복궁", null, null, "맛집", List.of());
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.NO_PLACE);
+    }
+
+    @Test
+    void 관광지_category면_지금처럼_TourAPI로_확정한다() {
+        var resolver = resolverForTourApi(List.of(tourApiItem("경복궁", "서울특별시 종로구 사직로 161")));
+
+        PlaceResolver.Result resolved = resolver.resolve("p1", "경복궁", null, null, "관광지", List.of());
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+        assertThat(resolved.resolvedPlace().geocodingProvider()).isEqualTo(GeocodingProvider.TOURAPI);
+    }
+
+    @Test
     void 지점명없는_일반장소는_TourAPI_제목_완전일치로_RESOLVED() {
         // 실측 사례("올림픽공원" - contentTypeId=12로 좁히면 서울 송파 올림픽공원만 제목이 정확히
         // 일치, 수원/창원의 "OO올림픽공원"은 완전일치에서 자동으로 빠진다, 2026-10-28).
