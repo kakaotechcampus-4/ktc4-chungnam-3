@@ -30,6 +30,30 @@ Variables는 EXTERNAL_RECALL_MODEL과 EXTERNAL_SHORTS_URL이다. 모델은 서�
 read:packages 권한 토큰으로 로그인한다. 토큰은 소스·config.json·이미지에 넣지 않는다.
 패키지 게시 권한은 운영 코드 실행 권한으로 이어지므로 신뢰할 사람에게만 준다.
 
+## main 머지 없이 GHCR 테스트
+
+GitHub 수동 실행은 기본 브랜치에 등록된 workflow가 필요하므로 기존 Backend release 진입점을 사용한다.
+이 파일은 이미 기본 브랜치 develop에 등록되어 있다. 새로운 workflow를 main에 먼저 넣을 필요가 없다.
+
+1. 현재 브랜치의 변경을 커밋·푸시한다.
+2. GitHub Actions → Backend release → Run workflow를 연다.
+3. Branch를 feat/ghcr-deploy로 선택하고 deploy는 체크하지 않은 채 실행한다.
+
+수동 실행한 non-main 브랜치에서는 기본 CI 5개가 모두 성공한 뒤 ARM64 이미지 빌드·임시 DB 기동 검사를 수행한다.
+GITHUB_TOKEN으로 별도 패키지 `ghcr.io/kakaotechcampus-4/remembrall-backend-test`에
+`test-<commit>-<run-id>-<attempt>` 태그를 게시한다. 게시된 digest를 pull하고 다시 임시 DB로 기동 검사한다.
+Actions Summary와 `ghcr-test-...` artifact의 GHCR_TEST_RESULT.json에서 태그·digest·결과를 확인한다.
+
+실제 외부 API Secret과 production Environment는 사용하지 않는다. 이미지에는 external-gate=not-run,
+test-only=true 라벨을 붙인다. 서버는 별도 운영 패키지만 허용하므로 이 테스트 이미지를 적용하지 않는다.
+deploy 입력이나 BACKEND_DEPLOY_ENABLED 값에 관계없이 non-main 경로는 deploy-main을 갱신하지 않는다.
+실제 API gate와 운영용 이미지 게시는 main 경로에서만 실행한다. main에서 수동 실행하면 기존 릴리스 검사가 실행된다.
+
+기본 CI가 실패하면 게시 작업은 건너뛴다. push·pull 또는 게시 후 기동 검사가 실패해도 성공 receipt를 만들지 않는다.
+GHCR 패키지가 아직 없으면 첫 게시 시 생성된다. 조직의 패키지 생성 정책이나 기존 패키지 권한 때문에
+GITHUB_TOKEN 업로드가 거부될 수 있으며, 이 경우 관리자에게 해당 패키지의 Actions 접근 권한을 확인한다.
+테스트 이미지의 정리·공개 여부는 조직 Packages에서 별도로 관리한다.
+
 ## 이미지와 비밀 설정
 
 Docker 빌드 context는 검증된 artifact를 내려받은 release 폴더뿐이다. Dockerfile은 JAR와

@@ -2,6 +2,19 @@
 
 작업 브랜치: feat/ghcr-deploy. 기준 develop: bf1b359. 커밋·푸시·GitHub 게시 작업은 수행하지 않았다.
 
+## non-main 수동 GHCR 검사 추가
+
+- 기본 브랜치 develop에 이미 등록된 Backend release workflow_dispatch를 확인하고 해당 파일의 non-main 경로를 확장했다.
+  신규 파일 등록을 위해 main에 머지할 필요 없이 현재 브랜치를 선택하도록 구성했다.
+- main 경로의 실제 외부 gate와 운영 게시를 명시적으로 main에 제한했다.
+- non-main 수동 경로는 기본 CI 후 별도 패키지·고유 테스트 태그로 빌드/기동 검사/push/digest pull/재기동 검사를 수행하도록 구성했다.
+  외부 검사 receipt와 라벨은 not-run으로 기록하고 성공한 실제 외부 API 검사로 표시하지 않는다.
+- Ubuntu 임시 폴더에서 실제 publish-test.sh를 가짜 Docker·기동 명령과 실행한 검사 9개 통과.
+  main·push·tag·잘못된 SHA 거부, 테스트 저장소에만 게시, 실패 시 게시 차단, push/pull/재기동 실패 시 성공 결과 미생성을 확인했다.
+- 기존 배포기 21개와 합쳐 Python 검사 총 30개 통과. Bash 문법과 actionlint 검사도 통과했다.
+- 이번 검증은 실제 GHCR 로그인·업로드·다운로드나 새 GitHub Actions 실행 결과가 아니다. 운영 서버는 변경하지 않았다.
+- 커밋·푸시는 사용자가 수행하며, 이후 Actions → Backend release → Run workflow에서 feat/ghcr-deploy를 선택해 실제 검사를 실행한다.
+
 ## 실제 실행한 검사
 
 - Ubuntu 22.04 ARM64 / Docker 29 / Compose 2.40.3 / Python 3.10에서 pull 배포기 단위 검사 21개 통과.

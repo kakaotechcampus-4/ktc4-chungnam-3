@@ -22,6 +22,10 @@ main에 머지된 뒤에는 release workflow가 같은 커밋의 기본 CI를 �
 서버는 게시된 배포 채널을 직접 가져온다. GitHub 게시 성공은 실제 서버 배포 성공과 다르다.
 설정과 최초 활성화 절차는 [.github/container/README.md](../.github/container/README.md)를 참고한다.
 
+main 머지 전 GHCR 검사는 기존 `Backend release`의 Run workflow에서 현재 작업 브랜치를 선택해 수동 실행한다.
+non-main 수동 실행은 기본 CI 이후 별도 `remembrall-backend-test` 패키지에만 게시하고, 게시 digest를 pull해 기동을 다시 확인한다.
+실제 외부 API gate·운영 패키지·배포 채널은 main 경로로 제한하며, 테스트 경로는 운영 서버에 접근하지 않는다.
+
 ## 인증 파일과 외부 연동
 
 `.github/ci/application-ci.properties`를 추가 설정으로 읽는다. 실제 API 키 대신 무효한 고정 값을 사용하고,
