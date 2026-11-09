@@ -82,12 +82,16 @@ public class BrunoHarnessConfiguration {
 
     @Bean @Primary
     PlaceResolver harnessResolver() {
-        PlaceResolver resolver = mock(PlaceResolver.class);
-        when(resolver.resolve(anyString(), anyString(), nullable(String.class), nullable(String.class), anyList()))
-                .thenAnswer(call -> new PlaceResolver.Result(PlaceResolver.Decision.RESOLVED,
+        // Both the original overload and the category-aware overload return the same synthetic place.
+        return mock(PlaceResolver.class, call -> {
+            if (call.getMethod().getName().equals("resolve")
+                    && call.getMethod().getReturnType() == PlaceResolver.Result.class) {
+                return new PlaceResolver.Result(PlaceResolver.Decision.RESOLVED,
                         new ResolvedPlaceDto(call.getArgument(0), call.getArgument(1), null, "합성 주소", 36.37, 127.38,
-                                GeocodingProvider.LOCATIONIQ, "bruno-place", null), null));
-        return resolver;
+                                GeocodingProvider.LOCATIONIQ, "bruno-place", null), null);
+            }
+            return RETURNS_DEFAULTS.answer(call);
+        });
     }
 
     @Bean @Primary
