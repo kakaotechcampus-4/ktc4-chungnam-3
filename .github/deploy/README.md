@@ -1,4 +1,9 @@
-# 자동 외부 연동 검사와 배포
+# 이전 SSH 배포 방식 — 현재 워크플로에서 사용하지 않음
+
+새 배포 경로는 [GHCR pull 배포](../container/README.md)다. 아래 SSH 전송·블루/그린 스크립트는 이전 구현 참고용이며
+`backend-release.yml`에서 호출하지 않는다. 새 서버에는 이 문서의 bootstrap을 실행하지 않는다.
+
+## 이전 구현 기록
 
 develop 대상 PR 및 develop push에서는 실제 키 없이 기본 CI만 실행한다. 통합 시점에는 배포하지 않는다.
 `backend-release.yml`: main push → 해당 커밋의 Backend CI 재검증·JAR 생성 → 실제 외부 API gate → 동일 JAR 배포.

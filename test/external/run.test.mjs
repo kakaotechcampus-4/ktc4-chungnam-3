@@ -24,6 +24,12 @@ test('canonical YouTube URLs and model identifiers are required', () => {
   assert.throws(() => configuration({ ...environment(), EXTERNAL_RECALL_MODEL: 'bad\nvalue' }));
   assert.equal(configuration(environment()).model, 'team-verified-model');
 });
+
+test('bare youtube.com Shorts setting is normalized to the canonical host', () => {
+  assert.equal(configuration({ ...environment(), EXTERNAL_SHORTS_URL: 'https://youtube.com/shorts/FyXT_7huLds' }).url,
+    'https://www.youtube.com/shorts/FyXT_7huLds');
+  assert.throws(() => configuration({ ...environment(), EXTERNAL_SHORTS_URL: 'https://youtube.com.evil/shorts/FyXT_7huLds' }));
+});
 test('property injection in credentials is rejected without exposing the credential', () => {
   assert.throws(() => configuration({ ...environment(), EXTERNAL_KAKAO_API_KEY: 'SECRET\nproperty=value' }), error =>
     !error.message.includes('SECRET') && error.message.includes('EXTERNAL_KAKAO_API_KEY'));

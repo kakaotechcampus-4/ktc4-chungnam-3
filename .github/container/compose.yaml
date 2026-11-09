@@ -1,0 +1,50 @@
+name: remembrall-backend
+services:
+  backend:
+    image: ${BACKEND_IMAGE:?digest required}
+    container_name: remembrall-backend
+    user: "${APP_UID:?}:${APP_GID:?}"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,size=128m
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 2g
+    cpus: 1.5
+    ports: ["127.0.0.1:8080:8080"]
+    networks: [backend]
+    secrets:
+      - application_properties
+      - firebase_json
+    command:
+      - --spring.config.additional-location=file:/run/secrets/application_properties
+      - --spring.config.import=
+      - --spring.datasource.url=jdbc:postgresql://${DB_CONTAINER:?}:5432/${DB_NAME:?}
+      - --notification.fcm-credentials-path=/run/secrets/firebase_json
+      - --server.address=0.0.0.0
+      - --server.port=8080
+      - --server.shutdown=graceful
+      - --spring.lifecycle.timeout-per-shutdown-phase=120s
+      - --recall.agent.mode=llm
+      - --recall.agent.provider=google-genai
+      - --recall.agent.model=${RECALL_MODEL:?}
+    stop_grace_period: 150s
+    healthcheck:
+      test: [CMD, curl, -fsS, --max-time, "3", "http://127.0.0.1:8080/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+networks:
+  backend:
+    external: true
+    name: ${DB_NETWORK:?}
+secrets:
+  application_properties:
+    file: ${APP_CONFIG:?}
+  firebase_json:
+    file: ${FCM_CONFIG:?}

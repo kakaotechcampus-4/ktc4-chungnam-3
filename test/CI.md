@@ -13,13 +13,14 @@ main에 머지된 뒤에는 release workflow가 같은 커밋의 기본 CI를 �
 | Backend JUnit | 기존 `test` 태스크 전체 실행. `live` 태그는 기존 설정대로 제외 |
 | Bruno API regression | 빌드한 JAR와 임시 PostgreSQL/pgvector로 `test/bruno`의 기본 회귀 폴더 실행 |
 | Bruno seeded regression | 테스트 전용 백엔드·합성 데이터·외부 연동 대역으로 새 컬렉션 4개를 두 번 실행 |
-| Backend delivery tools | 외부 gate 보호/관찰 테스트와 네트워크 차단 컨테이너의 모의 배포·롤백 검사 |
+| Backend delivery tools | 외부 gate 보호/관찰 테스트, GHCR pull 배포기의 상태 전이·복구 검사, Compose 설정 검사 |
 
 빌드와 JUnit은 별도 작업이다. JUnit 실패 시에도 빌드가 성공했다면 Bruno 결과를 확인할 수 있다.
 다섯 검사 모두 성공해야 전체 CI가 성공한다. 실패를 무시하거나 테스트를 임의로 제외하지 않는다.
 이 워크플로 자체는 배포하지 않으며 우분투 서버, PC의 SSH 터널, 팀 DB를 사용하지 않는다.
-별도 `Backend release`가 main push 시 CI를 재사용하고 실제 연동 gate 이후 배포를 연결한다.
-등록할 키, 서버 최초 준비와 활성화 조건은 `.github/deploy/README.md`를 참고한다.
+별도 `Backend release`가 main push 시 CI를 재사용하고 실제 연동 gate 이후 ARM64 이미지 기동 검사와 GHCR 게시를 수행한다.
+서버는 게시된 배포 채널을 직접 가져온다. GitHub 게시 성공은 실제 서버 배포 성공과 다르다.
+설정과 최초 활성화 절차는 [.github/container/README.md](../.github/container/README.md)를 참고한다.
 
 ## 인증 파일과 외부 연동
 
