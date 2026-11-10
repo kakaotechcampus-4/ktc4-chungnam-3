@@ -966,4 +966,37 @@ class PlaceResolverTest {
                 .isEqualTo(GeocodingProvider.LOCATIONIQ);
     }
 
+    // --- 지역 기준점은 "그 지역 자체" (2026-11-11, 오일내 실측) ---
+    private static final DataportalStoreClient.StoreResult OILNAE = new DataportalStoreClient.StoreResult(
+            "MA-OIL", "오일내둔산", "시청점", "음식", "대전광역시 서구 둔산남로 104", 36.3488, 127.3890);
+
+    @Test
+    void 지역힌트에_동까지_있으면_그_동네_건물이_아니라_동_자체를_기준점으로_쓴다() {
+        PlaceResolver.Result resolved = new PlaceResolver(
+                (lon, lat, radius) -> Math.abs(lat - 36.3530) < 0.001 ? List.of(OILNAE) : List.of(),
+                (name, branch, region) -> switch (name) {
+                    case "서구 둔산동" -> List.of(result("KDB산업은행 대전지점, 137, 둔산서로, 둔산동, 둔산1동, 서구, 대전광역시", 36.3560, 127.3780));
+                    case "둔산동" -> List.of(result("둔산동, 둔산1동, 서구, 대전광역시", 36.3530, 127.3820));
+                    default -> List.of();
+                },
+                query -> Optional.empty(), name -> List.of(), 1000)
+                .resolve("p1", "오일내", "둔산시청점", "대전 서구 둔산동", List.of());
+
+        // 예전엔 은행 좌표가 기준점이 돼 반경 밖 → NO_PLACE. 지점명 표기가 달라 거리로 좁힌 1곳이라 되묻기.
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.NEEDS_CONFIRMATION);
+        assertThat(resolved.confirmRequest().candidates()).extracting(ResolvedPlaceDto::address)
+                .containsExactly("대전광역시 서구 둔산남로 104");
+    }
+
+    @Test
+    void 기준점_이름이_지역_단어와_같으면_다시_검색하지_않는다() {
+        var queries = new java.util.ArrayList<String>();
+        new PlaceResolver((lon, lat, radius) -> List.of(OILNAE), (name, branch, region) -> {
+            queries.add(name);
+            return List.of(result("둔산동, 둔산1동, 서구, 대전광역시", 36.3488, 127.3890));
+        }, query -> Optional.empty(), name -> List.of(), 1000)
+                .resolve("p1", "오일내", "둔산시청점", "대전 서구 둔산동", List.of());
+
+        assertThat(queries).containsExactly("서구 둔산동");
+    }
 }

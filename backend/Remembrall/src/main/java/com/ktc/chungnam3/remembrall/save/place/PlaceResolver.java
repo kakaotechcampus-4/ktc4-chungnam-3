@@ -604,7 +604,33 @@ public class PlaceResolver {
         // 토큰별로 본다 - LocationIQ displayName은 "중리동, 대덕구, 대전광역시"처럼 작은 단위부터 거꾸로
         // 오므로 "대덕구 중리동" 통째 포함 비교는 항상 실패한다(2026-11-04 발견, 토큰 1개면 동작 동일).
         List<String> tokens = List.of(anchorQuery.get().split("\\s+"));
+
+        // 기준점은 "그 지역 자체"여야 한다(2026-11-11, 오일내 실측) - "서구 둔산동"으로 검색하면 결과가 전부 둔산동에
+        // 있는 건물(1순위 KDB산업은행, 가게에서 1,278m)이라 반경 1km 밖이 됐다. 이름이 마지막 단어("둔산동")와
+        // 같은 결과를 먼저 고르고, 없으면 마지막 단어만으로 한 번 더 찾는다("둔산동" 중심, 가게에서 828m).
+        // "강남"(강남역)·"종로3가"·"성동구"처럼 1순위 이름이 원래 그 단어인 경우는 결과가 그대로다.
+        String finest = tokens.get(tokens.size() - 1);
+        Optional<PlaceSearchClient.PlaceSearchResult> named = namedAs(anchorCandidates, finest, tokens);
+        if (named.isEmpty() && tokens.size() > 1) {
+            try {
+                named = namedAs(placeLookup.search(finest, null, regionHint), finest, tokens);
+            } catch (RuntimeException e) {
+                log.warn("LocationIQ 기준점 재검색 실패 query={}: {}", finest, e.getMessage());
+            }
+        }
+        if (named.isPresent()) {
+            return named;
+        }
         return anchorCandidates.stream()
+                .filter(c -> tokens.stream().allMatch(t -> containsIgnoreCase(c.displayName(), t)))
+                .findFirst();
+    }
+
+    /** displayName 첫 부분(이름)이 {@code name}과 같고, 지역 단어가 모두 주소에 들어있는 첫 결과. */
+    private Optional<PlaceSearchClient.PlaceSearchResult> namedAs(
+            List<PlaceSearchClient.PlaceSearchResult> candidates, String name, List<String> tokens) {
+        return candidates.stream()
+                .filter(c -> c.displayName() != null && c.displayName().split(",")[0].trim().equalsIgnoreCase(name))
                 .filter(c -> tokens.stream().allMatch(t -> containsIgnoreCase(c.displayName(), t)))
                 .findFirst();
     }
