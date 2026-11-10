@@ -999,4 +999,37 @@ class PlaceResolverTest {
 
         assertThat(queries).containsExactly("서구 둔산동");
     }
+
+    // --- 지역 붙인 VWorld 기준점: 확정이 나올 때까지 다음 순위를 본다 (PR 리뷰, doheelab-coder) ---
+    @Test
+    void 일순위가_다른_구의_같은_이름_가게여도_이순위에서_확정되면_확정한다() {
+        var gwangjin = new DataportalStoreClient.StoreResult("MA-GJ", "호랑이식탁", null, "음식",
+                "서울특별시 광진구 아차산로 200", 37.5400, 127.0700);
+        var resolver = new PlaceResolver(storesNear(List.of(gwangjin, TIGER)), (name, branch, region) -> List.of(),
+                vworldByQuery(Map.of("서울특별시 성동구 호랑이식탁", List.of(
+                        result("호랑이식탁", 37.5400, 127.0700), result("호랑이식탁", 37.5426, 127.0560)))),
+                name -> List.of(), 1000);
+
+        PlaceResolver.Result resolved = resolver.resolve("p5", "호랑이식탁", null, "서울특별시 성동구", List.of());
+
+        // 예전엔 1순위(광진구)에서 구가 달라 되묻고 멈췄다.
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+        assertThat(resolved.resolvedPlace().geocodingPlaceId()).isEqualTo("MA-TIGER");
+    }
+
+    @Test
+    void 어느_순위에서도_확정이_없으면_처음_나온_되묻기를_돌려준다() {
+        var gwangjin = new DataportalStoreClient.StoreResult("MA-GJ", "호랑이식탁", null, "음식",
+                "서울특별시 광진구 아차산로 200", 37.5400, 127.0700);
+        var resolver = new PlaceResolver(storesNear(List.of(gwangjin)), (name, branch, region) -> List.of(),
+                vworldByQuery(Map.of("서울특별시 성동구 호랑이식탁", List.of(
+                        result("호랑이식탁", 37.5400, 127.0700), result("호랑이식탁", 37.5600, 127.0300)))),
+                name -> List.of(), 1000);
+
+        PlaceResolver.Result resolved = resolver.resolve("p5", "호랑이식탁", null, "서울특별시 성동구", List.of());
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.NEEDS_CONFIRMATION);
+        assertThat(resolved.confirmRequest().candidates()).extracting(ResolvedPlaceDto::address)
+                .containsExactly("서울특별시 광진구 아차산로 200");
+    }
 }

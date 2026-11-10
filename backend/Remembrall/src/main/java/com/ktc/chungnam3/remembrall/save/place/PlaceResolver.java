@@ -660,12 +660,21 @@ public class PlaceResolver {
             } catch (RuntimeException e) {
                 regionAnchors = List.of();
             }
+            // 확정이 나올 때까지 다음 순위를 본다(PR 리뷰, doheelab-coder) - 1순위가 다른 구의 같은 이름 가게라
+            // 되묻기가 되면 거기서 멈춰 2·3순위의 맞는 가게를 못 봤다. 확정이 없을 때만 처음 나온 되묻기를 돌려준다.
+            Optional<Result> firstAsk = Optional.empty();
             for (PlaceSearchClient.PlaceSearchResult anchor : regionAnchors) {
                 Optional<Result> viaRegionAnchor =
                         matchStoresAround(candidateId, name, regionHint, anchor, VWORLD_ANCHOR_RADIUS_METERS, true);
-                if (viaRegionAnchor.isPresent()) {
+                if (viaRegionAnchor.isPresent() && viaRegionAnchor.get().decision() == Decision.RESOLVED) {
                     return viaRegionAnchor;
                 }
+                if (firstAsk.isEmpty()) {
+                    firstAsk = viaRegionAnchor;
+                }
+            }
+            if (firstAsk.isPresent()) {
+                return firstAsk;
             }
         }
 
