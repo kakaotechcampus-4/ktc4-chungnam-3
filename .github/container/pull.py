@@ -35,6 +35,11 @@ def atomic_json(path, value):
         stream.flush()
         os.fsync(stream.fileno())
     os.replace(temporary, path)
+    descriptor = os.open(path.parent, os.O_DIRECTORY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
 
 
 def validate_config(config):
@@ -54,6 +59,11 @@ def validate_config(config):
     for key in ('uid', 'gid'):
         if type(config.get(key)) is not int or not 0 < config[key] < 65535:
             raise DeployError('Container must run as a non-root UID/GID')
+    if type(config.get('host_port', 8080)) is not int or not 1024 <= config.get('host_port', 8080) <= 65535:
+        raise DeployError('Invalid localhost application port')
+    for key in ('project', 'container_name'):
+        if not re.fullmatch(r'[a-z0-9][a-z0-9_-]{1,60}', config.get(key, 'remembrall-backend')):
+            raise DeployError('Invalid Compose project or container name')
     for key in ('app_config', 'fcm_config'):
         if not re.fullmatch(r'/[A-Za-z0-9_./-]+', config.get(key, '')) or '..' in config[key].split('/'):
             raise DeployError('Invalid local secret file path')
@@ -68,6 +78,7 @@ def candidate_from_inspect(info, config):
             or labels.get('org.opencontainers.image.source') != config['source']
             or not SHA.fullmatch(revision)
             or labels.get('io.remembrall.external-gate') != 'passed'
+            or labels.get('io.remembrall.test-only') == 'true'
             or labels.get('io.remembrall.external-model') != config['model']
             or not re.fullmatch(r'[0-9a-f]{64}', labels.get('io.remembrall.jar-sha256', ''))
             or not re.fullmatch(r'[1-9][0-9]*', sequence)):
@@ -98,7 +109,12 @@ class System:
 
     def candidate(self):
         channel = self.config['image'] + ':deploy-main'
-        self.run(['docker', 'pull', channel], timeout=180)
+        result = self.run(['docker', '--config', '/root/.docker', 'pull', channel], timeout=180, check=False)
+        if result.returncode:
+            error = (result.stderr or b'').lower()
+            if b'unauthorized' in error or b'denied' in error:
+                raise DeployError('GHCR access denied; check root login, read:packages, SSO and token expiry. Running service retained.')
+            raise DeployError('GHCR image pull failed; running service retained')
         info = json.loads(self.run(['docker', 'image', 'inspect', channel]).stdout)[0]
         return candidate_from_inspect(info, self.config)
 
@@ -109,10 +125,13 @@ class System:
         env = {'BACKEND_IMAGE': image, 'APP_UID': self.config['uid'], 'APP_GID': self.config['gid'],
                'APP_CONFIG': self.config['app_config'], 'FCM_CONFIG': self.config['fcm_config'],
                'DB_CONTAINER': self.config['db_container'], 'DB_NAME': self.config['db_name'],
-               'DB_NETWORK': self.config['db_network'], 'RECALL_MODEL': self.config['model']}
+               'DB_NETWORK': self.config['db_network'], 'RECALL_MODEL': self.config['model'],
+               'HOST_PORT': self.config.get('host_port', 8080),
+               'APP_CONTAINER': self.config.get('container_name', 'remembrall-backend'),
+               'DEPLOY_PROJECT': self.config.get('project', 'remembrall-backend')}
         self.env_file.write_text(''.join(f'{k}={v}\n' for k, v in env.items()), encoding='utf-8')
         os.chmod(self.env_file, 0o600)
-        return self.run(['docker', 'compose', '--env-file', str(self.env_file), '-p', 'remembrall-backend',
+        return self.run(['docker', 'compose', '--env-file', str(self.env_file), '-p', self.config.get('project', 'remembrall-backend'),
                          '-f', str(self.install / 'compose.yaml'), *args], timeout=180)
 
     def prepare(self, candidate):
@@ -184,7 +203,8 @@ class System:
         self.compose(candidate['image'], 'stop', 'backend')
 
     def health(self, public=False):
-        url = self.config['public_health_url'] if public else 'http://127.0.0.1:8080/actuator/health'
+        port = self.config.get('host_port', 8080)
+        url = self.config['public_health_url'] if public else f'http://127.0.0.1:{port}/actuator/health'
         for _ in range(60 if not public else 5):
             result = self.run(['curl', '-fsS', '--max-time', '3', url], check=False)
             try:
@@ -192,7 +212,7 @@ class System:
                     if public:
                         return
                     code = self.run(['curl', '-sS', '--max-time', '5', '-o', '/dev/null', '-w', '%{http_code}',
-                                     'http://127.0.0.1:8080/api/me/consents']).stdout.decode().strip()
+                                     f'http://127.0.0.1:{port}/api/me/consents']).stdout.decode().strip()
                     if code == '401':
                         return
             except (ValueError, AttributeError):
@@ -247,6 +267,11 @@ class Deployer:
         if self.system.pending() != 0:
             raise Deferred('Application is busy; deployment deferred without blocking requests')
         self.system.prepare(target)
+        self._transition(target)
+        return 'deployed'
+
+    def _transition(self, target):
+        current = self.state.get('current')
         before = dict(self.state)
         self.state = {'phase': 'preparing', 'before': before, 'previous': current, 'target': target,
                       'legacy_enabled': self.system.legacy_enabled()}
@@ -284,7 +309,6 @@ class Deployer:
                 pass
             self.recover()
             raise
-        return 'deployed'
 
     def rollback(self):
         self.recover()
@@ -293,6 +317,8 @@ class Deployer:
             raise DeployError('No container release to roll back')
         if not previous and not self.state.get('legacy_previous'):
             raise DeployError('No known previous application remains for another rollback')
+        if self.system.pending() != 0:
+            raise Deferred('Application is busy; rollback deferred without blocking requests')
         try:
             self.system.gate(True)
             self.system.drain()

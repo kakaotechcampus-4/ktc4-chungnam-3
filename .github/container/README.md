@@ -25,9 +25,25 @@ EXTERNAL_DATAPORTAL_API_KEY, EXTERNAL_VWORLD_API_KEY 및 선택 EXTERNAL_KMA_API
 Variables는 EXTERNAL_RECALL_MODEL과 EXTERNAL_SHORTS_URL이다. 모델은 서버 config.json의 model과 같아야 한다.
 이미지 게시 단계는 production Environment에 속하지만 추가 SSH Secret을 요구하지 않는다.
 
-첫 게시 후 조직 Packages에서 패키지를 public으로 설정해야 서버가 익명 다운로드할 수 있다.
-공개 패키지는 누구나 JAR를 내려받을 수 있다. 비공개를 원하면 서버의 root Docker 계정에만
-read:packages 권한 토큰으로 로그인한다. 토큰은 소스·config.json·이미지에 넣지 않는다.
+패키지는 비공개로 유지한다. 서버의 root Docker 계정에 classic PAT의 `read:packages`로 로그인한다.
+현재 테스트 패키지는 root 인증으로 실제 다운로드를 확인했으며 조직의 공개 설정을 바꿀 필요가 없다.
+운영 패키지는 첫 게시 후 별도로 pull 권한을 확인해야 한다. 같은 조직이라는 이유로 권한을 가정하지 않는다.
+토큰은 소스·배포 config.json·이미지·GitHub Actions Secret에 넣지 않는다. 서버의 Docker 인증 저장소만 사용한다.
+현재 서버에는 이미 로그인했으므로 다시 로그인할 필요가 없다. 갱신할 때는 다음처럼 입력한다.
+
+```bash
+sudo -i
+read -r -p 'GitHub ID: ' GHCR_USER
+read -r -s -p 'Token: ' GHCR_TOKEN; printf '\n'
+printf '%s' "$GHCR_TOKEN" | docker --config /root/.docker login ghcr.io -u "$GHCR_USER" --password-stdin
+unset GHCR_TOKEN GHCR_USER
+chmod 700 /root/.docker
+chmod 600 /root/.docker/config.json
+exit
+```
+
+Docker config.json의 인증 값은 암호화가 아니므로 출력하거나 공유하지 않는다.
+토큰 만료·SSO·조직 정책·패키지 접근 권한에 따라 pull이 실패할 수 있다. 이 경우 기존 앱을 중지하지 않는다.
 패키지 게시 권한은 운영 코드 실행 권한으로 이어지므로 신뢰할 사람에게만 준다.
 
 ## main 머지 없이 GHCR 테스트
@@ -92,7 +108,7 @@ include /etc/remembrall-container/maintenance.conf;
 외부 health URL이 503을 반환하는 것까지 확인해야 기존 앱을 종료한다. include가 없으면 배포를 중단한다.
 Nginx worker가 `/run/remembrall-container/maintenance`를 볼 수 있어야 한다.
 
-첫 이미지를 게시하고 공개 여부를 확인한 후 수동으로 첫 전환한다.
+첫 운영 이미지를 게시하고 root 인증으로 해당 `deploy-main` 이미지를 pull할 수 있는지 확인한 후 수동으로 첫 전환한다.
 
 ```bash
 sudo python3 /usr/local/lib/remembrall-container/pull.py status
@@ -147,3 +163,18 @@ bash .github/container/smoke.sh 로컬-ARM64-이미지
 Python 상태 전이 검사는 Linux 환경에서 가짜 System을 사용한다. 실제 Docker·Nginx 장애 복구 결과가 아니다.
 smoke는 실제 ARM64 이미지와 일회용 DB를 사용하지만 외부 키는 더미이며 실제 FCM 수신을 검증하지 않는다.
 실제 API gate, GHCR 게시·다운로드, 운영 첫 전환·복구·재부팅 결과는 별도 실행 기록으로 남긴다.
+
+실제 Compose 기동·재시작·시작 실패 복구는 명시적으로 실행하는 `integration.py`로 검사한다.
+
+```bash
+sudo python3 .github/container/integration.py --image ghcr.io/kakaotechcampus-4/remembrall-backend-test@sha256:<테스트-digest>
+```
+
+일회용 DB·전용 네트워크·임의 localhost 포트를 만들고 종료 시 정리한다. 실제 키·운영 DB·systemd·Nginx는 사용하지 않는다.
+동일 테스트 이미지로 프로세스 교체, 로그인 세션·동의 보존, pg_dump, 잘못된 시작 명령 뒤 복구를 확인한다.
+테스트 전용 라벨은 운영 배포 정책에서 계속 거부한다. 이 검사는 실제 서로 다른 릴리스 간 DB 호환성,
+운영 HTTPS 점검 조건이나 기존 JAR에서의 첫 전환을 검증하지 않는다.
+
+서버에서 Git을 받아 빌드하던 방식과 SSH 업로드 배포 스크립트는 사용하지 않는다.
+이전 소스 빌드 도구는 백업 후 정리하고 기존 운영 JAR는 첫 전환 실패 시 복구용으로 보존한다.
+현재 서버 준비·실행 결과와 남은 확인은 [VALIDATION.md](VALIDATION.md)에 기록한다.
