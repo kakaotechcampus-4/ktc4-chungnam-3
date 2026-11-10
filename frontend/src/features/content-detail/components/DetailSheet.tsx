@@ -22,6 +22,8 @@ export type DetailSheetProps = {
     walk?: string;
     thumbUri?: string;
     fade: ThumbFade;
+    // 근처에서 연 08: 썸네일이 이 바램에서 fade(원래 색)로 한 번 풀린다(Thumb).
+    restoreFrom?: ThumbFade;
     note?: string;
     tags?: readonly string[];
     sourceMeta: string;
@@ -40,6 +42,7 @@ export default function DetailSheet({
     walk,
     thumbUri,
     fade,
+    restoreFrom,
     note,
     tags,
     sourceMeta,
@@ -53,7 +56,12 @@ export default function DetailSheet({
     return (
         <View style={styles.body}>
             <View style={styles.head}>
-                <Thumb fade={fade} uri={thumbUri} style={styles.thumb} />
+                <Thumb
+                    fade={fade}
+                    uri={thumbUri}
+                    restoreFrom={restoreFrom}
+                    style={styles.thumb}
+                />
                 <View style={styles.info}>
                     <Text numberOfLines={1} style={styles.time}>
                         {time}

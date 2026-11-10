@@ -3,6 +3,7 @@
 // "지금" 카드는 가장 가까운 1곳, 나머지는 바램(recent → weeks → months)으로 묶고 묶음 안에서는 가까운 순이다.
 // 반경 안에 없으면 06: 가장 가까운 장소 이름 · 직선거리(km), 썸네일은 가까운 3곳. 장소가 하나도 없으면 nearest 가 없다.
 // 카드 요약은 영상 요약 → 영상 제목 → 숨김. 썸네일 · 바램 · 지난 시간은 그 장소의 가장 최근 저장물.
+// "지금" 카드는 근처에 와 있으니 원래 색(recent)으로 그린다("근처에 가면 원래 색으로 돌아온다"). 나머지는 저장 시각대로다.
 import type { SavedPlace } from "../../domain/savedPlace";
 import type { LocationConsentView } from "../../shared/api/useLocationConsent";
 import { youtubeThumbnailUrl } from "../../shared/external-links/youtubeLinks";
@@ -77,11 +78,13 @@ export function toNearbyView(
                 .map(({ place }) => youtubeThumbnailUrl(place.videoId)),
         };
     }
-    const items = rest.map(({ place, meters }) => toItem(place, meters, now));
+    const items = rest.map(({ place, meters }) =>
+        toItem(place, meters, now, false),
+    );
     return {
         kind: "list",
         total: inside.length,
-        now: toItem(first.place, first.meters, now),
+        now: toItem(first.place, first.meters, now, true),
         groups: FADE_ORDER.map((fade) =>
             items.filter((item) => item.fade === fade),
         ).filter((group) => group.length > 0),
@@ -142,7 +145,13 @@ export function locationAction(input: {
     return "none";
 }
 
-function toItem(place: SavedPlace, meters: number, now: Date): NearbyItem {
+// nearby 면 저장 시각과 상관없이 원래 색(recent)이다.
+function toItem(
+    place: SavedPlace,
+    meters: number,
+    now: Date,
+    nearby: boolean,
+): NearbyItem {
     const savedAt = new Date(place.savedAt);
     return {
         placeId: place.placeId,
@@ -152,7 +161,7 @@ function toItem(place: SavedPlace, meters: number, now: Date): NearbyItem {
         walk: distanceLabel(meters),
         summary: present(place.summary) ?? present(place.title),
         thumbUri: youtubeThumbnailUrl(place.videoId),
-        fade: fadeFor(savedAt, now),
+        fade: nearby ? "recent" : fadeFor(savedAt, now),
     };
 }
 

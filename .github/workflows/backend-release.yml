@@ -1,0 +1,131 @@
+name: Backend release
+run-name: ${{ github.ref == 'refs/heads/main' && 'Backend release' || 'GHCR branch test' }} / ${{ github.ref_name }}
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: Main only - promote the validated image to the server deployment channel
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# Never interrupt an in-progress traffic switch for a newer push.
+concurrency:
+  group: backend-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/'))
+    uses: ./.github/workflows/backend-ci.yml
+
+  external:
+    name: Real external API gate
+    needs: ci
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: external-api
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-jar-${{ github.sha }}
+          path: release
+      - run: npm install --global @usebruno/cli@4.3.0
+      - name: Check real analysis, embedding and LLM on an empty disposable DB
+        env:
+          EXTERNAL_YOUTUBE_API_KEY: ${{ secrets.EXTERNAL_YOUTUBE_API_KEY }}
+          EXTERNAL_GEMINI_API_KEY: ${{ secrets.EXTERNAL_GEMINI_API_KEY }}
+          EXTERNAL_LOCATIONIQ_API_KEY: ${{ secrets.EXTERNAL_LOCATIONIQ_API_KEY }}
+          EXTERNAL_KAKAO_API_KEY: ${{ secrets.EXTERNAL_KAKAO_API_KEY }}
+          EXTERNAL_DATAPORTAL_API_KEY: ${{ secrets.EXTERNAL_DATAPORTAL_API_KEY }}
+          EXTERNAL_VWORLD_API_KEY: ${{ secrets.EXTERNAL_VWORLD_API_KEY }}
+          EXTERNAL_KMA_API_KEY: ${{ secrets.EXTERNAL_KMA_API_KEY }}
+          EXTERNAL_RECALL_MODEL: ${{ vars.EXTERNAL_RECALL_MODEL }}
+          EXTERNAL_SHORTS_URL: ${{ vars.EXTERNAL_SHORTS_URL }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: node test/external/run.mjs --jar release/Remembrall-0.0.1-SNAPSHOT.jar
+      - name: Record checksum of the exact validated JAR
+        run: |
+          cp test/external/reports/result.json release/EXTERNAL_RESULT.json
+          cd release
+          sha256sum Remembrall-0.0.1-SNAPSHOT.jar > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: validated-backend-${{ github.sha }}
+          path: release/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload sanitized external test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: external-results-${{ github.sha }}
+          path: test/external/reports/
+          if-no-files-found: warn
+          retention-days: 7
+
+  publish:
+    name: Publish validated ARM64 image
+    needs: external
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04-arm
+    environment: production
+    permissions:
+      contents: read
+      packages: write
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: validated-backend-${{ github.sha }}
+          path: release
+      - name: Build, smoke test and publish the same validated JAR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PROMOTE_DEPLOYMENT: ${{ vars.BACKEND_DEPLOY_ENABLED == 'true' && (github.event_name == 'push' || inputs.deploy) }}
+        run: bash .github/container/publish.sh
+
+  test-publish:
+    name: Publish and pull test ARM64 image
+    needs: ci
+    if: github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/') && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      packages: write
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-jar-${{ github.sha }}
+          path: release
+      - name: Build, smoke, publish and pull a test-only image
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/container/publish-test.sh
+      - name: Upload test image receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: ghcr-test-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release/GHCR_TEST_RESULT.json
+          if-no-files-found: error
+          retention-days: 7

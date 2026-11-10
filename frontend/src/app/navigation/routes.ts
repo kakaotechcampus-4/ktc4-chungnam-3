@@ -52,9 +52,10 @@ export type RootStackParamList = {
     [ROUTES.Settings]: undefined;
     // 지도 · 근처는 placeId(목 장소)로, 기억 탭은 저장물로, 알림은 notificationId 로 연다.
     // 저장물로 열 때 placeId 가 있으면 그 장소를 그린다(없거나 저장물에 없으면 첫 장소).
+    // nearby: 근처에서 연 08(알림 · 근처 탭 "지금" 카드). 장소를 원래 색으로 그린다.
     [ROUTES.ContentDetail]:
         | { notificationId: string }
-        | (PersonalSaveParams & { placeId?: string })
+        | (PersonalSaveParams & { placeId?: string; nearby?: true })
         | { placeId: string };
     [ROUTES.SaveResult]: NavigatorScreenParams<SaveResultStackParamList>;
 };

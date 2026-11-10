@@ -3,6 +3,9 @@ name: Backend CI
 on:
   pull_request:
     branches: [develop]
+  push:
+    branches: [develop]
+  workflow_call:
 
 permissions:
   contents: read
@@ -12,6 +15,54 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  delivery-tools:
+    name: Backend delivery tools
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check external runner and scoped observation
+        run: node --test test/external/run.test.mjs
+      - name: Check pull deployment state transitions and rollback
+        run: python3 -m unittest discover -s .github/container -p 'test_*.py' -v
+      - name: Validate container deployment configuration
+        run: |
+          bash -n .github/container/publish.sh .github/container/publish-test.sh .github/container/smoke.sh .github/container/bootstrap.sh
+          BACKEND_IMAGE=ghcr.io/kakaotechcampus-4/remembrall-backend@sha256:$(printf 'a%.0s' {1..64}) \
+          APP_UID=1001 APP_GID=1001 DB_CONTAINER=remembrall-db DB_NAME=remembrall \
+          DB_NETWORK=remembrall-backend RECALL_MODEL=fixture-model APP_CONFIG=/tmp/app.properties FCM_CONFIG=/tmp/firebase.json \
+          docker compose -f .github/container/compose.yaml config --quiet
+
+  seeded-bruno:
+    name: Bruno seeded regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install pinned Bruno CLI
+        run: npm install --global @usebruno/cli@4.3.0
+      - name: Run isolated seeded collections twice
+        run: bash test/harness/run.sh
+      - name: Upload seeded regression reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bruno-seeded-${{ github.sha }}
+          path: test/harness/reports/
+          if-no-files-found: warn
+          retention-days: 7
+
   build:
     name: Backend build
     runs-on: ubuntu-24.04

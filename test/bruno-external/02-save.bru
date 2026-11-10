@@ -1,0 +1,29 @@
+meta {
+  name: EXT 새 영상 저장
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/personal-saves
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{extToken}}
+}
+
+body:json {
+  {"url":"{{shortsUrl}}"}
+}
+
+script:pre-request {
+if(!bru.getVar("extToken")) throw new Error("외부 연동 Runner를 처음부터 실행하세요.");
+
+}
+
+tests {
+test("HTTP 201 및 단계 결과",function(){expect(res.status).to.equal(201);expect(res.body.personalSaveId).to.be.a("string");bru.setVar("extSave",res.body.personalSaveId);bru.setVar("extContent",res.body.contentId);bru.setVar("extDeadline",Date.now()+300000);});
+}

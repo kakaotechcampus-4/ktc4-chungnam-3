@@ -1,0 +1,29 @@
+meta {
+  name: SAVE retryAgain
+  type: http
+  seq: 28
+}
+
+post {
+  url: {{baseUrl}}/api/personal-saves
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{qaTokenA}}
+}
+
+body:json {
+  {"url":"https://www.youtube.com/shorts/BrunoRetry0"}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("저장 접수",function(){expect(res.status).to.equal(200); expect(res.body.personalSaveId).to.be.a("string");bru.setVar("qaSaveretryAgain",res.body.personalSaveId);bru.setVar("qaContentretryAgain",res.body.contentId);bru.setVar("qaDeadline",Date.now()+20000);});
+}

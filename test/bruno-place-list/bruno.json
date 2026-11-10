@@ -1,0 +1,10 @@
+{
+  "version": "1",
+  "name": "REMEMBRALL bruno-place-list",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git",
+    "reports"
+  ]
+}

@@ -1,0 +1,20 @@
+meta {
+  name: PLACES 인증 없음
+  type: http
+  seq: 15
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves/places
+  body: none
+  auth: none
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("상태와 공통 오류 코드",function(){expect(res.status).to.equal(401); expect(res.body.code).to.equal("INVALID_SESSION");});
+}

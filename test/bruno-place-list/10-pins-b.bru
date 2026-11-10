@@ -1,0 +1,24 @@
+meta {
+  name: PLACES B 회원 격리
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/api/personal-saves/places
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{qaTokenB}}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("B 소유 출처만 노출",function(){expect(res.status).to.equal(200); expect(res.body).to.be.an("array");res.body.forEach(p=>{expect(p.placeId).to.match(/^[0-9a-f-]{36}$/i);expect(p.name).to.be.a("string");expect(p.address).to.be.a("string");expect(p.latitude).to.be.a("number").within(-90,90);expect(p.longitude).to.be.a("number").within(-180,180);expect(Number.isFinite(Date.parse(p.savedAt))).to.equal(true);});expect(res.body).to.have.lengthOf(1);expect(res.body[0].personalSaveId).to.equal(bru.getVar("qaSaveB0"));expect(res.body[0].placeId).to.equal(bru.getVar("qaPlace"));});
+}

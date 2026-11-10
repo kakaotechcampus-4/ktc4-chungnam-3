@@ -1,0 +1,29 @@
+meta {
+  name: DEVICE 로그아웃 전 토큰 등록
+  type: http
+  seq: 23
+}
+
+put {
+  url: {{baseUrl}}/api/devices/fcm-token
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{qaTokenA}}
+}
+
+body:json {
+  {"fcmToken":"qa-final-{{qaInstallA}}"}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("FCM 등록",function(){expect(res.status).to.equal(204); });
+}

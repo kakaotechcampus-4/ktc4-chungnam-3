@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -273,8 +274,7 @@ public class PlaceResolver {
         } catch (RuntimeException e) {
             return false;
         }
-        return nearby.stream().anyMatch(store ->
-                containsIgnoreCase(store.brchNm(), branchName) || containsIgnoreCase(store.bizesNm(), branchName));
+        return nearby.stream().anyMatch(store -> matchesBranch(store, branchName));
     }
 
     /**
@@ -470,6 +470,7 @@ public class PlaceResolver {
         try {
             anchor = franchiseAnchorLookup.findAnchor(query);
         } catch (RuntimeException e) {
+            log.warn("VWorld 기준점 검색 실패 query={}: {}", query, e.getMessage());
             return Optional.empty();
         }
         if (anchor.isEmpty()) {
@@ -507,7 +508,7 @@ public class PlaceResolver {
             // 텍스트로도 전혀 안 걸리거나 너무 많이 걸리면(개수 상한 초과) 이 기준점 자체를 못 믿겠다는
             // 뜻이니 포기하고 기존 ①~④ 흐름으로 폴백한다.
             List<DataportalStoreClient.StoreResult> byBranch = nearby.stream()
-                    .filter(s -> containsIgnoreCase(s.brchNm(), branchName) || containsIgnoreCase(s.bizesNm(), branchName))
+                    .filter(s -> matchesBranch(s, branchName))
                     .toList();
             if (byBranch.isEmpty() || byBranch.size() > MAX_CONFIRMATION_CANDIDATES) {
                 return Optional.empty();
@@ -572,6 +573,7 @@ public class PlaceResolver {
         try {
             anchorCandidates = placeLookup.search(anchorQuery.get(), null, regionHint);
         } catch (RuntimeException e) {
+            log.warn("LocationIQ 기준점 검색 실패 query={}: {}", anchorQuery.get(), e.getMessage());
             return Optional.empty();
         }
 
@@ -600,6 +602,7 @@ public class PlaceResolver {
         try {
             vworldAnchor = franchiseAnchorLookup.findAnchor(name);
         } catch (RuntimeException e) {
+            log.warn("VWorld 상호명 기준점 검색 실패 name={}: {}", name, e.getMessage());
             vworldAnchor = Optional.empty();
         }
         Optional<Result> viaVWorld = vworldAnchor.flatMap(a ->
@@ -642,6 +645,7 @@ public class PlaceResolver {
         try {
             candidates = generalPlaceLookup.search(name);
         } catch (RuntimeException e) {
+            log.warn("TourAPI 검색 실패 name={}: {}", name, e.getMessage());
             return Optional.empty();
         }
         if (candidates.isEmpty()) {
@@ -700,10 +704,42 @@ public class PlaceResolver {
     private List<DataportalStoreClient.StoreResult> nearbyStores(
             String name, double lon, double lat, int radiusMeters) {
         if (CONVENIENCE_STORE_BRANDS.stream().anyMatch(brand -> containsIgnoreCase(name, brand))) {
-            return nearbyStoreLookup.searchByRadiusBySubCategory(
-                    lon, lat, radiusMeters, CONVENIENCE_STORE_SUBCATEGORY_CODES);
+            return dedupeSameStore(nearbyStoreLookup.searchByRadiusBySubCategory(
+                    lon, lat, radiusMeters, CONVENIENCE_STORE_SUBCATEGORY_CODES));
         }
-        return nearbyStoreLookup.searchByRadius(lon, lat, radiusMeters, List.of("I2", "G2"));
+        return dedupeSameStore(nearbyStoreLookup.searchByRadius(lon, lat, radiusMeters, List.of("I2", "G2")));
+    }
+
+    /**
+     * 공공상가정보와 LOCALDATA({@link CompositeNearbyStoreLookup})가 같은 매장을 각자 돌려주면 후보가
+     * 중복돼, 정답을 찾아도 "후보 2개 되묻기"로 끝났다(2026-11-05, 스타벅스 케이스퀘어강남점이 "강남대로94길
+     * 10"·"강남대로94길 10, 1층 (역삼동)"으로 두 번 나옴). 기본주소+정규화 상호명이 같으면 첫 번째(공공상가정보)만
+     * 남긴다 - 상호명까지 키에 넣어서 같은 건물의 다른 가게는 합치지 않는다.
+     * ponytail: 두 소스의 주소 표기 자체가 다르면(예: "강남대로 지하 396" vs "강남대로 302-2") 못 합친다.
+     */
+    private List<DataportalStoreClient.StoreResult> dedupeSameStore(List<DataportalStoreClient.StoreResult> stores) {
+        Set<String> seen = new HashSet<>();
+        return stores.stream()
+                .filter(s -> s.roadAddress() == null || seen.add(baseAddress(s.roadAddress()) + "|" + storeKey(s)))
+                .toList();
+    }
+
+    /** "서울특별시 서초구 강남대로 385, 1층 (서초동)" → "서울특별시서초구강남대로385" - 층·동 같은 꼬리를 뗀다. */
+    private static String baseAddress(String roadAddress) {
+        int cut = roadAddress.length();
+        for (char c : new char[]{',', '('}) {
+            int i = roadAddress.indexOf(c);
+            if (i >= 0) {
+                cut = Math.min(cut, i);
+            }
+        }
+        return normalize(roadAddress.substring(0, cut));
+    }
+
+    /** 상호명+지점명을 공백 없이 붙이고 끝 "점"을 뗀다 - "스타벅스"+"강남역7번출구"와 "스타벅스 강남역 7번출구점"이 같아진다. */
+    private static String storeKey(DataportalStoreClient.StoreResult s) {
+        String key = normalize(s.bizesNm() + (s.brchNm() == null ? "" : s.brchNm()));
+        return key.endsWith("점") ? key.substring(0, key.length() - 1) : key;
     }
 
     /**
@@ -721,7 +757,7 @@ public class PlaceResolver {
         // 공공 상가정보는 지점명을 brchNm에 따로 안 두고 bizesNm에 붙여서 등록한 경우가 많다
         // (예: "스타벅스강남역점"인데 brchNm은 비어있음) - 그래서 둘 다 본다.
         List<DataportalStoreClient.StoreResult> narrowed = brandMatches.stream()
-                .filter(s -> containsIgnoreCase(s.brchNm(), branchName) || containsIgnoreCase(s.bizesNm(), branchName))
+                .filter(s -> matchesBranch(s, branchName))
                 .toList();
         if (!narrowed.isEmpty()) {
             // "CU" 같은 짧은 브랜드명·코드는 containsIgnoreCase가 반경 내 무관한 업소까지 폭넓게
@@ -815,19 +851,42 @@ public class PlaceResolver {
     // brchNm이 항상 null인 경우(2026-10-09, CompositeNearbyStoreLookup 연결 후 실제 재검증 중 NPE로
     // 발견)처럼, 모든 호출부가 null 가능성이 있는 필드를 넘길 수 있어 호출부마다 널 체크를 두는 대신
     // 여기 한 곳에서 안전하게 처리한다.
+    // 공백도 무시한다(2026-11-05) - LOCALDATA는 "스타벅스 강남역 7번출구점"처럼 띄어 쓰고 Gemini는
+    // "강남역7번출구점"처럼 붙여 써서, 공백 하나 때문에 정답 매장을 놓쳤다.
     private boolean containsIgnoreCase(String haystack, String needle) {
-        return haystack != null && haystack.toLowerCase().contains(needle.toLowerCase());
+        return haystack != null && normalize(haystack).contains(normalize(needle));
+    }
+
+    private static String normalize(String s) {
+        return s.toLowerCase().replaceAll("\\s+", "");
+    }
+
+    /**
+     * 업소의 지점명(brchNm)·상호명(bizesNm)에 찾는 지점명이 들어있는지 본다. 공공상가정보는 brchNm을
+     * "강남역7번출구"처럼 끝 "점" 없이 등록해서(2026-11-05 실측) "강남역7번출구점"과 안 맞았다 - brchNm이
+     * "점"으로 안 끝나면 붙여서 비교한다. 반대로 찾는 쪽 "점"을 떼면 "강남점"→"강남"이 돼 강남R점·
+     * 강남대로점까지 과매칭되므로 그렇게 하지 않는다.
+     */
+    private boolean matchesBranch(DataportalStoreClient.StoreResult store, String branchName) {
+        String brchNm = store.brchNm();
+        if (brchNm != null && !brchNm.isBlank() && !brchNm.strip().endsWith("점")) {
+            brchNm = brchNm + "점";
+        }
+        return containsIgnoreCase(brchNm, branchName) || containsIgnoreCase(store.bizesNm(), branchName);
     }
 
     /**
      * {@link #containsIgnoreCase}에 {@link #BRAND_NAME_ALIASES}를 더해 브랜드명을 확인한다 - "CU"처럼
      * 공공상가정보 등록 표기(한글 음차)가 후보 이름(로마자)과 글자 자체가 안 겹치는 브랜드 전용.
      */
+    // 브랜드 비교는 지점명 비교(containsIgnoreCase, 공백 무시)와 달리 PlaceNameMatcher 규칙을 쓴다(PR #70 리뷰,
+    // doheelab-coder) - 공백만 지우면 지점명 없이 "공차"를 찾을 때 근처 "성공 차돌박이"까지 후보가 돼 확정될
+    // 가게가 되묻기로 바뀌었다. 띄어쓰기만 다른 브랜드("돼지곰탕 하우"/"돼지곰탕하우")는 계속 맞는다.
     private boolean matchesBrand(String bizesNm, String brandName) {
-        if (containsIgnoreCase(bizesNm, brandName)) {
+        if (PlaceNameMatcher.matches(bizesNm, brandName)) {
             return true;
         }
         String alias = BRAND_NAME_ALIASES.get(brandName);
-        return alias != null && containsIgnoreCase(bizesNm, alias);
+        return alias != null && PlaceNameMatcher.matches(bizesNm, alias);
     }
 }

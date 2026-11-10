@@ -19,6 +19,8 @@ import com.ktc.chungnam3.remembrall.repository.ContentRepository;
 import com.ktc.chungnam3.remembrall.repository.PersonalSaveRepository;
 import com.ktc.chungnam3.remembrall.repository.PlaceRepository;
 import com.ktc.chungnam3.remembrall.repository.PublicCandidateRepository;
+import com.ktc.chungnam3.remembrall.repository.RecentProposalRepository;
+import com.ktc.chungnam3.remembrall.repository.RecentProposalRepository.RecentProposals;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -26,6 +28,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -41,6 +44,7 @@ class ProposalValidatorTest {
     private final ContentPlaceRepository links = mock(ContentPlaceRepository.class);
     private final PersonalSaveRepository saves = mock(PersonalSaveRepository.class);
     private final PublicCandidateRepository publicCandidates = mock(PublicCandidateRepository.class);
+    private final RecentProposalRepository recentProposals = mock(RecentProposalRepository.class);
     private final WalkingTimeCalculator walking = new WalkingTimeCalculator(
             new RecallToolProperties(5000, 20, 20, 3, 2000, java.time.Duration.ofDays(7), 1.5, 100));
     private final Place origin = place(37.0);
@@ -60,6 +64,24 @@ class ProposalValidatorTest {
         for (Place place : List.of(origin, first, last)) {
             when(places.findById(place.getId())).thenReturn(Optional.of(place));
         }
+        when(recentProposals.findRecent(memberId)).thenReturn(RecentProposals.NONE);
+    }
+
+    @Test
+    void rejectsPlaceSentRecentlyEvenThroughAnotherContent() {
+        when(recentProposals.findRecent(memberId)).thenReturn(new RecentProposals(Set.of(last.getId()), Set.of()));
+
+        assertThat(validator(30).valid(memberId, origin.getId(), course())).isFalse();
+        assertThat(validator(30).valid(memberId, origin.getId(), placeProposal(first.getId()))).isTrue();
+        assertThat(validator(30).valid(memberId, origin.getId(), placeProposal(last.getId()))).isFalse();
+    }
+
+    @Test
+    void rejectsContentProposalSentRecentlyOnlyByContentKey() {
+        when(recentProposals.findRecent(memberId)).thenReturn(new RecentProposals(Set.of(), Set.of(contentId)));
+
+        assertThat(validator(30).valid(memberId, origin.getId(), contentProposal())).isFalse();
+        assertThat(validator(30).valid(memberId, origin.getId(), placeProposal(first.getId()))).isTrue();
     }
 
     @Test
@@ -82,7 +104,20 @@ class ProposalValidatorTest {
 
     private ProposalValidator validator(double maximum) {
         var properties = new RecallProperties(Duration.ofMinutes(30), Duration.ofHours(2), maximum, 1);
-        return new ProposalValidator(contents, places, links, saves, publicCandidates, walking, properties);
+        return new ProposalValidator(contents, places, links, saves, publicCandidates, walking, properties,
+                recentProposals);
+    }
+
+    private RecallAgentResult placeProposal(UUID placeId) {
+        return RecallAgentResult.propose(ProposalType.PLACE, new ProposalPayload(List.of(
+                new ProposalPayload.Item(contentId, placeId, ProposalSource.PERSONAL))),
+                "Decision", "Title", "Body");
+    }
+
+    private RecallAgentResult contentProposal() {
+        return RecallAgentResult.propose(ProposalType.CONTENT, new ProposalPayload(List.of(
+                new ProposalPayload.Item(contentId, null, ProposalSource.PERSONAL))),
+                "Decision", "Title", "Body");
     }
 
     private RecallAgentResult course() {

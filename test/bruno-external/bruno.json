@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "REMEMBRALL actual external gate",
+  "type": "collection",
+  "ignore": [
+    "reports",
+    ".git"
+  ]
+}

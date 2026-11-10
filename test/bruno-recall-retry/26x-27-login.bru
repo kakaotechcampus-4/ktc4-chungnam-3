@@ -1,0 +1,29 @@
+meta {
+  name: SETUP 독립 시나리오 27 login
+  type: http
+  seq: 32
+}
+
+post {
+  url: {{baseUrl}}/api/auth/guest
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {"installationId":"{{qaInstallA}}"}
+}
+
+script:pre-request {
+bru.setVar("qaInstallA",require("uuid").v4());
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("세션 발급",function(){expect(res.status).to.equal(200); expect(res.body.sessionToken).to.be.a("string").and.not.empty;bru.setVar("qaTokenA",res.body.sessionToken);});
+}

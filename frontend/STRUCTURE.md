@@ -90,7 +90,7 @@ frontend/
     ├── features/             화면
     │   ├── onboarding/       첫 실행 흐름. 소개 · 로그인 · 권한(알림 · 위치 2단계) · 첫 저장 안내(00a~00f)
     │   │   └── components/
-    │   ├── archive/          기억 탭. 시간순 앨범. 저장물 목록 API(useArchivePages) · 섹션 · 바램 · 이름(albumSections)
+    │   ├── archive/          기억 탭. 시간순 앨범. 저장물 목록 API(useArchivePages) · 섹션 · 바램 · 이름(albumSections) · 지우기 확인 시트(07c DeleteSaveSheet)
     │   │   └── components/
     │   ├── proposal/         근처 탭(01 · 06 · 06b). 지금 위치 근처의 내 장소(nearbyView: 반경 · 묶음 · 06b 게이트 · 버튼 동작)
     │   │   └── components/
@@ -152,7 +152,7 @@ frontend/
         │   └── secureStore.ts    안전한 저장소(expo-secure-store) 지연 로더. 세션 · 설치 id
         ├── geo/
         │   └── distanceMeters.ts  두 좌표 거리(m). 서버 GeoDistance 와 같은 haversine
-        ├── external-links/   지도 딥링크 (단순 URL 빌더)
+        ├── external-links/   외부 링크. 카카오맵 도보 길찾기 URL(mapLinks) · 열기(openMapRoute, 앱 → 모바일웹) · YouTube 주소(youtubeLinks) · 웹 페이지 열기(openExternalUrl)
         │   ├── youtubeLinks.ts  YouTube Shorts 주소 · 썸네일 주소(hqdefault). 공유 파서와 화면들이 같이 쓴다
         │   └── openExternalUrl.ts  웹 페이지(약관) 열기. expo-web-browser 지연 로드, 실패하면 Linking
         └── ui/               두 개 이상 feature 가 쓰는 공통 컴포넌트
@@ -172,7 +172,7 @@ frontend/
 - 두 개 이상의 feature 에서 쓰면 `shared/ui/`, 한 feature 에서만 쓰면 `features/*/components/`.
 - `app/navigation` 이 하단 바로 쓰는 BottomNav 는 `shared/ui/` 에 둔다.
 - 온보딩 전용: OnboardingLayout(제목 · 본문 · 버튼 영역 틀), PhotoStack(00a · 00b 일러스트), SocialLoginButton(00b, Provider 변형), LoginError(00b-err), NotificationPreview(00c), PermissionStep(00d · 00e), GuideRow(00f). 모두 `features/onboarding/components/`.
-- 두 feature 이상이 쓰는 것: ScreenHeader(근처 · 기억 헤더), Chip(근처 · 지도 필터. 카테고리가 응답에 없어 지금은 두 화면 모두 숨겼다), PhotoMarker · PinLabel · CurrentLocation(지도 탭 · 08 지도), SheetHandle(08 · 10b 시트), NotFound(저장 결과 · 장소 상세), LocationConsentSheet(00d · 06b · 설정 11 의 위치 정보 이용 동의 시트), ModalSheet(확인 시트 틀 · 버튼 묶음. 바깥 닫힘 · 저장 중 차단. 앱 루트 BottomSheetModalProvider 위에 뜬다. 동의 시트 · 11d 거두기 시트가 쓴다).
+- 두 feature 이상이 쓰는 것: ScreenHeader(근처 · 기억 헤더), Chip(근처 · 지도 필터. 카테고리가 응답에 없어 지금은 두 화면 모두 숨겼다), PhotoMarker · PinLabel · CurrentLocation(지도 탭 · 08 지도), SheetHandle(08 · 10b 시트), NotFound(저장 결과 · 장소 상세), LocationConsentSheet(00d · 06b · 설정 11 의 위치 정보 이용 동의 시트), ModalSheet(확인 시트 틀 · 버튼 묶음. 바깥 닫힘 · 저장 중 차단. 앱 루트 BottomSheetModalProvider 위에 뜬다. 동의 시트 · 11d 거두기 시트 · 07c 지우기 시트가 쓴다).
 - PhotoMarker(핀)와 PinLabel(이름표)은 별도 마커다. Android 는 마커 뷰를 그 크기의 비트맵으로 찍으므로 핀 비트맵 크기는 선택과 무관하게 고정한다(그림자 있는 핀은 그림자 여백 포함). 다시 찍기는 `redraw()` 로 요청하고 화면에 다시 포커스가 오면 다시 찍는다. `tracksViewChanges` 는 자식 스타일 변화를 다시 찍는다는 보장이 없다.
 - 지도 자식(마커)은 화면이 숨겨진 동안 추가 · 제거 · 재배치되지 않게 한다. react-native-maps(Android)는 지도가 화면에서 떨어지면 마커 목록을 비웠다가 다시 붙을 때 복원하므로, 그 사이의 구조 변경이 어긋난다. 그래서 마커 zIndex 는 바꾸지 않고(Fabric 이 재배치한다), 이름표는 지도마다 하나를 계속 두고 opacity 로 숨긴다.
 - 지도 스타일은 Figma 색 토큰으로 만든 값이라 `shared/ui/theme/mapStyle.ts` 에 둔다.
@@ -246,7 +246,10 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   로그인 · 온보딩을 마쳐 signedIn 이 되면 연다(종료 상태에서 누른 알림으로 로그인 전 화면이 뜬 경우). 위치 동의는 조건이 아니다. 시연 도구의 "알림 열기"도 같은 opener 를 부른다(중복 거르기는 거치지 않아 다시 누르면 다시 연다).
 - 02c 에서 저장하면 SaveResult 모달 하나만 닫아 흐름을 끝낸다. 뒤로 가기는 02c → 02 로 간다.
 - 08 "이 장소가 아니에요"는 SaveResult 모달에 PlaceSearch 하나만 올린 바꾸기 모드(placeId)다. 바꾸기 · 뒤로 가기 모두 모달을 닫고 08 로 돌아간다. 딥링크는 없다.
-- 08 "길 안내 시작"은 동작하지 않는다. 백엔드 협의 이슈 대기.
+- 08 "길 안내 시작"은 카카오맵 도보 길찾기를 연다(`openWalkingRoute`, SDK · API 키 · 서버 변경 없음). 세 경로(저장물 · 알림 · 개발용 딥링크) 모두 같다.
+  앱 스킴 `kakaomap://route?sp={위도},{경도}&ep={위도},{경도}&by=foot` 을 먼저 열고, 실패하면 모바일웹 스킴 `http://m.map.kakao.com/scheme/route?…`(같은 파라미터)을 연다.
+  둘 다 실패하면 경고만 남긴다. ep 는 08 에 그린 장소 좌표, sp 는 지금 위치(`useDeviceLocation` 이 located 일 때)이고 모르면 sp 를 빼고 바로 연다.
+  좌표는 서버 값 그대로(반올림 · 인코딩 없음), 이동수단은 foot 고정이다. `canOpenURL` 은 쓰지 않는다(Android 11+ 는 `<queries>` 선언이 필요해진다).
 - 하단 바의 선택 표시는 `bg/subtle` pill 이다. 브랜드 색을 쓰지 않는다.
 - 없는 저장 결과 id · 장소 id 로 들어오면 NotFound(12)를 보여준다. "기억 목록으로" → 기억 탭.
 - 기억 탭(07 · 07b)은 저장물 목록 API(`fetchPersonalSaves`)를 읽는다. 첫 페이지 20개, 끝 근처(한 화면 이내)까지 내리면 `nextCursor` 로 다음 페이지를 붙인다.
@@ -256,7 +259,7 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   목록이 비면 07b. "모두 N개"(N 은 저장물 수. 이름이 장소명이라 "곳"이면 장소 수로 오해된다)는 마지막 페이지까지 읽었을 때만, 그 전에는 "오래 잊은 것일수록 바래 있어요"만 보인다.
 - 기억 탭 바램 · 섹션은 저장 시각에서 지난 시간으로 정한다(`albumSections`). 7일 미만 recent "이번 주", 30일 미만 weeks "지난 몇 주",
   30일 이상 months 이고 섹션은 계절(3~5 봄 · 6~8 여름 · 9~11 가을 · 12~2 겨울, 12월은 다음 해 겨울)에 "올해" · "지난해" · "{YYYY}년"을 붙인다.
-  근처에 왔을 때 바램이 되살아나는 것(Figma 2061:632)은 목록 응답에 그 정보가 없어 아직 하지 않는다.
+  기억 탭은 근처에 와도 바램이 그대로다(목록 응답에 그 정보가 없다). 근처에서 원래 색으로 돌아오는 것(Figma 2061:632)은 근처 탭 "지금" 카드와 근처에서 연 08 이 한다.
 - 기억 탭 셀: 썸네일은 videoId 의 YouTube 썸네일, 배지는 SaveState(analyzing 분석 중 · failed 실패 · needsConfirmation 확인 필요 · noPlace 장소 없음 · ready 없음).
   상태는 목록 항목으로 정한다(`toSaveStateFromItem`): 분석 중 · 실패 → 답하지 않은 되묻기(`pendingConfirmCount > 0`)가 있으면 확인 필요(장소가 일부 확정됐어도) → 장소 수.
   실패 배지는 실패 종류로 가르지 않는다("실패" 하나). 매퍼는 `analysisFailureCode` 로 실패 이유를 채워 두고, 이유는 05 가 설명한다.
@@ -267,6 +270,13 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   (백엔드에 "처음 추출된 장소"로 바꿔 달라고 요청함. 앱에서 맞추지 않는다).
   확인 필요 셀은 저장 결과로 연다(02 · 02b).
 - 기억 탭에서 미확정 셀은 `SaveResult > Result { personalSaveId }`, ready 셀은 `ContentDetail { personalSaveId }` 로 연다.
+- 기억 탭 셀을 길게 누르면(기본 delayLongPress, 상태와 상관없이 모든 셀) 07c 지우기 확인 시트(`DeleteSaveSheet`, 2266:1206)를 띄운다. 짧게 누르기는 위와 같다.
+  셀에는 접근성 동작 "지우기"(`longpress`)가 붙는다. 시트는 11d 와 같은 틀(`ModalSheet`)에 지울 대상 줄(썸네일 · 셀과 같은 이름 · "{savedAgo} 저장")을 보인다.
+  "지우기" → `deletePersonalSave`(`DELETE /api/personal-saves/{personalSaveId}`). 204 와 404(이미 없음)는 지운 것으로 보고 시트를 닫으면서
+  `useArchivePages.remove` 로 목록에서 바로 빼고 다시 읽는다("모두 N개"도 바로 줄고, 마지막 하나면 07b). 그 전에 시작한 읽기 · 다음 페이지 응답은 버려 지운 항목이 되살아나지 않는다.
+  그 밖의 실패는 시트를 두고 "지우지 못했어요. 연결을 확인하고 다시 눌러주세요."를 보이고, 다시 누르면 다시 보낸다. 지우는 중에는 바깥 닫힘 · 두 버튼을 막는다.
+  시트는 기억 탭의 모든 분기에 그려 07b 로 바뀌어도 닫힘 애니메이션이 끝난다. 서버가 쓰지 않게 된 장소의 트리거를 지우므로 앱은 지오펜스를 따로 다시 등록하지 않는다
+  (다음 앞으로 올 때 재등록에서 빠진다). 지운 저장물의 알림은 12, 근처 · 지도 탭은 포커스마다 다시 읽는다. 목 모드는 `mockDeletePersonalSave` 가 같은 흐름을 탄다.
   지도 · 근처도 `ContentDetail { personalSaveId, placeId }`(저장물 08)로 연다. `ContentDetail { placeId }`(장소 목)는 개발용 딥링크(`detail/{placeId}`)만 쓴다.
 - 저장 결과(03 · 04 · 05)는 저장물 상세 API(`usePersonalSaveDetail` → `toSaveState`)를 읽는다. 포커스될 때 · 포커스된 동안 앱이 앞으로 올 때 읽고,
   분석 중이면 5초마다 다시 읽다가 끝나면 멈춘다. analyzing → 03, needsConfirmation → 02 · 02b, noPlace → 04, failed → 05,
@@ -294,6 +304,11 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
   "비공개로 바뀌었거나 삭제된 영상이라 다시 분석할 수 없어요." analysisError "장소를 알아내지 못했어요" / "이 영상은 다시 분석해도 같은 결과가 나와요. 링크는 그대로 보관해둘게요."
   코드가 없으면(null) Figma 05 문구 + 다시 시도. 다시 시도는 상세의 sourceUrl 을 다시 저장하고 상세를 다시 읽는다(서버가 다시 분석하면 03, 아니면 05 에 머문다).
 - 저장물로 연 08 은 `placeId` 파라미터와 같은 장소, 없으면 첫 장소를 그린다(`savedPlaceSheet` 의 `pickPlace`, 장소별 전환 전). 큰 글씨는 지난 시간, 바램은 저장 시각, 썸네일은 videoId.
+  근처에서 연 08(`ContentDetail` 의 `nearby: true`: 알림을 눌러 연 08 과 근처 탭 "지금" 카드로 연 08)은 그린 장소의 썸네일 · 장소 핀을 원래 색(recent)으로 그린다
+  ("근처에 가면 원래 색으로 돌아온다"). 썸네일은 저장 시각대로의 바램에서 원래 색으로 한 번 풀린다(`restoreFrom`, 600ms `metrics.thumb.restoreDurationMs`).
+  풀림은 썸네일 이미지를 불러온 뒤 시작하고, 이미지가 없거나 불러오지 못하면 · 시스템 동작 줄이기면 바로 원래 색이다. 08 을 연 동안 한 번이고(시트를 펼치고 접어도 다시 바래지 않는다),
+  화면 밖 측정용 시트에서는 시작하지 않는다. 장소 핀은 비트맵 마커라 풀림 없이 처음부터 원래 색이다. 이미 recent 면 풀림이 없다.
+  기억 탭 · 지도 탭 · 근처 탭 나머지 카드에서 연 08 과 개발용 딥링크 08 의 미니 핀은 저장 시각대로다. preview-mock 가상 도착의 로컬 알림도 알림 경로라 원래 색으로 연다.
   도보 시간은 지금 위치를 알 때 그 위치에서 장소까지의 거리로 정한다(`distanceLabel`, 모르면 없음).
   응답에 없는 값은 08b 규칙대로 비운다: 메모는 장소 설명 → 영상 요약 → 숨김, 태그는 카테고리 1개 → 숨김, 주소 · 도보 시간이 모두 없으면 메타 줄을 숨긴다.
   원본 영상 줄 둘째 줄은 "{영상 제목} · YouTube Shorts"(제목이 없으면 "YouTube Shorts"), 누르면 videoId 의 Shorts 주소를 연다(sourceUrl 은 watch 형식).
@@ -328,7 +343,8 @@ RootStack           인증 상태에 따라 Onboarding 또는 아래 화면들 �
 - 근처 탭(01 · 06 · 06b, `features/proposal`)은 지금 위치와 내 장소(`useSavedPlaces`, 장소마다 가장 최근 저장물)로 그린다(`nearbyView`).
   반경은 직선거리 1km 이하(서버 꺼내기 후보 반경 `recall.candidates.radius-meters` 와 같다). "잊고 있던 곳 N개"의 N 은 반경 안 장소 수다.
   "지금" 카드(NearbyCard)는 반경 안에서 가장 가까운 1곳("지금 도보 N분"), 나머지(MemoryCard, 메타는 "도보 N분")는 바램(recent → weeks → months)으로 묶고 묶음 안에서는 가까운 순이다.
-  카드 요약은 영상 요약 → 영상 제목 → 숨김. 태그 줄 · 필터 칩은 그리지 않는다(응답에 없다). 카드를 누르면 저장물 08.
+  "지금" 카드는 근처에 와 있으니 저장 시각과 상관없이 원래 색(recent)으로 그린다(풀림 없음). 나머지 카드의 바램 · 묶음은 저장 시각대로다.
+  카드 요약은 영상 요약 → 영상 제목 → 숨김. 태그 줄 · 필터 칩은 그리지 않는다(응답에 없다). 카드를 누르면 저장물 08("지금" 카드는 `nearby: true` 로 연다).
   헤더는 "지금 {동네}"다. 동네 이름은 지금 위치를 역지오코딩해 정한다(`useAreaName` · `reverseGeocodeArea`). Android Geocoder 주소의
   district(subLocality) → street(thoroughfare) → city(locality) → formattedAddress 조각 순으로 보고 "동 · 읍 · 면 · 가"로 끝나는 첫 값을 쓰며, 없거나 실패하면 동네 줄을 숨긴다.
   위치 · 동의 · 장소를 읽는 동안은 헤더만 보인다(목록을 보였다가 06b 로 바뀌지 않게). 장소를 처음 읽다가 실패하면 기억 탭과 같은 "확인하지 못했어요. 눌러서 다시 불러와요"(누르면 다시 읽기).

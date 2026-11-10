@@ -1,0 +1,30 @@
+meta {
+  name: bruno-analysis-lifecycle RESET
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/__bruno/control
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  X-Bruno-Control: {{controlToken}}
+}
+
+body:json {
+  {"action":"reset"}
+}
+
+script:pre-request {
+Object.keys(bru.getAllVars()).filter(k=>k.startsWith("qa")).forEach(k=>bru.deleteVar(k));
+const base=bru.getEnvVar("baseUrl"); if(!/^http:\/\/(127\.0\.0\.1|localhost):[0-9]+$/.test(base||"")) throw new Error("루프백 테스트 환경만 허용합니다.");
+if((bru.getEnvVar("controlToken")||"").length<32) throw new Error("임시 하네스 인증 토큰이 필요합니다.");
+}
+
+tests {
+test("하네스 인증 및 격리 데이터 초기화",function(){expect(res.status).to.equal(200); expect(res.body.reset).to.equal(true);bru.setVar("qaReady",true);bru.setVar("qaInstallA",require("uuid").v4());bru.setVar("qaInstallB",require("uuid").v4());});
+}

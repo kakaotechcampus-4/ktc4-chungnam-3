@@ -1,0 +1,24 @@
+meta {
+  name: EXT 현재 위치 약관
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/me/consents
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{extToken}}
+}
+
+script:pre-request {
+if(!bru.getVar("extToken")) throw new Error("외부 연동 Runner를 처음부터 실행하세요.");
+
+}
+
+tests {
+test("HTTP 200 및 단계 결과",function(){expect(res.status).to.equal(200);const c=res.body.find(c=>c.consentType==="LOCATION_BASED_SERVICE");expect(c.currentTermsVersion).to.be.a("string");bru.setVar("extTerms",c.currentTermsVersion);});
+}

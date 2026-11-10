@@ -9,7 +9,9 @@
 // 저장물이 ready 가 아니면(장소가 없어졌거나 다시 분석 중) 저장 결과(02~05)로 바꾼다. 404 는 12.
 // notificationId 로 열면(알림) 알림 상세를 읽고 열람 처리를 한 번 보낸 뒤(기다리지 않고 실패는 무시), 첫 항목의 저장물 08 로 바꾼다.
 // 404 · 항목 없음 · 내 저장물이 아닌 항목(PUBLIC)은 12, 그 밖의 읽기 실패는 다시 불러오기.
+// 알림 · 근처 탭 "지금" 카드로 연 저장물 08(nearby)은 장소를 원래 색으로 그리고 썸네일이 한 번 풀린다(savedPlaceSheet).
 // 읽는 동안은 바탕과 뒤로가기만, 읽기 실패는 그 위에 다시 불러오기 문구를 보인다.
+// "길 안내 시작"은 카카오맵 도보 길찾기를 연다. 도착은 그린 장소 좌표, 출발은 지금 위치(모르면 빼고 연다, 기다리지 않는다).
 import BottomSheet, {
     type BottomSheetFooterProps,
     BottomSheetScrollView,
@@ -43,6 +45,7 @@ import { openNotification } from "../../shared/api/notifications";
 import { useNotificationDetail } from "../../shared/api/useNotificationDetail";
 import { usePersonalSaveDetail } from "../../shared/api/usePersonalSaveDetail";
 import { openExternalUrl } from "../../shared/external-links/openExternalUrl";
+import { openWalkingRoute } from "../../shared/external-links/openMapRoute";
 import { youtubeShortsUrl } from "../../shared/external-links/youtubeLinks";
 import { distanceMeters } from "../../shared/geo/distanceMeters";
 import { useDeviceLocation } from "../../shared/permissions/useDeviceLocation";
@@ -102,6 +105,7 @@ export default function ContentDetailScreen() {
             <SavedPlaceDetail
                 personalSaveId={params.personalSaveId}
                 placeId={params.placeId}
+                nearby={params.nearby === true}
             />
         );
     }
@@ -109,6 +113,7 @@ export default function ContentDetailScreen() {
 }
 
 // 알림으로 여는 08. 알림 상세를 읽어 저장물 08 로 바꾼다(뒤로 가면 알림을 누르기 전 화면).
+// 도착 알림은 근처에 왔다는 뜻이라 nearby 로 연다.
 function NotificationPlaceDetail({
     notificationId,
 }: {
@@ -133,6 +138,7 @@ function NotificationPlaceDetail({
             StackActions.replace("ContentDetail", {
                 personalSaveId: target.personalSaveId,
                 ...(target.placeId != null && { placeId: target.placeId }),
+                nearby: true,
             }),
         );
     }, [target, navigation]);
@@ -171,9 +177,11 @@ function MockPlaceDetail({ placeId }: { placeId: string }) {
 function SavedPlaceDetail({
     personalSaveId,
     placeId,
+    nearby,
 }: {
     personalSaveId: string;
     placeId?: string;
+    nearby: boolean;
 }) {
     const navigation = useNavigation();
     const { view, reload } = usePersonalSaveDetail(personalSaveId, {
@@ -195,7 +203,7 @@ function SavedPlaceDetail({
     if (view.status === "failed") return <DetailPending onRetry={reload} />;
     const sheet =
         view.status === "loaded"
-            ? toSavedPlaceSheet(view.detail, new Date(), placeId)
+            ? toSavedPlaceSheet(view.detail, new Date(), { placeId, nearby })
             : null;
     const place =
         view.status === "loaded" ? pickPlace(view.detail, placeId) : undefined;
@@ -376,6 +384,7 @@ function ContentDetailView({
         <DetailFooter
             {...props}
             bottomInset={insets.bottom}
+            onStartRoute={() => void openWalkingRoute(coordinate, current)}
             onNotThisPlace={onReplace}
         />
     );
@@ -389,8 +398,10 @@ function ContentDetailView({
                     style={styles.measure}
                     onLayout={measureBody}
                 >
+                    {/* 측정용이라 썸네일 풀림은 시작하지 않는다(실제 시트에서 한 번만). */}
                     <DetailSheet
                         {...sheet}
+                        restoreFrom={undefined}
                         showWalk={showWalk}
                         noteExpanded={false}
                     />

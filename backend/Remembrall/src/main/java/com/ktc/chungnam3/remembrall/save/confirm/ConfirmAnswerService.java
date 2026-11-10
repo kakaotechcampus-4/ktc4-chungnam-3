@@ -74,15 +74,20 @@ public class ConfirmAnswerService {
                 .findFirst()
                 .orElseThrow(() -> new ApiException(ErrorCode.INVALID_REQUEST));
 
-        Optional<String> verificationPlaceId;
-        try {
-            verificationPlaceId = kakaoPlaceLookup.findPlaceId(
-                    selected.name(), selected.branchName(), selected.lat(), selected.lng());
-        } catch (RuntimeException e) {
-            throw new ApiException(ErrorCode.KAKAO_API_ERROR, e);
+        // 분석 때 카카오로 미리 검증한 후보는 ID를 들고 있다(SavePipelineService.preverifyConfirmation) -
+        // 다시 부르지 않고 그대로 쓴다. 없으면(예전 후보·사전검증 때 카카오 장애) 여기서 검증한다.
+        Optional<String> verificationPlaceId = Optional.ofNullable(selected.verificationPlaceId());
+        if (verificationPlaceId.isEmpty()) {
+            try {
+                verificationPlaceId = kakaoPlaceLookup.findPlaceId(
+                        selected.name(), selected.branchName(), selected.lat(), selected.lng());
+            } catch (RuntimeException e) {
+                throw new ApiException(ErrorCode.KAKAO_API_ERROR, e);
+            }
         }
         if (verificationPlaceId.isEmpty()) {
-            throw new ApiException(ErrorCode.NOT_FOUND);
+            // 다시 눌러도 결과가 같은 실패라 404(후보 없음)와 구분한다(2026-11-08, 2002횟집 실서버 재현).
+            throw new ApiException(ErrorCode.PLACE_NOT_VERIFIABLE);
         }
 
         AnalysisOutcome.PlaceResult placeResult = new AnalysisOutcome.PlaceResult(

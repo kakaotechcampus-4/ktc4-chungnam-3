@@ -712,6 +712,83 @@ class PlaceResolverTest {
         assertThat(resolved.resolvedPlace().geocodingPlaceId()).isEqualTo("MA0001");
     }
 
+    // 실측(2026-11-05) "스타벅스 강남역7번출구점" - 같은 기준점 주변 다른 스타벅스 하나를 같이 둔다.
+    private static final PlaceSearchClient.PlaceSearchResult GANGNAM_ANCHOR = result("강남역", 37.4979, 127.0276);
+    private static final DataportalStoreClient.StoreResult KSQUARE = new DataportalStoreClient.StoreResult(
+            "MA-KSQ", "스타벅스", "케이스퀘어강남", "음식", "서울특별시 강남구 강남대로94길 10", 37.4996, 127.0283);
+
+    @Test
+    void 공공데이터_지점명에_끝_점이_없어도_지점명으로_확정한다() {
+        // 공공상가정보는 brchNm을 "강남역7번출구"처럼 "점" 없이 등록한다 - 예전엔 "강남역7번출구점"과 안 맞아
+        // 거리 폴백으로 엉뚱한 매장을 되물었다.
+        var exit7 = new DataportalStoreClient.StoreResult("MA-EXIT7", "스타벅스", "강남역7번출구", "음식",
+                "서울특별시 서초구 강남대로 385", 37.4963, 127.0287);
+        var resolver = resolverForVWorldAnchor(GANGNAM_ANCHOR, List.of(KSQUARE, exit7));
+
+        PlaceResolver.Result resolved = resolver.resolve("p1", "스타벅스", "강남역7번출구점", "서울 강남", List.of());
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+        assertThat(resolved.resolvedPlace().address()).isEqualTo("서울특별시 서초구 강남대로 385");
+    }
+
+    @Test
+    void 상호명_띄어쓰기가_달라도_지점명으로_확정한다() {
+        // LOCALDATA는 "스타벅스 강남역 7번출구점"처럼 띄어 쓴다(brchNm은 항상 null).
+        var exit7 = new DataportalStoreClient.StoreResult("LD-EXIT7", "스타벅스 강남역 7번출구점", null, "커피숍",
+                "서울특별시 서초구 강남대로 385, 1층 (서초동)", 37.4963, 127.0287);
+        var resolver = resolverForVWorldAnchor(GANGNAM_ANCHOR, List.of(KSQUARE, exit7));
+
+        PlaceResolver.Result resolved = resolver.resolve("p1", "스타벅스", "강남역7번출구점", "서울 강남", List.of());
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+        assertThat(resolved.resolvedPlace().geocodingPlaceId()).isEqualTo("LD-EXIT7");
+    }
+
+    @Test
+    void 두_데이터소스에_같은_매장이_있으면_하나로_합쳐_확정한다() {
+        // 공공상가정보·LOCALDATA가 같은 매장을 각자 돌려주면 예전엔 후보 2개 되묻기로 끝났다.
+        // 공공상가정보(먼저 들어옴) 쪽을 남긴다.
+        var fromDataportal = new DataportalStoreClient.StoreResult("MA-EXIT7", "스타벅스", "강남역7번출구", "음식",
+                "서울특별시 서초구 강남대로 385", 37.4963, 127.0287);
+        var fromLocalData = new DataportalStoreClient.StoreResult("LD-EXIT7", "스타벅스 강남역 7번출구점", null, "커피숍",
+                "서울특별시 서초구 강남대로 385, 1층 (서초동)", 37.4963, 127.0287);
+        var resolver = resolverForVWorldAnchor(GANGNAM_ANCHOR, List.of(KSQUARE, fromDataportal, fromLocalData));
+
+        PlaceResolver.Result resolved = resolver.resolve("p1", "스타벅스", "강남역7번출구점", "서울 강남", List.of());
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+        assertThat(resolved.resolvedPlace().geocodingPlaceId()).isEqualTo("MA-EXIT7");
+    }
+
+    @Test
+    void 짧은_브랜드는_공백을_지워야_맞는_단어_중간_업소를_후보로_넣지_않는다() {
+        // PR #70 리뷰(doheelab-coder): 공백만 지우면 "성공 차돌박이"가 "공차"로 맞아, 확정될 공차가 되묻기 2곳이 됐다.
+        var anchor = result("성수동, 성동구, 서울특별시", 37.544, 127.055);
+        var gongcha = new DataportalStoreClient.StoreResult("MA-GC", "공차", "성수역점", "음식",
+                "서울특별시 성동구 아차산로 100", 37.544, 127.055);
+        var chadol = new DataportalStoreClient.StoreResult("MA-CD", "성공 차돌박이", null, "음식",
+                "서울특별시 성동구 아차산로 102", 37.544, 127.055);
+        var resolver = resolverForAnchor(List.of(anchor), List.of(gongcha, chadol));
+
+        PlaceResolver.Result resolved = resolver.resolve("p1", "공차", null, "서울 성수동", List.of());
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+        assertThat(resolved.resolvedPlace().geocodingPlaceId()).isEqualTo("MA-GC");
+    }
+
+    @Test
+    void 띄어쓰기만_다른_브랜드는_계속_같은_가게로_본다() {
+        var anchor = result("성수동, 성동구, 서울특별시", 37.544, 127.055);
+        var hau = new DataportalStoreClient.StoreResult("MA-HAU", "돼지곰탕하우", null, "음식",
+                "서울특별시 성동구 성수이로 62", 37.544, 127.055);
+        var resolver = resolverForAnchor(List.of(anchor), List.of(hau));
+
+        PlaceResolver.Result resolved = resolver.resolve("p1", "돼지곰탕 하우", null, "서울 성수동", List.of());
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+        assertThat(resolved.resolvedPlace().geocodingPlaceId()).isEqualTo("MA-HAU");
+    }
+
     @Test
     void 지점명없는_가게가_기준점_주변_공공데이터에_없으면_기존_LocationIQ_흐름으로_폴백한다() {
         var anchor = result("중리동, 대덕구, 대전광역시", 36.360, 127.421);

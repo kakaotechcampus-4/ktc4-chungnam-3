@@ -1,0 +1,24 @@
+meta {
+  name: EXT 로그아웃
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/api/auth/logout
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{extToken}}
+}
+
+script:pre-request {
+if(!bru.getVar("extToken")) throw new Error("외부 연동 Runner를 처음부터 실행하세요.");
+
+}
+
+tests {
+test("HTTP 204 및 단계 결과",function(){expect(res.status).to.equal(204);});
+}

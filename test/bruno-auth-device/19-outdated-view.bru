@@ -1,0 +1,24 @@
+meta {
+  name: CONSENT 기존 동의와 현재 버전 구분
+  type: http
+  seq: 19
+}
+
+get {
+  url: {{baseUrl}}/api/me/consents
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{qaTokenA}}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("저장 버전 v1·현재 버전 v2",function(){expect(res.status).to.equal(200); const c=res.body.find(c=>c.consentType==="LOCATION_BASED_SERVICE");expect(c.termsVersion).to.equal("v1");expect(c.currentTermsVersion).to.equal("v2");bru.setVar("qaConsentBefore",c);});
+}

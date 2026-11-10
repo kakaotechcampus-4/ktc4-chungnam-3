@@ -21,6 +21,8 @@ export const metrics = {
         playSize: 12,
         playOffsetLeft: 4.5,
         playOffsetTop: 4,
+        // 근처에서 연 08 썸네일이 저장 시각대로의 바램에서 원래 색으로 풀리는 시간. 구현값이다.
+        restoreDurationMs: 600,
     },
     // C/Badge 2054:150.
     badge: {
@@ -68,6 +70,10 @@ export const metrics = {
     albumCell: {
         labelGap: 6,
         badgeInset: 6,
+    },
+    // 07c 기억 지우기 확인 시트 2266:1206. 지울 대상 줄의 썸네일 폭(높이는 9:16).
+    deleteSaveSheet: {
+        thumbWidth: 36,
     },
     // 07b 전체 기억 빈 상태 2061:956. frames: 360 폭 절대좌표를 프레임 중심 기준으로 바꾼 값.
     archiveEmpty: {

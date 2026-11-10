@@ -16,10 +16,12 @@ import com.ktc.chungnam3.remembrall.domain.member.Member;
 import com.ktc.chungnam3.remembrall.recall.agent.RecallAgent;
 import com.ktc.chungnam3.remembrall.recall.agent.StubRecallAgent;
 import com.ktc.chungnam3.remembrall.recall.config.RecallCandidateProperties;
+import com.ktc.chungnam3.remembrall.recall.config.RecallToolProperties;
 import com.ktc.chungnam3.remembrall.recall.service.RecallAgentInputService;
 import com.ktc.chungnam3.remembrall.repository.DeviceRepository;
 import com.ktc.chungnam3.remembrall.repository.MemberRepository;
 import com.ktc.chungnam3.remembrall.repository.RecallCandidateRepository;
+import com.ktc.chungnam3.remembrall.repository.RecentProposalRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -214,12 +216,13 @@ class E2eSeedIntegrationTest {
     @EnableAutoConfiguration
     @EntityScan("com.ktc.chungnam3.remembrall.domain")
     @EnableJpaRepositories(basePackageClasses = MemberRepository.class)
-    @EnableConfigurationProperties(RecallCandidateProperties.class)
+    @EnableConfigurationProperties({RecallCandidateProperties.class, RecallToolProperties.class})
     @Import({E2eSeedService.class, E2eSeedController.class, E2eAgentInputRecorder.class,
             ContentPersistenceService.class, ContentAnalysisResultService.class,
             MemberConsentService.class, ConsentConfiguration.class, SecurityConfig.class,
             SessionAuthenticationFilter.class, ApiAuthenticationEntryPoint.class, SessionTokenHasher.class,
-            GlobalExceptionHandler.class, RecallAgentInputService.class, RecallCandidateRepository.class})
+            GlobalExceptionHandler.class, RecallAgentInputService.class, RecallCandidateRepository.class,
+            RecentProposalRepository.class})
     static class TestApplication {
         @Bean
         Clock clock() {

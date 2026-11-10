@@ -1,0 +1,13 @@
+[Unit]
+Description=Check and deploy validated Remembrall GHCR image
+After=network-online.target docker.service nginx.service
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+UMask=0077
+ExecStart=/usr/bin/python3 /usr/local/lib/remembrall-container/pull.py poll
+TimeoutStartSec=600
+TimeoutStopSec=180

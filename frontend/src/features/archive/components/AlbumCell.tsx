@@ -1,5 +1,6 @@
 // 앨범 셀. 썸네일 + 상태 배지 + 한 줄 이름. 폭은 부모가 정한다.
 // 이름은 부모가 정해 넘긴다(albumSections 의 albumLabel). 꼬리말("외 N곳")은 줄이지 않고 이름만 말줄임한다.
+// 길게 누르기는 지우기 확인(07c)이다. onLongPress 가 있을 때만 접근성 동작 "지우기"를 붙인다(TalkBack 동작 메뉴 · 두 번 탭하고 길게 누르기).
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import Badge, { type BadgeStatus } from "../../../shared/ui/Badge";
@@ -13,7 +14,10 @@ export type AlbumCellProps = {
     fade: ThumbFade;
     status?: BadgeStatus;
     onPress?: () => void;
+    onLongPress?: () => void;
 };
+
+const LONG_PRESS_ACTIONS = [{ name: "longpress", label: "지우기" }];
 
 export default function AlbumCell({
     label,
@@ -22,12 +26,24 @@ export default function AlbumCell({
     fade,
     status,
     onPress,
+    onLongPress,
 }: AlbumCellProps) {
     return (
         <Pressable
             accessibilityRole={onPress ? "button" : undefined}
             disabled={!onPress}
             onPress={onPress}
+            onLongPress={onLongPress}
+            accessibilityActions={onLongPress ? LONG_PRESS_ACTIONS : undefined}
+            onAccessibilityAction={
+                onLongPress
+                    ? (event) => {
+                          if (event.nativeEvent.actionName === "longpress") {
+                              onLongPress();
+                          }
+                      }
+                    : undefined
+            }
             style={styles.cell}
         >
             <View>

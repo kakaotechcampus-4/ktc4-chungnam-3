@@ -14,6 +14,7 @@ import com.ktc.chungnam3.remembrall.repository.RecallCandidateRepository;
 import com.ktc.chungnam3.remembrall.repository.RecallCandidateRepository.PersonalContentRow;
 import com.ktc.chungnam3.remembrall.repository.RecallCandidateRepository.PersonalPlaceRow;
 import com.ktc.chungnam3.remembrall.repository.RecallCandidateRepository.PublicPlaceRow;
+import com.ktc.chungnam3.remembrall.repository.RecentProposalRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,10 +31,13 @@ public class RecallAgentInputService {
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private final RecallCandidateRepository candidates;
     private final RecallCandidateProperties properties;
+    private final RecentProposalRepository recentProposals;
 
-    public RecallAgentInputService(RecallCandidateRepository candidates, RecallCandidateProperties properties) {
+    public RecallAgentInputService(RecallCandidateRepository candidates, RecallCandidateProperties properties,
+                                   RecentProposalRepository recentProposals) {
         this.candidates = candidates;
         this.properties = properties;
+        this.recentProposals = recentProposals;
     }
 
     @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
@@ -43,10 +47,12 @@ public class RecallAgentInputService {
             throw new IllegalStateException("Recall execution origin no longer exists");
         }
         var origin = rows.getFirst();
+        var recent = recentProposals.findRecent(origin.memberId());
         var contents = rows.stream().filter(row -> row.content() != null)
                 .map(row -> personalContent(row.content())).toList();
         var personalRows = candidates.findNearbyPersonal(origin.memberId(), origin.placeId(),
-                origin.latitude(), origin.longitude(), properties.radiusMeters(), properties.nearbyPersonalLimit());
+                origin.latitude(), origin.longitude(), properties.radiusMeters(), properties.nearbyPersonalLimit(),
+                recent.placeIds());
         var personalContents = new LinkedHashMap<UUID, List<PersonalContent>>();
         var personalPlacesById = new LinkedHashMap<UUID, PersonalPlaceRow>();
         personalRows.forEach(row -> {
@@ -57,7 +63,8 @@ public class RecallAgentInputService {
                 row.distanceMeters(), List.copyOf(personalContents.get(row.placeId())))).toList();
 
         var publicRows = candidates.findNearbyPublic(origin.memberId(),
-                origin.latitude(), origin.longitude(), properties.radiusMeters(), properties.nearbyPublicLimit());
+                origin.latitude(), origin.longitude(), properties.radiusMeters(), properties.nearbyPublicLimit(),
+                recent.placeIds());
         var publicContents = new LinkedHashMap<UUID, List<PublicContent>>();
         var publicPlacesById = new LinkedHashMap<UUID, PublicPlaceRow>();
         publicRows.forEach(row -> {
@@ -69,7 +76,8 @@ public class RecallAgentInputService {
         var publicPlaces = publicPlacesById.values().stream().map(row -> new PublicPlace(row.placeId(), row.name(),
                 row.distanceMeters(), List.copyOf(publicContents.get(row.placeId())))).toList();
 
-        var semantic = candidates.findSemantic(origin.memberId(), origin.placeId(), properties.semanticLimit())
+        var semantic = candidates.findSemantic(origin.memberId(), origin.placeId(), properties.semanticLimit(),
+                        recent.contentIds())
                 .stream().map(row -> new SemanticContent(row.contentId(),
                         row.personalSaveId() == null ? ProposalSource.PUBLIC : ProposalSource.PERSONAL,
                         row.personalSaveId(), row.title(), summarize(row.summary()), row.category(), row.savedAt()))

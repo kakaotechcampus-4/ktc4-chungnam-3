@@ -1,0 +1,24 @@
+meta {
+  name: AUTH 재발급 세션 사용
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{baseUrl}}/api/me/consents
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{qaTokenA}}
+}
+
+script:pre-request {
+if(!bru.getVar("qaReady")) throw new Error("test/harness/run.sh로 임시 환경을 준비하고 전체 Runner를 실행하세요.");
+
+}
+
+tests {
+test("새 세션 정상",function(){expect(res.status).to.equal(200); bru.setVar("qaOldToken",bru.getVar("qaTokenA"));});
+}
