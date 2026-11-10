@@ -51,7 +51,7 @@ public class VideoContentAnalyzer {
     private static final String MODEL = "gemini-3.8-flash";
 
     private static final String ANALYSIS_VERSION = "v1";
-    private static final String PROMPT_VERSION = "v5";
+    private static final String PROMPT_VERSION = "v8";
 
     private static final String PROMPT_TEMPLATE = """
             너는 여행·맛집 유튜브 영상에서 정보를 추출하는 분석가다.
@@ -80,6 +80,23 @@ public class VideoContentAnalyzer {
             - 장소 이름은 상호명(name)·지점명(branchName)·지역 단서(regionHint)로 나눠 적어라.
               예: "대전 성심당 본점"이면 name="성심당", branchName="본점", regionHint="대전".
               지점이나 지역이 확인되지 않으면 해당 필드는 빈 문자열로 둬라.
+            - 영상에 나온 상호명을 그대로 적어라. 음식 종류나 업종을 상호명에 덧붙이지 마라(예: 실제로 "간도우"라고만
+              확인되면 name="간도우"로 두고 "초밥집"을 붙이지 마라). 영상·메타데이터에서 상호명을 확인할 수 없으면
+              후보를 만들지 마라. "여기", 음식 사진, 분위기만으로 가게 이름을 추측하지 마라.
+            - 각 후보의 nameEvidence에 상호명을 확인한 근거를 기록해라. source는 BUSINESS_SIGN(가게 간판/로고),
+              SPOKEN_AUDIO(음성), EDITORIAL_OVERLAY(편집 자막/순위 카드), TITLE_DESCRIPTION_TAGS(제목·설명·태그),
+              AUTHOR_COMMENT(채널 운영자 댓글) 중 하나다.
+              observedText에는 이름을 확인할 수 있는 짧은 원문을 그대로 적어라. 영상 속 글자나 음성이 근거면
+              timestamp를 MM:SS로 적고, 메타데이터나 댓글이 근거면 timestamp는 빈 문자열로 둬라. 실제 시점을
+              확인할 수 없으면 시점을 만들지 말고 후보를 제외해라.
+            - 여러 근거가 있으면 BUSINESS_SIGN 또는 SPOKEN_AUDIO를 편집 자막보다 우선해라. 편집 자막/순위 카드의
+              이름 뒤에 붙은 "초밥집", "횟집", "국밥", "식당", "맛집" 등 업종 설명은 실제 간판이나 음성에서
+              상호명의 일부라고 확인되지 않는 한 name에 넣지 말고 category/description으로 분리해라. 단, 순위 카드에
+              "서울맛집", "2002횟집"처럼 구분 기호 없이 한 덩어리로 표시된 문구는 끝 단어가 업종처럼 보여도 임의로
+              자르지 말고 전체를 보존해라. 업종 설명이 구분 기호나 문장 구조로 분리된 경우에만 나눠라.
+            - 한글 간판 글자가 흐리거나 비슷해 정확히 읽기 어려우면 문맥으로 글자를 추측하지 마라. 반복해서 보이는
+              간판·음성·메타데이터로 확인되지 않으면 그 후보를 제외해라.
+            - name은 확인된 상호명의 실제 표기를 따라라. 근거에 없는 업종명·지점명·단어를 이름에 보태지 마라.
             - regionHint에는 시·도(예: 서울특별시, 대전광역시)를 반드시 포함해라. 구·동까지 확인되면
               "대전 중구"처럼 시·도 뒤에 이어서 적되, 시·도 자체를 빼지는 마라 - 장소 검색 단계가
               시·도 단위로만 지역을 대조하기 때문이다. 구·동까지도 불확실하면 시·도까지만 적어라.
@@ -110,13 +127,22 @@ public class VideoContentAnalyzer {
                       "branchName": { "type": "string" },
                       "regionHint": { "type": "string" },
                       "description": { "type": "string" },
+                      "nameEvidence": {
+                        "type": "object",
+                        "properties": {
+                          "timestamp": { "type": "string", "description": "MM:SS, 메타데이터/댓글 근거면 빈 문자열" },
+                          "source": { "type": "string", "enum": ["BUSINESS_SIGN", "SPOKEN_AUDIO", "EDITORIAL_OVERLAY", "TITLE_DESCRIPTION_TAGS", "AUTHOR_COMMENT"] },
+                          "observedText": { "type": "string", "description": "상호명을 뒷받침하는 짧은 원문" }
+                        },
+                        "required": ["timestamp", "source", "observedText"]
+                      },
                       "category": {
                         "type": "string",
                         "enum": ["카페", "맛집", "관광지", "술집", "쇼핑", "기타"],
                         "description": "이 장소 하나에 맞는 분류 하나 (축제는 제외 - 장소 자체의 성격으로 골라라)"
                       }
                     },
-                    "required": ["name", "branchName", "regionHint", "description", "category"]
+                    "required": ["name", "branchName", "regionHint", "description", "category", "nameEvidence"]
                   }
                 },
                 "temporalInfos": {
@@ -146,7 +172,12 @@ public class VideoContentAnalyzer {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record LlmPlace(String name, String branchName, String regionHint, String description, String category) {
+    private record LlmPlace(String name, String branchName, String regionHint, String description, String category,
+                            LlmNameEvidence nameEvidence) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record LlmNameEvidence(String timestamp, String source, String observedText) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -281,6 +312,8 @@ public class VideoContentAnalyzer {
                     blankToNull(p.branchName()),
                     blankToNull(p.regionHint()),
                     p.description(),
+                    // nameEvidence는 모델이 근거를 확인하고 이름을 쓰게 하려는 장치라 여기서 버린다 -
+                    // extraction 계약(PlaceCandidateDto)은 바꾸지 않는다.
                     p.category()
             ));
         }
