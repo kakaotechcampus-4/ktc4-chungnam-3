@@ -21,6 +21,9 @@ main에 머지된 뒤에는 release workflow가 같은 커밋의 기본 CI를 �
 별도 `Backend release`가 main push 시 CI를 재사용하고 실제 연동 gate 이후 ARM64 이미지 기동 검사와 GHCR 게시를 수행한다.
 서버는 게시된 배포 채널을 직접 가져온다. GitHub 게시 성공은 실제 서버 배포 성공과 다르다.
 설정과 최초 활성화 절차는 [.github/container/README.md](../.github/container/README.md)를 참고한다.
+GHCR 패키지는 비공개로 유지하며 서버 root의 Docker 로그인으로 가져온다.
+Actions에는 서버 SSH 키나 서버 다운로드용 PAT를 등록하지 않는다. 서버에서 소스를 빌드하는 경로는 사용하지 않는다.
+첫 운영 전환 전까지 서버 자동 배포는 비활성 상태로 준비한다.
 
 main 머지 전 GHCR 검사는 기존 `Backend release`의 Run workflow에서 현재 작업 브랜치를 선택해 수동 실행한다.
 non-main 수동 실행은 기본 CI 이후 별도 `remembrall-backend-test` 패키지에만 게시하고, 게시 digest를 pull해 기동을 다시 확인한다.

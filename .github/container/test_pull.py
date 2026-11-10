@@ -42,6 +42,37 @@ class PolicyTests(unittest.TestCase):
                            ('app_config', '/tmp/../etc/shadow'), ('public_health_url', 'http://example.com/')]:
             with self.assertRaises(pull.DeployError): pull.validate_config({**CONFIG, key: value})
 
+    def test_fixture_port_and_names_cannot_inject_compose_configuration(self):
+        pull.validate_config({**CONFIG, 'host_port': 18081, 'project': 'fixture-1', 'container_name': 'fixture-app'})
+        for key, value in [('host_port', 80), ('host_port', True), ('host_port', 65536),
+                           ('project', 'x\nBAD=1'), ('container_name', '../prod')]:
+            with self.assertRaises(pull.DeployError): pull.validate_config({**CONFIG, key: value})
+
+    def test_test_only_image_without_external_gate_is_rejected(self):
+        info = self.info()
+        info['Config']['Labels'].update({'io.remembrall.external-gate': 'not-run', 'io.remembrall.test-only': 'true'})
+        with self.assertRaises(pull.DeployError): pull.candidate_from_inspect(info, CONFIG)
+        info['Config']['Labels']['io.remembrall.external-gate'] = 'passed'
+        with self.assertRaises(pull.DeployError): pull.candidate_from_inspect(info, CONFIG)
+
+    def test_private_pull_uses_root_docker_login(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            system = pull.System(CONFIG, Path(temporary))
+            system.run = Mock(side_effect=[Mock(returncode=0), Mock(stdout=json.dumps([self.info()]).encode())])
+            self.assertEqual(system.candidate(), NEW)
+            self.assertEqual(system.run.call_args_list[0].args[0],
+                             ['docker', '--config', '/root/.docker', 'pull', CONFIG['image'] + ':deploy-main'])
+
+    def test_registry_error_never_exposes_command_output(self):
+        for reason, expected in [(b'unauthorized secret-content', 'GHCR access denied'),
+                                 (b'network secret-content', 'GHCR image pull failed')]:
+            with tempfile.TemporaryDirectory() as temporary:
+                system = pull.System(CONFIG, Path(temporary))
+                system.run = Mock(return_value=Mock(returncode=1, stderr=reason))
+                with self.assertRaises(pull.DeployError) as error: system.candidate()
+                self.assertIn(expected, str(error.exception))
+                self.assertNotIn('secret-content', str(error.exception))
+
     def test_nginx_can_stat_the_maintenance_flag_under_service_umask(self):
         with tempfile.TemporaryDirectory() as temporary:
             base = Path(temporary)
@@ -117,6 +148,12 @@ class TransitionTests(unittest.TestCase):
         self.system.pending.return_value = 1
         with self.assertRaises(pull.Deferred): self.deployer().poll()
         self.system.gate.assert_not_called(); self.system.prepare.assert_not_called()
+
+    def test_busy_rollback_does_not_close_ingress(self):
+        self.system.pending.return_value = 1
+        d = self.deployer({'phase': 'ready', 'current': NEW, 'previous': OLD})
+        with self.assertRaises(pull.Deferred): d.rollback()
+        self.system.gate.assert_not_called(); self.system.stop.assert_not_called()
 
     def test_missing_nginx_guard_prevents_stopping_service(self):
         self.system.gate.side_effect = lambda enabled: (_ for _ in ()).throw(pull.DeployError('no guard')) if enabled else None

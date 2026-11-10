@@ -1,8 +1,8 @@
-name: remembrall-backend
+name: ${DEPLOY_PROJECT:-remembrall-backend}
 services:
   backend:
     image: ${BACKEND_IMAGE:?digest required}
-    container_name: remembrall-backend
+    container_name: ${APP_CONTAINER:-remembrall-backend}
     user: "${APP_UID:?}:${APP_GID:?}"
     restart: unless-stopped
     read_only: true
@@ -12,13 +12,14 @@ services:
     security_opt: [no-new-privileges:true]
     mem_limit: 2g
     cpus: 1.5
-    ports: ["127.0.0.1:8080:8080"]
+    ports: ["127.0.0.1:${HOST_PORT:-8080}:8080"]
     networks: [backend]
     secrets:
-      - application_properties
+      - source: application_properties
+        target: application.properties
       - firebase_json
     command:
-      - --spring.config.additional-location=file:/run/secrets/application_properties
+      - --spring.config.additional-location=file:/run/secrets/application.properties
       - --spring.config.import=
       - --spring.datasource.url=jdbc:postgresql://${DB_CONTAINER:?}:5432/${DB_NAME:?}
       - --notification.fcm-credentials-path=/run/secrets/firebase_json
