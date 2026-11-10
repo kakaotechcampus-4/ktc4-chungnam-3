@@ -30,7 +30,7 @@ export function configuration(environment) {
   }));
   const model = environment.EXTERNAL_RECALL_MODEL;
   if (!model || !/^[A-Za-z0-9._/-]{1,100}$/.test(model)) throw new Error('Set EXTERNAL_RECALL_MODEL to a team-verified model');
-  const url = environment.EXTERNAL_SHORTS_URL;
+  const url = environment.EXTERNAL_SHORTS_URL?.replace(/^https:\/\/youtube\.com\//, 'https://www.youtube.com/');
   if (!/^https:\/\/www\.youtube\.com\/shorts\/[A-Za-z0-9_-]{11}$/.test(url || '')) throw new Error('Set a canonical EXTERNAL_SHORTS_URL');
   return { keys, model, url };
 }

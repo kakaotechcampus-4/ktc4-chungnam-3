@@ -1,0 +1,11 @@
+[Unit]
+Description=Poll Remembrall deployment channel every minute
+
+[Timer]
+OnBootSec=60s
+OnUnitInactiveSec=60s
+RandomizedDelaySec=10s
+Unit=remembrall-pull.service
+
+[Install]
+WantedBy=timers.target

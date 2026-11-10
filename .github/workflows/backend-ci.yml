@@ -26,8 +26,15 @@ jobs:
           node-version: '22'
       - name: Check external runner and scoped observation
         run: node --test test/external/run.test.mjs
-      - name: Check cutover and rollback with mocked commands only
-        run: docker run --rm --network none --entrypoint bash -v "$PWD:/workspace:ro" pgvector/pgvector:pg16 /workspace/.github/deploy/test.sh
+      - name: Check pull deployment state transitions and rollback
+        run: python3 -m unittest discover -s .github/container -p 'test_*.py' -v
+      - name: Validate container deployment configuration
+        run: |
+          bash -n .github/container/publish.sh .github/container/publish-test.sh .github/container/smoke.sh .github/container/bootstrap.sh
+          BACKEND_IMAGE=ghcr.io/kakaotechcampus-4/remembrall-backend@sha256:$(printf 'a%.0s' {1..64}) \
+          APP_UID=1001 APP_GID=1001 DB_CONTAINER=remembrall-db DB_NAME=remembrall \
+          DB_NETWORK=remembrall-backend RECALL_MODEL=fixture-model APP_CONFIG=/tmp/app.properties FCM_CONFIG=/tmp/firebase.json \
+          docker compose -f .github/container/compose.yaml config --quiet
 
   seeded-bruno:
     name: Bruno seeded regression
