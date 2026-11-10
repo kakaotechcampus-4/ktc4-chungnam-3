@@ -813,6 +813,35 @@ class PlaceResolverTest {
                 .containsExactly("서울특별시 마포구 양화로 1");
     }
 
+    // PR 리뷰(doheelab-coder): 공공상가정보 주소는 도로명이라 "동"이 없다 - "서울 성수동" 힌트면 맞는 가게도 되묻기가 됐다.
+    private static PlaceResolver resolverWithTigerAsVWorldFirst() {
+        return new PlaceResolver(storesNear(List.of(TIGER)), (name, branch, region) -> List.of(),
+                vworldByQuery(Map.of("호랑이식탁", List.of(result("호랑이식탁", 37.5426, 127.0560)))),
+                name -> List.of(), 1000);
+    }
+
+    @Test
+    void 지역힌트의_동은_주소에_없어도_구가_맞으면_확정한다() {
+        assertThat(resolverWithTigerAsVWorldFirst().resolve("p5", "호랑이식탁", null, "서울 성동구 성수동", List.of())
+                .decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+        assertThat(resolverWithTigerAsVWorldFirst().resolve("p5", "호랑이식탁", null, "서울 성수동", List.of())
+                .decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+    }
+
+    @Test
+    void 지역힌트가_동뿐이면_시도뿐일_때처럼_구를_확인할_수_없다() {
+        // 알려진 한계: "성수동"만 있으면 다른 구(마포구) 가게도 통과한다.
+        assertThat(resolverWithHongdaeAsVWorldFirst().resolve("p1", "스타벅스", null, "서울 성수동", List.of())
+                .decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+    }
+
+    @Test
+    void 두_글자_구_이름_줄임말은_동으로_끝나도_그대로_확인한다() {
+        // "성동"은 성동구 줄임말 - 빼면 마포구 가게가 확정된다.
+        assertThat(resolverWithHongdaeAsVWorldFirst().resolve("p1", "스타벅스", null, "서울 성동", List.of())
+                .decision()).isEqualTo(PlaceResolver.Decision.NEEDS_CONFIRMATION);
+    }
+
     @Test
     void 지역이_서울특별시처럼_정식_시도명이어도_구동으로만_확인한다() {
         // "서울특별시"를 구·동 단어로 남기면 서울 모든 주소가 통과해 확인이 무력해진다.
@@ -936,4 +965,5 @@ class PlaceResolverTest {
         assertThat(resolved.confirmRequest().candidates().get(0).geocodingProvider())
                 .isEqualTo(GeocodingProvider.LOCATIONIQ);
     }
+
 }

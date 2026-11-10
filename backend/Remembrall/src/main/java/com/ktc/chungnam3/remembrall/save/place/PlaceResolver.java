@@ -696,8 +696,11 @@ public class PlaceResolver {
         if (regionHint == null) {
             return true;
         }
+        // "성수동"처럼 3글자 이상 "동"으로 끝나는 단어도 뺀다(PR 리뷰, doheelab-coder) - 공공상가정보 주소는 도로명이라
+        // "동"이 없어서, "서울 성수동" 힌트면 맞는 가게(성수이로 32-10)도 되묻기가 됐다. 동만 있는 힌트에선 다른 구
+        // 가게도 통과하는 한계는 시·도만 있을 때와 같다. "성동"·"강동"처럼 두 글자 구 이름 줄임말은 그대로 확인한다.
         List<String> districtTokens = Arrays.stream(regionHint.trim().split("\\s+"))
-                .filter(token -> !isProvinceToken(token))
+                .filter(token -> !isProvinceToken(token) && !(token.length() > 2 && token.endsWith("동")))
                 .toList();
         if (districtTokens.isEmpty()) {
             return true;
