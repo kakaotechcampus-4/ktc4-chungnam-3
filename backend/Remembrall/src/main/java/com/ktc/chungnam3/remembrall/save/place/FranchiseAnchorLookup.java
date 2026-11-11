@@ -1,5 +1,6 @@
 package com.ktc.chungnam3.remembrall.save.place;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -11,4 +12,13 @@ import java.util.Optional;
  */
 public interface FranchiseAnchorLookup {
     Optional<PlaceSearchClient.PlaceSearchResult> findAnchor(String query);
+
+    /**
+     * 상위 {@code limit}개 결과의 좌표(2026-11-08) - 1순위가 동명의 다른 지역 가게인 경우가 흔해서
+     * (실측: "서울맛집" 1순위가 경북 상주) 여러 개를 받아 호출부가 차례로 기준점으로 써본다.
+     * 기본 구현은 {@link #findAnchor} 1건 - 테스트 람다가 그대로 동작하게.
+     */
+    default List<PlaceSearchClient.PlaceSearchResult> findAnchors(String query, int limit) {
+        return findAnchor(query).map(List::of).orElse(List.of());
+    }
 }
