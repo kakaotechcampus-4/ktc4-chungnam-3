@@ -301,7 +301,7 @@ public class SavePipelineService {
         PlaceResolver.Result result;
         try {
             result = placeResolver.resolve(candidate.candidateId(), candidate.name(), candidate.branchName(),
-                    candidate.regionHint(), searchResults);
+                    candidate.regionHint(), candidate.category(), searchResults);
         } catch (RuntimeException e) {
             // 방어적 처리: PlaceResolver는 주입받은 lookup 예외를 내부에서 전부 삼키므로 실제로는
             // 여기 안 걸릴 가능성이 높다 - 그 전제가 깨지는 순간 파이프라인 전체가 죽는 대신 이 후보

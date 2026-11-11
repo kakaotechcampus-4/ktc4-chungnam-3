@@ -73,12 +73,18 @@ public class VWorldSearchClient implements FranchiseAnchorLookup {
      */
     @Override
     public Optional<PlaceSearchClient.PlaceSearchResult> findAnchor(String query) {
+        return findAnchors(query, 1).stream().findFirst();
+    }
+
+    /** 상위 {@code limit}개 후보의 좌표만 순서대로 돌려준다(주소 등 다른 필드는 반환하지 않음 - 저장 금지 약관). */
+    @Override
+    public List<PlaceSearchClient.PlaceSearchResult> findAnchors(String query, int limit) {
         ResponseWrapper response = restClient.get()
                 .uri(uriBuilder -> uriBuilder.path("/search")
                         .queryParam("service", "search")
                         .queryParam("request", "search")
                         .queryParam("version", "2.0")
-                        .queryParam("size", 1)
+                        .queryParam("size", limit)
                         .queryParam("page", 1)
                         .queryParam("query", query)
                         .queryParam("type", "place")
@@ -90,17 +96,15 @@ public class VWorldSearchClient implements FranchiseAnchorLookup {
                 .body(ResponseWrapper.class);
 
         if (response == null || response.response() == null || !"OK".equals(response.response().status())) {
-            return Optional.empty();
+            return List.of();
         }
 
         List<Item> items = response.response().result() == null || response.response().result().items() == null
                 ? List.of() : response.response().result().items();
-        if (items.isEmpty() || items.get(0).point() == null) {
-            return Optional.empty();
-        }
-
-        Point point = items.get(0).point();
-        return Optional.of(new PlaceSearchClient.PlaceSearchResult(
-                null, Double.parseDouble(point.y()), Double.parseDouble(point.x()), null, null, null));
+        return items.stream()
+                .filter(item -> item.point() != null)
+                .map(item -> new PlaceSearchClient.PlaceSearchResult(
+                        null, Double.parseDouble(item.point().y()), Double.parseDouble(item.point().x()), null, null, null))
+                .toList();
     }
 }

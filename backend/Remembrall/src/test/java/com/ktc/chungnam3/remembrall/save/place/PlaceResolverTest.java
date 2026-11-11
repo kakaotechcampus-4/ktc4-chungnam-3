@@ -1,9 +1,11 @@
 package com.ktc.chungnam3.remembrall.save.place;
 
 import com.ktc.chungnam3.remembrall.domain.place.GeocodingProvider;
+import com.ktc.chungnam3.remembrall.save.dto.ResolvedPlaceDto;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.IntStream;
 
@@ -613,6 +615,26 @@ class PlaceResolverTest {
     }
 
     @Test
+    void 가게류_category면_TourAPI의_같은_이름_관광지로_확정하지_않는다() {
+        // PR #70 리뷰(doheelab-coder): 한식당 "경복궁"(맛집)이 TourAPI 궁궐로 확정됐다 - TourAPI는 관광지만 검색한다.
+        var resolver = resolverForTourApi(List.of(tourApiItem("경복궁", "서울특별시 종로구 사직로 161")));
+
+        PlaceResolver.Result resolved = resolver.resolve("p1", "경복궁", null, null, "맛집", List.of());
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.NO_PLACE);
+    }
+
+    @Test
+    void 관광지_category면_지금처럼_TourAPI로_확정한다() {
+        var resolver = resolverForTourApi(List.of(tourApiItem("경복궁", "서울특별시 종로구 사직로 161")));
+
+        PlaceResolver.Result resolved = resolver.resolve("p1", "경복궁", null, null, "관광지", List.of());
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+        assertThat(resolved.resolvedPlace().geocodingProvider()).isEqualTo(GeocodingProvider.TOURAPI);
+    }
+
+    @Test
     void 지점명없는_일반장소는_TourAPI_제목_완전일치로_RESOLVED() {
         // 실측 사례("올림픽공원" - contentTypeId=12로 좁히면 서울 송파 올림픽공원만 제목이 정확히
         // 일치, 수원/창원의 "OO올림픽공원"은 완전일치에서 자동으로 빠진다, 2026-10-28).
@@ -712,6 +734,147 @@ class PlaceResolverTest {
         assertThat(resolved.resolvedPlace().geocodingPlaceId()).isEqualTo("MA0001");
     }
 
+    // --- "구 단위 지역 + 가게명" VWorld 기준점 (2026-11-08, 성수맛집 BEST10 실측) ---
+    // 반경검색 fake: 요청 좌표에서 100m 안에 있는 업소만 돌려준다(좌표 기준 동작을 실제처럼).
+    private static NearbyStoreLookup storesNear(List<DataportalStoreClient.StoreResult> all) {
+        return (lon, lat, radiusMeters) -> all.stream()
+                .filter(s -> Math.abs(s.lat() - lat) < 0.0009 && Math.abs(s.lon() - lon) < 0.0011)
+                .toList();
+    }
+
+    /** 검색어별로 정해진 VWorld 결과(여러 개)를 돌려주는 fake. findAnchor는 그중 1순위. */
+    private static FranchiseAnchorLookup vworldByQuery(Map<String, List<PlaceSearchClient.PlaceSearchResult>> byQuery) {
+        return new FranchiseAnchorLookup() {
+            @Override
+            public Optional<PlaceSearchClient.PlaceSearchResult> findAnchor(String query) {
+                return byQuery.getOrDefault(query, List.of()).stream().findFirst();
+            }
+
+            @Override
+            public List<PlaceSearchClient.PlaceSearchResult> findAnchors(String query, int limit) {
+                return byQuery.getOrDefault(query, List.of()).stream().limit(limit).toList();
+            }
+        };
+    }
+
+    private static final DataportalStoreClient.StoreResult TIGER = new DataportalStoreClient.StoreResult(
+            "MA-TIGER", "호랑이식탁", null, "음식", "서울특별시 성동구 성수이로 32-10", 37.5426, 127.0560);
+
+    @Test
+    void 가게명만으론_다른_지역이_1순위여도_지역을_붙인_VWorld_검색으로_기준점을_잡아_확정한다() {
+        // 실측: "호랑이식탁" 1순위는 경기 성남 → 지역 필터에 걸려 버려지고, 구청 기준점은 가게에서 3km+.
+        var resolver = new PlaceResolver(storesNear(List.of(TIGER)),
+                (name, branch, region) -> List.of(result("성동구, 서울특별시", 37.5635, 127.0365)),
+                vworldByQuery(Map.of(
+                        "호랑이식탁", List.of(result("호랑이식탁", 37.3670, 127.1080)),
+                        "서울특별시 성동구 호랑이식탁", List.of(result("호랑이식탁", 37.5426, 127.0560)))),
+                name -> List.of(), 1000);
+
+        PlaceResolver.Result resolved = resolver.resolve("p5", "호랑이식탁", null, "서울특별시 성동구", List.of());
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+        assertThat(resolved.resolvedPlace().geocodingPlaceId()).isEqualTo("MA-TIGER");
+    }
+
+    @Test
+    void 지역을_붙인_VWorld_결과_중_2순위에서만_가게가_맞아도_확정한다() {
+        // 실측: "서울특별시 성동구 서울맛집" 1순위(아차산로7길 29)는 실제 가게와 1,075m, 2순위가 1m.
+        var shop = new DataportalStoreClient.StoreResult("MA-SEOUL", "서울맛집", null, "음식",
+                "서울특별시 성동구 성덕정15길 6-9", 37.5383, 127.0540);
+        var resolver = new PlaceResolver(storesNear(List.of(shop)),
+                (name, branch, region) -> List.of(),
+                vworldByQuery(Map.of("서울특별시 성동구 서울맛집", List.of(
+                        result("서울맛집", 37.5450, 127.0620), result("서울맛집", 37.5383, 127.0540)))),
+                name -> List.of(), 1000);
+
+        PlaceResolver.Result resolved = resolver.resolve("p3", "서울맛집", null, "서울특별시 성동구", List.of());
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+        assertThat(resolved.resolvedPlace().address()).isEqualTo("서울특별시 성동구 성덕정15길 6-9");
+    }
+
+    // PR #70 리뷰(doheelab-coder): VWorld 전국 검색 1순위가 같은 시·도의 다른 지점이면 그 지점으로 확정됐다.
+    private static final DataportalStoreClient.StoreResult STARBUCKS_HONGDAE = new DataportalStoreClient.StoreResult(
+            "MA-HD", "스타벅스", "홍대", "음식", "서울특별시 마포구 양화로 1", 37.5563, 126.9236);
+
+    private static PlaceResolver resolverWithHongdaeAsVWorldFirst() {
+        return new PlaceResolver(storesNear(List.of(STARBUCKS_HONGDAE)), (name, branch, region) -> List.of(),
+                vworldByQuery(Map.of("스타벅스", List.of(result("스타벅스 홍대", 37.5563, 126.9236)))),
+                name -> List.of(), 1000);
+    }
+
+    @Test
+    void VWorld로_찾은_가게_주소에_지역의_구동이_없으면_확정하지_않고_되묻는다() {
+        PlaceResolver.Result resolved = resolverWithHongdaeAsVWorldFirst()
+                .resolve("p1", "스타벅스", null, "서울 강남", List.of());
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.NEEDS_CONFIRMATION);
+        assertThat(resolved.confirmRequest().candidates()).extracting(ResolvedPlaceDto::address)
+                .containsExactly("서울특별시 마포구 양화로 1");
+    }
+
+    // PR 리뷰(doheelab-coder): 공공상가정보 주소는 도로명이라 "동"이 없다 - "서울 성수동" 힌트면 맞는 가게도 되묻기가 됐다.
+    private static PlaceResolver resolverWithTigerAsVWorldFirst() {
+        return new PlaceResolver(storesNear(List.of(TIGER)), (name, branch, region) -> List.of(),
+                vworldByQuery(Map.of("호랑이식탁", List.of(result("호랑이식탁", 37.5426, 127.0560)))),
+                name -> List.of(), 1000);
+    }
+
+    @Test
+    void 지역힌트의_동은_주소에_없어도_구가_맞으면_확정한다() {
+        assertThat(resolverWithTigerAsVWorldFirst().resolve("p5", "호랑이식탁", null, "서울 성동구 성수동", List.of())
+                .decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+        assertThat(resolverWithTigerAsVWorldFirst().resolve("p5", "호랑이식탁", null, "서울 성수동", List.of())
+                .decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+    }
+
+    @Test
+    void 지역힌트가_동뿐이면_시도뿐일_때처럼_구를_확인할_수_없다() {
+        // 알려진 한계: "성수동"만 있으면 다른 구(마포구) 가게도 통과한다.
+        assertThat(resolverWithHongdaeAsVWorldFirst().resolve("p1", "스타벅스", null, "서울 성수동", List.of())
+                .decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+    }
+
+    @Test
+    void 두_글자_구_이름_줄임말은_동으로_끝나도_그대로_확인한다() {
+        // "성동"은 성동구 줄임말 - 빼면 마포구 가게가 확정된다.
+        assertThat(resolverWithHongdaeAsVWorldFirst().resolve("p1", "스타벅스", null, "서울 성동", List.of())
+                .decision()).isEqualTo(PlaceResolver.Decision.NEEDS_CONFIRMATION);
+    }
+
+    @Test
+    void 지역이_서울특별시처럼_정식_시도명이어도_구동으로만_확인한다() {
+        // "서울특별시"를 구·동 단어로 남기면 서울 모든 주소가 통과해 확인이 무력해진다.
+        PlaceResolver.Result resolved = resolverWithHongdaeAsVWorldFirst()
+                .resolve("p1", "스타벅스", null, "서울특별시 강남구", List.of());
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.NEEDS_CONFIRMATION);
+    }
+
+    @Test
+    void 지역이_시도뿐이면_지역을_붙인_VWorld_검색을_하지_않는다() {
+        var queried = new java.util.ArrayList<String>();
+        FranchiseAnchorLookup vworld = new FranchiseAnchorLookup() {
+            @Override
+            public Optional<PlaceSearchClient.PlaceSearchResult> findAnchor(String query) {
+                queried.add(query);
+                return Optional.empty();
+            }
+
+            @Override
+            public List<PlaceSearchClient.PlaceSearchResult> findAnchors(String query, int limit) {
+                queried.add(query);
+                return List.of();
+            }
+        };
+        var resolver = new PlaceResolver(storesNear(List.of()), (name, branch, region) -> List.of(), vworld,
+                name -> List.of(), 1000);
+
+        resolver.resolve("p1", "호랑이식탁", null, "서울", List.of());
+
+        assertThat(queried).containsExactly("호랑이식탁");
+    }
+
     // 실측(2026-11-05) "스타벅스 강남역7번출구점" - 같은 기준점 주변 다른 스타벅스 하나를 같이 둔다.
     private static final PlaceSearchClient.PlaceSearchResult GANGNAM_ANCHOR = result("강남역", 37.4979, 127.0276);
     private static final DataportalStoreClient.StoreResult KSQUARE = new DataportalStoreClient.StoreResult(
@@ -801,5 +964,72 @@ class PlaceResolverTest {
         assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.NEEDS_CONFIRMATION);
         assertThat(resolved.confirmRequest().candidates().get(0).geocodingProvider())
                 .isEqualTo(GeocodingProvider.LOCATIONIQ);
+    }
+
+    // --- 지역 기준점은 "그 지역 자체" (2026-11-11, 오일내 실측) ---
+    private static final DataportalStoreClient.StoreResult OILNAE = new DataportalStoreClient.StoreResult(
+            "MA-OIL", "오일내둔산", "시청점", "음식", "대전광역시 서구 둔산남로 104", 36.3488, 127.3890);
+
+    @Test
+    void 지역힌트에_동까지_있으면_그_동네_건물이_아니라_동_자체를_기준점으로_쓴다() {
+        PlaceResolver.Result resolved = new PlaceResolver(
+                (lon, lat, radius) -> Math.abs(lat - 36.3530) < 0.001 ? List.of(OILNAE) : List.of(),
+                (name, branch, region) -> switch (name) {
+                    case "서구 둔산동" -> List.of(result("KDB산업은행 대전지점, 137, 둔산서로, 둔산동, 둔산1동, 서구, 대전광역시", 36.3560, 127.3780));
+                    case "둔산동" -> List.of(result("둔산동, 둔산1동, 서구, 대전광역시", 36.3530, 127.3820));
+                    default -> List.of();
+                },
+                query -> Optional.empty(), name -> List.of(), 1000)
+                .resolve("p1", "오일내", "둔산시청점", "대전 서구 둔산동", List.of());
+
+        // 예전엔 은행 좌표가 기준점이 돼 반경 밖 → NO_PLACE. 지점명 표기가 달라 거리로 좁힌 1곳이라 되묻기.
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.NEEDS_CONFIRMATION);
+        assertThat(resolved.confirmRequest().candidates()).extracting(ResolvedPlaceDto::address)
+                .containsExactly("대전광역시 서구 둔산남로 104");
+    }
+
+    @Test
+    void 기준점_이름이_지역_단어와_같으면_다시_검색하지_않는다() {
+        var queries = new java.util.ArrayList<String>();
+        new PlaceResolver((lon, lat, radius) -> List.of(OILNAE), (name, branch, region) -> {
+            queries.add(name);
+            return List.of(result("둔산동, 둔산1동, 서구, 대전광역시", 36.3488, 127.3890));
+        }, query -> Optional.empty(), name -> List.of(), 1000)
+                .resolve("p1", "오일내", "둔산시청점", "대전 서구 둔산동", List.of());
+
+        assertThat(queries).containsExactly("서구 둔산동");
+    }
+
+    // --- 지역 붙인 VWorld 기준점: 확정이 나올 때까지 다음 순위를 본다 (PR 리뷰, doheelab-coder) ---
+    @Test
+    void 일순위가_다른_구의_같은_이름_가게여도_이순위에서_확정되면_확정한다() {
+        var gwangjin = new DataportalStoreClient.StoreResult("MA-GJ", "호랑이식탁", null, "음식",
+                "서울특별시 광진구 아차산로 200", 37.5400, 127.0700);
+        var resolver = new PlaceResolver(storesNear(List.of(gwangjin, TIGER)), (name, branch, region) -> List.of(),
+                vworldByQuery(Map.of("서울특별시 성동구 호랑이식탁", List.of(
+                        result("호랑이식탁", 37.5400, 127.0700), result("호랑이식탁", 37.5426, 127.0560)))),
+                name -> List.of(), 1000);
+
+        PlaceResolver.Result resolved = resolver.resolve("p5", "호랑이식탁", null, "서울특별시 성동구", List.of());
+
+        // 예전엔 1순위(광진구)에서 구가 달라 되묻고 멈췄다.
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.RESOLVED);
+        assertThat(resolved.resolvedPlace().geocodingPlaceId()).isEqualTo("MA-TIGER");
+    }
+
+    @Test
+    void 어느_순위에서도_확정이_없으면_처음_나온_되묻기를_돌려준다() {
+        var gwangjin = new DataportalStoreClient.StoreResult("MA-GJ", "호랑이식탁", null, "음식",
+                "서울특별시 광진구 아차산로 200", 37.5400, 127.0700);
+        var resolver = new PlaceResolver(storesNear(List.of(gwangjin)), (name, branch, region) -> List.of(),
+                vworldByQuery(Map.of("서울특별시 성동구 호랑이식탁", List.of(
+                        result("호랑이식탁", 37.5400, 127.0700), result("호랑이식탁", 37.5600, 127.0300)))),
+                name -> List.of(), 1000);
+
+        PlaceResolver.Result resolved = resolver.resolve("p5", "호랑이식탁", null, "서울특별시 성동구", List.of());
+
+        assertThat(resolved.decision()).isEqualTo(PlaceResolver.Decision.NEEDS_CONFIRMATION);
+        assertThat(resolved.confirmRequest().candidates()).extracting(ResolvedPlaceDto::address)
+                .containsExactly("서울특별시 광진구 아차산로 200");
     }
 }

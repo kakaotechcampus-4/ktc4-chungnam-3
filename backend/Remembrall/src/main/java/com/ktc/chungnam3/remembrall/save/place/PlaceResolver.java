@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -14,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -127,6 +129,14 @@ public class PlaceResolver {
     // 재사용한 값이다.
     private static final int VWORLD_ANCHOR_RADIUS_METERS = 100;
 
+    // "구 단위 지역 + 가게명" VWorld 검색에서 기준점으로 써볼 상위 결과 수(2026-11-08). 실측상 정답이
+    // 2순위였던 경우("성동구 서울맛집" - 1순위는 1,075m 떨어진 동명 업소)가 있어 1개로는 부족하고,
+    // 기준점마다 공공상가정보 반경 100m 조회가 한 번씩 붙으므로 크게 늘리지 않는다.
+    private static final int REGION_ANCHOR_CANDIDATES = 3;
+
+    // Gemini 후보 category 중 가게류 - VideoContentAnalyzer 프롬프트의 값 목록(카페/맛집/관광지/술집/쇼핑/기타)과 맞춘다.
+    private static final Set<String> STORE_CATEGORIES = Set.of("카페", "맛집", "술집", "쇼핑");
+
     // 지점명 텍스트로 못 좁혔을 때(개선③ 후속, 2026-09-30) 거리로 대신 좁힌다 - 가장 가까운 곳과
     // 그 다음으로 가까운 곳의 차이가 이 값보다 작으면 "확실히 더 가까운 곳"이 없다고 보고 되묻는다.
     private static final double DISTANCE_TIE_MARGIN_METERS = 30.0;
@@ -181,7 +191,19 @@ public class PlaceResolver {
     public record Result(Decision decision, ResolvedPlaceDto resolvedPlace, ConfirmRequestDto confirmRequest) {
     }
 
+    /** category를 모르는 호출부(기존 테스트 등)용 - TourAPI를 지금처럼 먼저 본다. */
     public Result resolve(String candidateId, String name, String branchName, String regionHint,
+                           List<PlaceSearchClient.PlaceSearchResult> searchResults) {
+        return resolve(candidateId, name, branchName, regionHint, null, searchResults);
+    }
+
+    /**
+     * @param category Gemini가 후보마다 준 업종(카페/맛집/관광지/술집/쇼핑/기타). 가게류({@link #STORE_CATEGORIES})면
+     *                 TourAPI를 건너뛴다(PR #70 리뷰, doheelab-coder) - TourAPI는 관광지(contentTypeId=12)만 검색하므로
+     *                 가게 후보가 거기서 맞았다면 그 가게가 아니다(한식당 "경복궁"이 궁궐로 확정됐다). Gemini가 관광지를
+     *                 가게류로 잘못 분류해도 다음 경로(공공상가정보·LocationIQ)로 넘어갈 뿐 사라지지 않는다.
+     */
+    public Result resolve(String candidateId, String name, String branchName, String regionHint, String category,
                            List<PlaceSearchClient.PlaceSearchResult> searchResults) {
         if (branchName != null && !branchName.isBlank()) {
             Optional<Result> viaAnchor = resolveViaAnchor(candidateId, name, branchName, regionHint);
@@ -189,9 +211,11 @@ public class PlaceResolver {
                 return viaAnchor.get();
             }
         } else {
-            Optional<Result> viaTourApi = resolveViaTourApi(candidateId, name, regionHint);
-            if (viaTourApi.isPresent()) {
-                return viaTourApi.get();
+            if (category == null || !STORE_CATEGORIES.contains(category)) {
+                Optional<Result> viaTourApi = resolveViaTourApi(candidateId, name, regionHint);
+                if (viaTourApi.isPresent()) {
+                    return viaTourApi.get();
+                }
             }
             Optional<Result> viaRegionStores = resolveViaRegionStores(candidateId, name, regionHint);
             if (viaRegionStores.isPresent()) {
@@ -580,7 +604,33 @@ public class PlaceResolver {
         // 토큰별로 본다 - LocationIQ displayName은 "중리동, 대덕구, 대전광역시"처럼 작은 단위부터 거꾸로
         // 오므로 "대덕구 중리동" 통째 포함 비교는 항상 실패한다(2026-11-04 발견, 토큰 1개면 동작 동일).
         List<String> tokens = List.of(anchorQuery.get().split("\\s+"));
+
+        // 기준점은 "그 지역 자체"여야 한다(2026-11-11, 오일내 실측) - "서구 둔산동"으로 검색하면 결과가 전부 둔산동에
+        // 있는 건물(1순위 KDB산업은행, 가게에서 1,278m)이라 반경 1km 밖이 됐다. 이름이 마지막 단어("둔산동")와
+        // 같은 결과를 먼저 고르고, 없으면 마지막 단어만으로 한 번 더 찾는다("둔산동" 중심, 가게에서 828m).
+        // "강남"(강남역)·"종로3가"·"성동구"처럼 1순위 이름이 원래 그 단어인 경우는 결과가 그대로다.
+        String finest = tokens.get(tokens.size() - 1);
+        Optional<PlaceSearchClient.PlaceSearchResult> named = namedAs(anchorCandidates, finest, tokens);
+        if (named.isEmpty() && tokens.size() > 1) {
+            try {
+                named = namedAs(placeLookup.search(finest, null, regionHint), finest, tokens);
+            } catch (RuntimeException e) {
+                log.warn("LocationIQ 기준점 재검색 실패 query={}: {}", finest, e.getMessage());
+            }
+        }
+        if (named.isPresent()) {
+            return named;
+        }
         return anchorCandidates.stream()
+                .filter(c -> tokens.stream().allMatch(t -> containsIgnoreCase(c.displayName(), t)))
+                .findFirst();
+    }
+
+    /** displayName 첫 부분(이름)이 {@code name}과 같고, 지역 단어가 모두 주소에 들어있는 첫 결과. */
+    private Optional<PlaceSearchClient.PlaceSearchResult> namedAs(
+            List<PlaceSearchClient.PlaceSearchResult> candidates, String name, List<String> tokens) {
+        return candidates.stream()
+                .filter(c -> c.displayName() != null && c.displayName().split(",")[0].trim().equalsIgnoreCase(name))
                 .filter(c -> tokens.stream().allMatch(t -> containsIgnoreCase(c.displayName(), t)))
                 .findFirst();
     }
@@ -598,6 +648,36 @@ public class PlaceResolver {
      * ponytail: 둘 다 못 잡으면(VWorld 미등록 + regionHint 시·도뿐) 여기선 못 찾는다.
      */
     private Optional<Result> resolveViaRegionStores(String candidateId, String name, String regionHint) {
+        // 2026-11-08: VWorld를 "구 단위 지역 + 가게명"으로 먼저 검색해 상위 몇 개를 차례로 기준점으로 쓴다 -
+        // 가게명만으로 검색하면 1순위가 동명의 다른 지역 가게라(실측: 서울맛집→상주, 호랑이식탁→성남,
+        // 명국수→대구) 지역 필터에 걸려 버려지고, 구청 기준점(가게까지 3km+)으로 넘어가 못 찾았다.
+        // 반경은 그대로 100m - 넓히면 과매칭·호출량이 늘어서 기준점을 정확히 잡는 쪽으로 푼다.
+        Optional<String> regionDetail = extractAnchorQuery(regionHint);
+        if (regionDetail.isPresent()) {
+            List<PlaceSearchClient.PlaceSearchResult> regionAnchors;
+            try {
+                regionAnchors = franchiseAnchorLookup.findAnchors(regionDetail.get() + " " + name, REGION_ANCHOR_CANDIDATES);
+            } catch (RuntimeException e) {
+                regionAnchors = List.of();
+            }
+            // 확정이 나올 때까지 다음 순위를 본다(PR 리뷰, doheelab-coder) - 1순위가 다른 구의 같은 이름 가게라
+            // 되묻기가 되면 거기서 멈춰 2·3순위의 맞는 가게를 못 봤다. 확정이 없을 때만 처음 나온 되묻기를 돌려준다.
+            Optional<Result> firstAsk = Optional.empty();
+            for (PlaceSearchClient.PlaceSearchResult anchor : regionAnchors) {
+                Optional<Result> viaRegionAnchor =
+                        matchStoresAround(candidateId, name, regionHint, anchor, VWORLD_ANCHOR_RADIUS_METERS, true);
+                if (viaRegionAnchor.isPresent() && viaRegionAnchor.get().decision() == Decision.RESOLVED) {
+                    return viaRegionAnchor;
+                }
+                if (firstAsk.isEmpty()) {
+                    firstAsk = viaRegionAnchor;
+                }
+            }
+            if (firstAsk.isPresent()) {
+                return firstAsk;
+            }
+        }
+
         Optional<PlaceSearchClient.PlaceSearchResult> vworldAnchor;
         try {
             vworldAnchor = franchiseAnchorLookup.findAnchor(name);
@@ -606,16 +686,23 @@ public class PlaceResolver {
             vworldAnchor = Optional.empty();
         }
         Optional<Result> viaVWorld = vworldAnchor.flatMap(a ->
-                matchStoresAround(candidateId, name, regionHint, a, VWORLD_ANCHOR_RADIUS_METERS));
+                matchStoresAround(candidateId, name, regionHint, a, VWORLD_ANCHOR_RADIUS_METERS, true));
         if (viaVWorld.isPresent()) {
             return viaVWorld;
         }
         return findRegionAnchor(regionHint).flatMap(a ->
-                matchStoresAround(candidateId, name, regionHint, a, franchiseAnchorRadiusMeters));
+                matchStoresAround(candidateId, name, regionHint, a, franchiseAnchorRadiusMeters, false));
     }
 
+    /**
+     * @param requireDistrict VWorld로 잡은 기준점이면 true - VWorld는 전국 검색이라 같은 시·도의 다른 지점을
+     *                        1순위로 줄 수 있다(PR #70 리뷰, doheelab-coder: "스타벅스"/"서울 강남"이 홍대 지점으로
+     *                        확정됨). 찾은 가게 주소에 지역 단서의 구·동이 없으면 확정하지 않고 되묻는다.
+     *                        regionHint 자체로 잡은 기준점(구 중심)은 이미 그 지역이라 false.
+     */
     private Optional<Result> matchStoresAround(String candidateId, String name, String regionHint,
-                                               PlaceSearchClient.PlaceSearchResult anchor, int radiusMeters) {
+                                               PlaceSearchClient.PlaceSearchResult anchor, int radiusMeters,
+                                               boolean requireDistrict) {
         List<DataportalStoreClient.StoreResult> nearby;
         try {
             nearby = nearbyStores(name, anchor.lon(), anchor.lat(), radiusMeters);
@@ -629,7 +716,43 @@ public class PlaceResolver {
         if (matches.isEmpty() || matches.size() > MAX_CONFIRMATION_CANDIDATES) {
             return Optional.empty();
         }
+        if (requireDistrict && !inDistrict(regionHint, matches)) {
+            return Optional.of(confirmOnly(candidateId, matches));
+        }
         return Optional.of(buildResult(candidateId, name, null, matches));
+    }
+
+    /**
+     * 모든 가게 주소에 regionHint의 구·동 단어가 하나라도 들어있는지 본다. 시·도 단어는 뺀다 - Gemini는
+     * "서울특별시 성동구"처럼 정식 명칭을 자주 주는데, "서울특별시"가 남으면 서울 모든 주소가 통과해 확인이
+     * 무력해진다. 시·도 말고 남는 단어가 없으면(regionHint가 "서울"뿐) 확인할 수 없으니 통과 - 알려진 한계.
+     */
+    private boolean inDistrict(String regionHint, List<DataportalStoreClient.StoreResult> stores) {
+        if (regionHint == null) {
+            return true;
+        }
+        // "성수동"처럼 3글자 이상 "동"으로 끝나는 단어도 뺀다(PR 리뷰, doheelab-coder) - 공공상가정보 주소는 도로명이라
+        // "동"이 없어서, "서울 성수동" 힌트면 맞는 가게(성수이로 32-10)도 되묻기가 됐다. 동만 있는 힌트에선 다른 구
+        // 가게도 통과하는 한계는 시·도만 있을 때와 같다. "성동"·"강동"처럼 두 글자 구 이름 줄임말은 그대로 확인한다.
+        List<String> districtTokens = Arrays.stream(regionHint.trim().split("\\s+"))
+                .filter(token -> !isProvinceToken(token) && !(token.length() > 2 && token.endsWith("동")))
+                .toList();
+        if (districtTokens.isEmpty()) {
+            return true;
+        }
+        return stores.stream().allMatch(s -> districtTokens.stream().anyMatch(t -> containsIgnoreCase(s.roadAddress(), t)));
+    }
+
+    /** "서울"·"서울특별시"·"경기도"·"충청남도"·"전북특별자치도"처럼 시·도를 가리키는 단어인지. */
+    private static boolean isProvinceToken(String token) {
+        if (KoreanProvinces.ROMANIZED_ALIASES.containsKey(token)) {
+            return true;
+        }
+        if (KoreanProvinces.KOREAN_ALIASES.values().stream().anyMatch(names -> names.contains(token))) {
+            return true;
+        }
+        return KoreanProvinces.ROMANIZED_ALIASES.keySet().stream()
+                .anyMatch(key -> token.matches(Pattern.quote(key) + "(특별시|광역시|특별자치시|특별자치도|도)"));
     }
 
     /**

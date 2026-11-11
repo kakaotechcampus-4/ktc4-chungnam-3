@@ -286,6 +286,24 @@ class SavePipelineServiceTest {
     }
 
     @Test
+    void Gemini_category가_PlaceResolver까지_전달돼_가게류면_TourAPI_관광지로_확정하지_않는다() {
+        PlaceResolver resolverWithPalace = new PlaceResolver(
+                (lon, lat, radiusMeters) -> List.of(), (name, branch, region) -> List.of(), query -> Optional.empty(),
+                name -> List.of(new com.ktc.chungnam3.remembrall.save.place.TourApiClient.TourApiItem(
+                        "126508", "경복궁", "서울특별시 종로구 사직로 161", 37.5796, 126.9770)),
+                1000);
+        var restaurant = new PlaceCandidateDto("p1", "경복궁", null, null, "고깃집", "맛집");
+        var palace = new PlaceCandidateDto("p2", "경복궁", null, null, "궁궐", "관광지");
+        SavePipelineService service = new SavePipelineService(url -> extraction(List.of(restaurant, palace)),
+                lookupOf(java.util.Map.of()), resolverWithPalace, kakaoAlwaysFound());
+
+        var places = service.save(new SavePipelineRequestDto("https://youtu.be/x")).places();
+
+        assertThat(places.get(0).decision()).isEqualTo(PlaceOutcomeDto.Decision.NO_PLACE);
+        assertThat(places.get(1).decision()).isEqualTo(PlaceOutcomeDto.Decision.RESOLVED);
+    }
+
+    @Test
     void 카카오에_장소가_없으면_RESOLVED_대신_NO_PLACE를_처리한다() {
         // Place.md: "결과가 모호하거나 일치하지 않으면 Place를 생성하지 않고 실패 기록" - PlaceResolver가
         // 확정해도 카카오 검증이 안 되면 RESOLVED로 내보내면 안 된다. 단, 정상 호출인데 못 찾은
